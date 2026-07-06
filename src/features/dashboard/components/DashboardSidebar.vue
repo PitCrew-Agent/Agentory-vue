@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
 import dashboardIcon from '@/assets/icons/dashboard/nav-dashboard.svg'
@@ -20,6 +21,10 @@ const props = defineProps({
   open: {
     type: Boolean,
     required: true,
+  },
+  showDock: {
+    type: Boolean,
+    default: true,
   },
 })
 
@@ -56,20 +61,32 @@ function restoreWidget(id) {
     data-test="dashboard-sidebar"
   >
     <nav class="dashboard-sidebar__nav" aria-label="대시보드 메뉴">
-      <button
-        v-for="item in props.items"
-        :key="item.id"
-        class="dashboard-sidebar__item"
-        :class="{ 'dashboard-sidebar__item--active': item.active }"
-        type="button"
-        :aria-current="item.active ? 'page' : undefined"
-      >
-        <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
-        <span class="dashboard-sidebar__label">{{ item.label }}</span>
-      </button>
+      <template v-for="item in props.items" :key="item.id">
+        <RouterLink
+          v-if="item.to"
+          class="dashboard-sidebar__item"
+          :class="{ 'dashboard-sidebar__item--active': item.active }"
+          :to="item.to"
+          :aria-current="item.active ? 'page' : undefined"
+        >
+          <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
+          <span class="dashboard-sidebar__label">{{ item.label }}</span>
+        </RouterLink>
+
+        <button
+          v-else
+          class="dashboard-sidebar__item"
+          :class="{ 'dashboard-sidebar__item--active': item.active }"
+          type="button"
+          :aria-current="item.active ? 'page' : undefined"
+        >
+          <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
+          <span class="dashboard-sidebar__label">{{ item.label }}</span>
+        </button>
+      </template>
     </nav>
 
-    <div class="dashboard-sidebar__storage">
+    <div v-if="props.showDock" class="dashboard-sidebar__storage">
       <button
         class="dashboard-sidebar__item dashboard-sidebar__storage-button"
         type="button"
@@ -168,6 +185,7 @@ function restoreWidget(id) {
   background: transparent;
   border: 0;
   border-radius: var(--agentory-radius-8);
+  text-decoration: none;
   transition:
     width 260ms ease,
     background 180ms ease,
@@ -189,6 +207,12 @@ function restoreWidget(id) {
   height: 29px;
   object-fit: contain;
   flex: 0 0 auto;
+  filter: brightness(0) saturate(100%) invert(24%);
+  transition: filter 180ms ease;
+}
+
+.dashboard-sidebar__item--active .dashboard-sidebar__icon {
+  filter: brightness(0) invert(1);
 }
 
 .dashboard-sidebar__item:not(.dashboard-sidebar__item--active) .dashboard-sidebar__icon {

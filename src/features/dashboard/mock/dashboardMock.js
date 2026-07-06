@@ -25,32 +25,41 @@ export const statusSummary = [
   },
 ]
 
-export const dashboardNavigation = [
+const dashboardNavigationItems = [
   {
     id: 'dashboard',
     label: '대시 보드 홈',
     icon: 'dashboard',
-    active: true,
+    to: '/dashboard',
   },
   {
     id: 'workLog',
     label: '작업 로그',
     icon: 'note',
-    active: false,
+    to: '/work-log',
   },
   {
     id: 'equipment',
     label: '설비 목록',
     icon: 'list',
-    active: false,
+    to: '/equipment',
   },
   {
     id: 'notification',
     label: '알림 이력',
     icon: 'bell',
-    active: false,
+    to: '/notifications',
   },
 ]
+
+export function createDashboardNavigation(activeId = 'dashboard') {
+  return dashboardNavigationItems.map((item) => ({
+    ...item,
+    active: item.id === activeId,
+  }))
+}
+
+export const dashboardNavigation = createDashboardNavigation('dashboard')
 
 export const selectedEquipment = {
   id: 'robot-arm-01',
