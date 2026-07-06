@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import('@/features/auth/views/AuthView.vue'),
       props: { screen: 'signup' },
     },
+    {
+      path: '/dashboard',
+      name: 'Dashboard',
+      component: () => import('@/features/dashboard/views/DashboardView.vue'),
+    },
   ],
 })
 
