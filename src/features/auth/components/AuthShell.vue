@@ -25,7 +25,7 @@ defineProps({
 </script>
 
 <template>
-  <main class="auth-page">
+  <main class="auth-page" :class="`auth-page--${cardVariant}`">
     <section class="auth-visual" aria-hidden="true"></section>
 
     <section class="auth-content" :class="`auth-content--${cardVariant}`">
@@ -160,6 +160,17 @@ defineProps({
 .auth-card--signup {
   --auth-card-height: var(--auth-card-height-signup);
   background: var(--agentory-color-bg-glass-white);
+}
+
+.auth-page--signup {
+  --auth-card-padding-bottom: clamp(24px, 3.15vh, 42px);
+  --auth-card-padding-top: clamp(24px, 3.15vh, 42px);
+  --auth-card-top: clamp(72px, 7.4vh, 110px);
+  --auth-control-height: clamp(30px, 3.2vh, 39px);
+  --auth-field-gap: clamp(5px, 0.7vh, 9px);
+  --auth-field-margin: clamp(10px, 1.2vh, 15px);
+  --auth-title-line-height: clamp(32px, 3.6vh, 44px);
+  --auth-title-margin: clamp(8px, 1vh, 14px);
 }
 
 .auth-header {

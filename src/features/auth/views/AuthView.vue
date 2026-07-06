@@ -1,9 +1,11 @@
 <script setup>
 import { computed, reactive, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import helpIcon from '@/assets/icons/help.png'
 import AuthShell from '@/features/auth/components/AuthShell.vue'
+import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
 
 const props = defineProps({
   screen: {
@@ -11,6 +13,9 @@ const props = defineProps({
     required: true,
   },
 })
+
+const router = useRouter()
+const { updateCurrentUser } = useCurrentUser()
 
 const screens = {
   login: {
@@ -76,7 +81,9 @@ const screens = {
     variant: 'signup',
     backTo: '/login',
     fields: [
+      { id: 'name', label: '이름', type: 'text', value: '이준호', autocomplete: 'name' },
       { id: 'userId', label: 'ID', type: 'text', value: 'employee1', autocomplete: 'username' },
+      { id: 'department', label: '부서', type: 'text', value: '생산기술팀', autocomplete: 'organization' },
       {
         id: 'password',
         label: 'password',
@@ -117,6 +124,17 @@ const footerActions = computed(() =>
   currentScreen.value.actions.filter((action) => !action.afterField),
 )
 
+function handleSubmit() {
+  if (currentScreen.value.variant === 'signup') {
+    updateCurrentUser({
+      department: formValues.department,
+      name: formValues.name,
+      userId: formValues.userId,
+    })
+    router.push('/dashboard')
+  }
+}
+
 watch(() => props.screen, resetFormValues, { immediate: true })
 </script>
 
@@ -128,7 +146,7 @@ watch(() => props.screen, resetFormValues, { immediate: true })
     :back-to="currentScreen.backTo"
   >
     <Transition name="auth-screen" mode="out-in">
-      <form :key="currentScreen.variant" class="auth-form" @submit.prevent>
+      <form :key="currentScreen.variant" class="auth-form" @submit.prevent="handleSubmit">
         <template v-for="field in currentScreen.fields" :key="field.id">
           <label class="auth-field" :for="field.id">
             <span class="auth-label">{{ field.label }}</span>

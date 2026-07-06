@@ -57,11 +57,21 @@ test('renders password recovery flow screens', async ({ page }) => {
 test('renders signup screen', async ({ page }) => {
   await page.goto('/signup')
   await expect(page.locator('h1')).toHaveText('회원가입')
+  await expect(page.locator('input#name')).toHaveValue('이준호')
   await expect(page.locator('input#userId')).toHaveValue('employee1')
+  await expect(page.locator('input#department')).toHaveValue('생산기술팀')
   await expect(page.locator('input#email')).toHaveValue('admin@metanet.co.kr')
   await expect(page.getByLabel('이전 화면으로 이동')).toBeVisible()
   await expectTopOffsetWithoutScroll(page)
 
-  await page.getByLabel('이전 화면으로 이동').click()
-  await expect(page).toHaveURL(/\/login$/)
+  await page.locator('input#name').fill('정하늘')
+  await page.locator('input#department').fill('품질운영팀')
+  await page.getByRole('button', { name: '완료' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.locator('[data-test="dashboard-header-user-button"]')).toHaveText('정하늘')
+
+  await page.locator('[data-test="dashboard-header-user-button"]').click()
+  await expect(page.locator('[data-test="dashboard-header-profile-name"]')).toHaveText('정하늘')
+  await expect(page.locator('[data-test="dashboard-header-profile-user-id"]')).toHaveText('employee1')
+  await expect(page.locator('[data-test="dashboard-header-profile-department"]')).toHaveText('품질운영팀')
 })
