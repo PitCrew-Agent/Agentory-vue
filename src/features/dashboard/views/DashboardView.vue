@@ -1,0 +1,845 @@
+<script setup>
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+
+import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
+import ChecklistPanel from '@/features/dashboard/components/ChecklistPanel.vue'
+import DashboardEditableWidget from '@/features/dashboard/components/DashboardEditableWidget.vue'
+import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
+import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
+import EquipmentChartPanel from '@/features/dashboard/components/EquipmentChartPanel.vue'
+import EquipmentDetailPanel from '@/features/dashboard/components/EquipmentDetailPanel.vue'
+import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
+import {
+  dashboardNavigation,
+  selectedEquipment,
+  statusSummary,
+} from '@/features/dashboard/mock/dashboardMock'
+
+const isSidebarOpen = ref(false)
+const layoutBoardRef = ref(null)
+const hasCustomLayout = ref(false)
+const assistantMessages = []
+const quickCommands = []
+const selectedMetricId = ref('temperature')
+const widgetGapPx = 15
+const layoutGridColumns = 4
+const layoutGridRows = 2
+let layoutResizeObserver
+
+const selectedChart = computed(
+  () => selectedEquipment.charts[selectedMetricId.value] ?? selectedEquipment.charts.temperature,
+)
+
+const widgetOrder = ['factory', 'detail', 'metricChart', 'checklist', 'assistant']
+const widgetMeta = {
+  assistant: { id: 'assistant', label: 'AI 어시스턴트', minHeight: 260, minWidth: 190 },
+  checklist: { id: 'checklist', label: '체크 리스트', minHeight: 140, minWidth: 210 },
+  detail: { id: 'detail', label: '상세 정보', minHeight: 150, minWidth: 220 },
+  factory: { id: 'factory', label: '3D 공장 화면', minHeight: 240, minWidth: 340 },
+  metricChart: { id: 'metricChart', label: '그래프', minHeight: 150, minWidth: 220 },
+}
+const visibleWidgetMap = reactive({
+  assistant: true,
+  checklist: true,
+  detail: true,
+  factory: true,
+  metricChart: true,
+})
+const widgetLayouts = reactive({
+  assistant: { x: 75, y: 0, w: 25, h: 100 },
+  checklist: { x: 50, y: 50, w: 25, h: 50 },
+  detail: { x: 0, y: 50, w: 25, h: 50 },
+  factory: { x: 0, y: 0, w: 75, h: 50 },
+  metricChart: { x: 25, y: 50, w: 25, h: 50 },
+})
+const previewLayouts = reactive({})
+const defaultLayoutGrid = {
+  assistant: { col: 3, cols: 1, row: 0, rows: 2 },
+  checklist: { col: 2, cols: 1, row: 1, rows: 1 },
+  detail: { col: 0, cols: 1, row: 1, rows: 1 },
+  factory: { col: 0, cols: 3, row: 0, rows: 1 },
+  metricChart: { col: 1, cols: 1, row: 1, rows: 1 },
+}
+
+const dockWidgets = computed(() =>
+  widgetOrder.filter((widgetId) => !visibleWidgetMap[widgetId]).map((widgetId) => widgetMeta[widgetId]),
+)
+
+function toggleSidebar() {
+  isSidebarOpen.value = !isSidebarOpen.value
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function normalizeLayout(layout) {
+  const width = clamp(layout.w, 0, 100)
+  const height = clamp(layout.h, 0, 100)
+
+  return {
+    h: height,
+    w: width,
+    x: clamp(layout.x, 0, 100 - width),
+    y: clamp(layout.y, 0, 100 - height),
+  }
+}
+
+function getBoardRect() {
+  return layoutBoardRef.value?.getBoundingClientRect()
+}
+
+function getGridMetrics() {
+  const boardRect = getBoardRect()
+
+  if (!boardRect?.width || !boardRect?.height) {
+    return null
+  }
+
+  const columnWidth = (boardRect.width - widgetGapPx * (layoutGridColumns - 1)) / layoutGridColumns
+  const rowHeight = (boardRect.height - widgetGapPx * (layoutGridRows - 1)) / layoutGridRows
+
+  return {
+    boardRect,
+    columnStride: columnWidth + widgetGapPx,
+    columnWidth,
+    rowHeight,
+    rowStride: rowHeight + widgetGapPx,
+  }
+}
+
+function gridToPercentLayout(grid, metrics = getGridMetrics()) {
+  if (!metrics) {
+    return normalizeLayout({
+      h: (grid.rows / layoutGridRows) * 100,
+      w: (grid.cols / layoutGridColumns) * 100,
+      x: (grid.col / layoutGridColumns) * 100,
+      y: (grid.row / layoutGridRows) * 100,
+    })
+  }
+
+  return normalizeLayout({
+    h:
+      ((grid.rows * metrics.rowHeight + widgetGapPx * (grid.rows - 1)) / metrics.boardRect.height) *
+      100,
+    w:
+      ((grid.cols * metrics.columnWidth + widgetGapPx * (grid.cols - 1)) /
+        metrics.boardRect.width) *
+      100,
+    x: ((grid.col * metrics.columnStride) / metrics.boardRect.width) * 100,
+    y: ((grid.row * metrics.rowStride) / metrics.boardRect.height) * 100,
+  })
+}
+
+function getMinGridSize(id, metrics = getGridMetrics()) {
+  const meta = widgetMeta[id]
+
+  if (!metrics || !meta) {
+    return { cols: 1, rows: 1 }
+  }
+
+  return {
+    cols: clamp(Math.ceil((meta.minWidth + widgetGapPx) / metrics.columnStride), 1, layoutGridColumns),
+    rows: clamp(Math.ceil((meta.minHeight + widgetGapPx) / metrics.rowStride), 1, layoutGridRows),
+  }
+}
+
+function percentToGrid(layout, id, metrics = getGridMetrics()) {
+  if (!metrics) {
+    return null
+  }
+
+  const minSize = getMinGridSize(id, metrics)
+  const layoutWidth = (layout.w / 100) * metrics.boardRect.width
+  const layoutHeight = (layout.h / 100) * metrics.boardRect.height
+  const layoutX = (layout.x / 100) * metrics.boardRect.width
+  const layoutY = (layout.y / 100) * metrics.boardRect.height
+  const cols = clamp(
+    Math.round((layoutWidth + widgetGapPx) / metrics.columnStride),
+    minSize.cols,
+    layoutGridColumns,
+  )
+  const rows = clamp(
+    Math.round((layoutHeight + widgetGapPx) / metrics.rowStride),
+    minSize.rows,
+    layoutGridRows,
+  )
+
+  return {
+    col: clamp(Math.round(layoutX / metrics.columnStride), 0, layoutGridColumns - cols),
+    cols,
+    row: clamp(Math.round(layoutY / metrics.rowStride), 0, layoutGridRows - rows),
+    rows,
+  }
+}
+
+function snapLayoutToGrid(layout, id) {
+  const grid = percentToGrid(normalizeLayout(layout), id)
+
+  if (!grid) {
+    return normalizeLayout(layout)
+  }
+
+  return gridToPercentLayout(grid)
+}
+
+function getMovePreviewGrid(layout, id, metrics = getGridMetrics()) {
+  const baseGrid = percentToGrid(widgetLayouts[id], id, metrics)
+  const sizeGrid = percentToGrid(layout, id, metrics)
+
+  if (!metrics || !baseGrid || !sizeGrid) {
+    return null
+  }
+
+  const layoutX = (layout.x / 100) * metrics.boardRect.width
+  const layoutY = (layout.y / 100) * metrics.boardRect.height
+  const rawCol = layoutX / metrics.columnStride
+  const rawRow = layoutY / metrics.rowStride
+  const snapThreshold = 0.32
+  let col = baseGrid.col
+  let row = baseGrid.row
+
+  if (rawCol > baseGrid.col + snapThreshold) {
+    col = Math.ceil(rawCol - snapThreshold)
+  } else if (rawCol < baseGrid.col - snapThreshold) {
+    col = Math.floor(rawCol + snapThreshold)
+  }
+
+  if (rawRow > baseGrid.row + snapThreshold) {
+    row = Math.ceil(rawRow - snapThreshold)
+  } else if (rawRow < baseGrid.row - snapThreshold) {
+    row = Math.floor(rawRow + snapThreshold)
+  }
+
+  return {
+    col: clamp(col, 0, layoutGridColumns - sizeGrid.cols),
+    cols: sizeGrid.cols,
+    row: clamp(row, 0, layoutGridRows - sizeGrid.rows),
+    rows: sizeGrid.rows,
+  }
+}
+
+function layoutsAreEqual(firstLayout, secondLayout) {
+  const threshold = 0.02
+
+  return (
+    Math.abs(firstLayout.x - secondLayout.x) <= threshold &&
+    Math.abs(firstLayout.y - secondLayout.y) <= threshold &&
+    Math.abs(firstLayout.w - secondLayout.w) <= threshold &&
+    Math.abs(firstLayout.h - secondLayout.h) <= threshold
+  )
+}
+
+function snapStoredLayoutsToGrid() {
+  Object.entries(widgetLayouts).forEach(([widgetId, layout]) => {
+    const snappedLayout = snapLayoutToGrid(layout, widgetId)
+
+    if (!layoutsAreEqual(layout, snappedLayout)) {
+      widgetLayouts[widgetId] = snappedLayout
+    }
+  })
+}
+
+function clearPreviewLayouts() {
+  Object.keys(previewLayouts).forEach((widgetId) => {
+    delete previewLayouts[widgetId]
+  })
+}
+
+function setPreviewLayouts(layouts) {
+  clearPreviewLayouts()
+
+  if (!layouts) {
+    return
+  }
+
+  Object.entries(layouts).forEach(([widgetId, layout]) => {
+    if (widgetLayouts[widgetId]) {
+      previewLayouts[widgetId] = snapLayoutToGrid(layout, widgetId)
+    }
+  })
+}
+
+function getWidgetLayout(id) {
+  return previewLayouts[id] ?? widgetLayouts[id]
+}
+
+function applyDefaultLayouts() {
+  const metrics = getGridMetrics()
+
+  if (!metrics) {
+    return
+  }
+
+  Object.entries(defaultLayoutGrid).forEach(([widgetId, grid]) => {
+    widgetLayouts[widgetId] = gridToPercentLayout(grid, metrics)
+  })
+}
+
+function getLayoutGap() {
+  const boardRect = getBoardRect()
+
+  return {
+    x: boardRect?.width ? (widgetGapPx / boardRect.width) * 100 : 1.5,
+    y: boardRect?.height ? (widgetGapPx / boardRect.height) * 100 : 2.5,
+  }
+}
+
+function overlapsGap(firstLayout, secondLayout, gap) {
+  const threshold = 0.02
+
+  return !(
+    firstLayout.x + firstLayout.w + gap.x <= secondLayout.x + threshold ||
+    secondLayout.x + secondLayout.w + gap.x <= firstLayout.x + threshold ||
+    firstLayout.y + firstLayout.h + gap.y <= secondLayout.y + threshold ||
+    secondLayout.y + secondLayout.h + gap.y <= firstLayout.y + threshold
+  )
+}
+
+function hasLayoutCollision(id, layout, layoutMap = widgetLayouts, visibleMap = visibleWidgetMap) {
+  const gap = getLayoutGap()
+
+  return Object.entries(layoutMap).some(
+    ([targetId, targetLayout]) =>
+      targetId !== id && visibleMap[targetId] && overlapsGap(layout, targetLayout, gap),
+  )
+}
+
+function getFallbackLayout(id) {
+  const minSize = getMinGridSize(id)
+
+  return gridToPercentLayout({
+    col: layoutGridColumns - minSize.cols,
+    cols: minSize.cols,
+    row: layoutGridRows - minSize.rows,
+    rows: minSize.rows,
+  })
+}
+
+function findAvailableLayout(id, layoutMap = widgetLayouts, visibleMap = visibleWidgetMap) {
+  const metrics = getGridMetrics()
+  const currentLayout = snapLayoutToGrid(layoutMap[id] ?? getFallbackLayout(id), id)
+  const preferredLayout = snapLayoutToGrid(currentLayout, id)
+
+  if (!hasLayoutCollision(id, preferredLayout, layoutMap, visibleMap)) {
+    return preferredLayout
+  }
+
+  if (!metrics) {
+    return null
+  }
+
+  const preferredGrid = percentToGrid(preferredLayout, id, metrics)
+  const minSize = getMinGridSize(id, metrics)
+  const candidateSpans = [
+    { cols: preferredGrid.cols, rows: preferredGrid.rows },
+    { cols: minSize.cols, rows: minSize.rows },
+  ]
+
+  for (const span of candidateSpans) {
+    for (let row = 0; row <= layoutGridRows - span.rows; row += 1) {
+      for (let col = 0; col <= layoutGridColumns - span.cols; col += 1) {
+        const candidateLayout = gridToPercentLayout({ col, cols: span.cols, row, rows: span.rows }, metrics)
+
+        if (!hasLayoutCollision(id, candidateLayout, layoutMap, visibleMap)) {
+          return candidateLayout
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function getCompactedLayoutMap() {
+  return Object.fromEntries(
+    Object.entries(widgetLayouts).map(([widgetId, layout]) => {
+      if (!visibleWidgetMap[widgetId]) {
+        return [widgetId, layout]
+      }
+
+      const metrics = getGridMetrics()
+      const minSize = getMinGridSize(widgetId, metrics)
+      const grid = percentToGrid(layout, widgetId, metrics) ?? {
+        col: 0,
+        cols: minSize.cols,
+        row: 0,
+        rows: minSize.rows,
+      }
+
+      return [
+        widgetId,
+        gridToPercentLayout({
+          col: clamp(grid.col, 0, layoutGridColumns - minSize.cols),
+          cols: minSize.cols,
+          row: clamp(grid.row, 0, layoutGridRows - minSize.rows),
+          rows: minSize.rows,
+        }),
+      ]
+    }),
+  )
+}
+
+function createRoomForWidget(id) {
+  const compactedLayouts = getCompactedLayoutMap()
+  const restoreLayout = findAvailableLayout(id, compactedLayouts)
+
+  if (!restoreLayout) {
+    return null
+  }
+
+  Object.entries(compactedLayouts).forEach(([widgetId, layout]) => {
+    if (visibleWidgetMap[widgetId]) {
+      widgetLayouts[widgetId] = layout
+    }
+  })
+
+  return restoreLayout
+}
+
+function fitResizeLayout(id, nextLayout) {
+  const metrics = getGridMetrics()
+  const snappedLayout = snapLayoutToGrid(nextLayout, id)
+  const snappedGrid = percentToGrid(snappedLayout, id, metrics)
+  const minSize = getMinGridSize(id, metrics)
+  const currentLayout = snapLayoutToGrid(widgetLayouts[id], id)
+
+  if (!metrics || !snappedGrid) {
+    return currentLayout
+  }
+
+  for (let rows = snappedGrid.rows; rows >= minSize.rows; rows -= 1) {
+    for (let cols = snappedGrid.cols; cols >= minSize.cols; cols -= 1) {
+      const candidateLayout = gridToPercentLayout(
+        {
+          col: clamp(snappedGrid.col, 0, layoutGridColumns - cols),
+          cols,
+          row: clamp(snappedGrid.row, 0, layoutGridRows - rows),
+          rows,
+        },
+        metrics,
+      )
+
+      if (!hasLayoutCollision(id, candidateLayout)) {
+        return candidateLayout
+      }
+    }
+  }
+
+  return gridToPercentLayout(
+    percentToGrid(currentLayout, id, metrics) ?? {
+      col: clamp(snappedGrid.col, 0, layoutGridColumns - minSize.cols),
+      cols: minSize.cols,
+      row: clamp(snappedGrid.row, 0, layoutGridRows - minSize.rows),
+      rows: minSize.rows,
+    },
+    metrics,
+  )
+}
+
+function gridsOverlap(firstGrid, secondGrid) {
+  return !(
+    firstGrid.col + firstGrid.cols <= secondGrid.col ||
+    secondGrid.col + secondGrid.cols <= firstGrid.col ||
+    firstGrid.row + firstGrid.rows <= secondGrid.row ||
+    secondGrid.row + secondGrid.rows <= firstGrid.row
+  )
+}
+
+function getGridDistance(firstGrid, secondGrid) {
+  return Math.hypot(firstGrid.col - secondGrid.col, firstGrid.row - secondGrid.row)
+}
+
+function getCandidatePushCost(candidateGrid, baseGrid, fixedGrid) {
+  if (!gridsOverlap(baseGrid, fixedGrid)) {
+    return 0
+  }
+
+  const baseCenterX = baseGrid.col + baseGrid.cols / 2
+  const baseCenterY = baseGrid.row + baseGrid.rows / 2
+  const fixedCenterX = fixedGrid.col + fixedGrid.cols / 2
+  const fixedCenterY = fixedGrid.row + fixedGrid.rows / 2
+  const deltaX = baseCenterX - fixedCenterX
+  const deltaY = baseCenterY - fixedCenterY
+  const isHorizontalPush = Math.abs(deltaX) >= Math.abs(deltaY)
+
+  if (isHorizontalPush) {
+    const sameRowCost = candidateGrid.row === baseGrid.row ? 0 : 0.75
+    const directionCost =
+      deltaX >= 0
+        ? candidateGrid.col >= fixedGrid.col + fixedGrid.cols
+          ? 0
+          : 0.45
+        : candidateGrid.col + candidateGrid.cols <= fixedGrid.col
+          ? 0
+          : 0.45
+
+    return sameRowCost + directionCost
+  }
+
+  const sameColumnCost = candidateGrid.col === baseGrid.col ? 0 : 0.75
+  const directionCost =
+    deltaY >= 0
+      ? candidateGrid.row >= fixedGrid.row + fixedGrid.rows
+        ? 0
+        : 0.45
+      : candidateGrid.row + candidateGrid.rows <= fixedGrid.row
+        ? 0
+        : 0.45
+
+  return sameColumnCost + directionCost
+}
+
+function getGridCandidates(baseGrid, fixedGrid) {
+  const candidates = []
+
+  for (let row = 0; row <= layoutGridRows - baseGrid.rows; row += 1) {
+    for (let col = 0; col <= layoutGridColumns - baseGrid.cols; col += 1) {
+      candidates.push({
+        col,
+        cols: baseGrid.cols,
+        row,
+        rows: baseGrid.rows,
+      })
+    }
+  }
+
+  return candidates.sort((first, second) => {
+    const distanceDiff =
+      getGridDistance(first, baseGrid) +
+      getCandidatePushCost(first, baseGrid, fixedGrid) -
+      (getGridDistance(second, baseGrid) + getCandidatePushCost(second, baseGrid, fixedGrid))
+
+    if (distanceDiff !== 0) {
+      return distanceDiff
+    }
+
+    return first.row - second.row || first.col - second.col
+  })
+}
+
+function createPushedGridLayouts(id, fixedGrid, metrics) {
+  const visibleIds = widgetOrder.filter((widgetId) => visibleWidgetMap[widgetId])
+  const baseGrids = Object.fromEntries(
+    visibleIds.map((widgetId) => [
+      widgetId,
+      widgetId === id
+        ? fixedGrid
+        : (percentToGrid(widgetLayouts[widgetId], widgetId, metrics) ?? percentToGrid(getFallbackLayout(widgetId), widgetId, metrics)),
+    ]),
+  )
+  const movingIds = visibleIds
+    .filter((widgetId) => widgetId !== id)
+    .sort((firstId, secondId) => {
+      const firstCollides = gridsOverlap(fixedGrid, baseGrids[firstId]) ? 0 : 1
+      const secondCollides = gridsOverlap(fixedGrid, baseGrids[secondId]) ? 0 : 1
+
+      return (
+        firstCollides - secondCollides ||
+        getGridDistance(baseGrids[firstId], fixedGrid) - getGridDistance(baseGrids[secondId], fixedGrid)
+      )
+    })
+  let bestSolution = null
+  let bestScore = Number.POSITIVE_INFINITY
+
+  function placeWidget(index, placedGrids, score) {
+    if (score >= bestScore) {
+      return
+    }
+
+    if (index >= movingIds.length) {
+      bestSolution = placedGrids
+      bestScore = score
+      return
+    }
+
+    const widgetId = movingIds[index]
+    const baseGrid = baseGrids[widgetId]
+
+    getGridCandidates(baseGrid, fixedGrid).forEach((candidateGrid) => {
+      const hasCollision = Object.values(placedGrids).some((placedGrid) =>
+        gridsOverlap(candidateGrid, placedGrid),
+      )
+
+      if (hasCollision) {
+        return
+      }
+
+      const movementCost = getGridDistance(candidateGrid, baseGrid)
+      const changedCost = movementCost === 0 ? 0 : 0.35
+      const pushCost = getCandidatePushCost(candidateGrid, baseGrid, fixedGrid)
+
+      placeWidget(
+        index + 1,
+        { ...placedGrids, [widgetId]: candidateGrid },
+        score + movementCost + changedCost + pushCost,
+      )
+    })
+  }
+
+  placeWidget(0, { [id]: fixedGrid }, 0)
+
+  return bestSolution
+}
+
+function resolveMoveLayout(id, nextLayout) {
+  const visualLayout = normalizeLayout(nextLayout)
+  const metrics = getGridMetrics()
+  const fixedGrid = getMovePreviewGrid(visualLayout, id, metrics)
+  const resolvedLayout = fixedGrid ? gridToPercentLayout(fixedGrid, metrics) : snapLayoutToGrid(nextLayout, id)
+  const currentLayout = snapLayoutToGrid(widgetLayouts[id], id)
+
+  if (!metrics || !fixedGrid) {
+    return {
+      layout: currentLayout,
+      layouts: { [id]: currentLayout },
+      state: 'valid',
+    }
+  }
+
+  const resolvedGridMap = createPushedGridLayouts(id, fixedGrid, metrics)
+
+  if (!resolvedGridMap) {
+    return {
+      layout: currentLayout,
+      layouts: { [id]: currentLayout },
+      state: 'invalid',
+    }
+  }
+
+  const resolvedLayouts = Object.fromEntries(
+    Object.entries(resolvedGridMap).map(([widgetId, grid]) => [widgetId, gridToPercentLayout(grid, metrics)]),
+  )
+
+  return {
+    layout: resolvedLayout,
+    layouts: resolvedLayouts,
+    state: 'valid',
+  }
+}
+
+function resolveLayoutChange(id, nextLayout, mode) {
+  if (mode === 'move') {
+    return resolveMoveLayout(id, nextLayout)
+  }
+
+  const fittedLayout = fitResizeLayout(id, nextLayout)
+
+  return {
+    layout: fittedLayout,
+    layouts: { [id]: fittedLayout },
+    state: 'valid',
+  }
+}
+
+function restoreWidget(id) {
+  const restoreLayout = findAvailableLayout(id) ?? createRoomForWidget(id)
+
+  if (!restoreLayout) {
+    return
+  }
+
+  hasCustomLayout.value = true
+  widgetLayouts[id] = restoreLayout
+  visibleWidgetMap[id] = true
+}
+
+function stashWidget(id) {
+  hasCustomLayout.value = true
+  visibleWidgetMap[id] = false
+}
+
+function updateWidgetLayout(id, nextLayout) {
+  const nextLayouts = nextLayout?.[id] ? nextLayout : { [id]: nextLayout }
+
+  hasCustomLayout.value = true
+  clearPreviewLayouts()
+
+  Object.entries(nextLayouts).forEach(([widgetId, layout]) => {
+    if (widgetLayouts[widgetId]) {
+      widgetLayouts[widgetId] = snapLayoutToGrid(layout, widgetId)
+    }
+  })
+}
+
+onMounted(() => {
+  applyDefaultLayouts()
+
+  if (typeof ResizeObserver === 'undefined') {
+    return
+  }
+
+  layoutResizeObserver = new ResizeObserver(() => {
+    if (!hasCustomLayout.value) {
+      applyDefaultLayouts()
+      return
+    }
+
+    snapStoredLayoutsToGrid()
+  })
+
+  if (layoutBoardRef.value) {
+    layoutResizeObserver.observe(layoutBoardRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  layoutResizeObserver?.disconnect()
+})
+</script>
+
+<template>
+  <main class="dashboard-page" :class="{ 'dashboard-page--sidebar-open': isSidebarOpen }">
+    <DashboardHeader :summary="statusSummary" />
+    <DashboardSidebar
+      :dock-widgets="dockWidgets"
+      :items="dashboardNavigation"
+      :open="isSidebarOpen"
+      @restore-widget="restoreWidget"
+      @toggle="toggleSidebar"
+    />
+
+    <section class="dashboard-content" aria-label="대시보드 편집 영역">
+      <div ref="layoutBoardRef" class="dashboard-layout-board" data-test="dashboard-layout-board">
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.factory"
+          id="factory"
+          :layout="getWidgetLayout('factory')"
+          :min-width="widgetMeta.factory.minWidth"
+          :min-height="widgetMeta.factory.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('factory')"
+          @update:layout="updateWidgetLayout('factory', $event)"
+        >
+          <FactoryViewport />
+        </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.detail"
+          id="detail"
+          :layout="getWidgetLayout('detail')"
+          :min-width="widgetMeta.detail.minWidth"
+          :min-height="widgetMeta.detail.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('detail')"
+          @update:layout="updateWidgetLayout('detail', $event)"
+        >
+          <EquipmentDetailPanel v-model:selected-metric-id="selectedMetricId" :equipment="selectedEquipment" />
+        </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.metricChart"
+          id="metricChart"
+          :layout="getWidgetLayout('metricChart')"
+          :min-width="widgetMeta.metricChart.minWidth"
+          :min-height="widgetMeta.metricChart.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('metricChart')"
+          @update:layout="updateWidgetLayout('metricChart', $event)"
+        >
+          <EquipmentChartPanel :chart="selectedChart" />
+        </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.checklist"
+          id="checklist"
+          :layout="getWidgetLayout('checklist')"
+          :min-width="widgetMeta.checklist.minWidth"
+          :min-height="widgetMeta.checklist.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('checklist')"
+          @update:layout="updateWidgetLayout('checklist', $event)"
+        >
+          <ChecklistPanel :items="selectedEquipment.checklist" />
+        </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.assistant"
+          id="assistant"
+          :layout="getWidgetLayout('assistant')"
+          :min-width="widgetMeta.assistant.minWidth"
+          :min-height="widgetMeta.assistant.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('assistant')"
+          @update:layout="updateWidgetLayout('assistant', $event)"
+        >
+          <AssistantPanel :messages="assistantMessages" :quick-commands="quickCommands" />
+        </DashboardEditableWidget>
+      </div>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+.dashboard-page {
+  --dashboard-scale: 0.8;
+  --dashboard-header-height: 72px;
+  --dashboard-sidebar-width: 90px;
+  --dashboard-assistant-width: clamp(288px, 17.92vw, 344px);
+  --dashboard-page-gutter: 15px;
+  --agentory-spacing-4: 3px;
+  --agentory-spacing-5: 4px;
+  --agentory-spacing-6: 5px;
+  --agentory-spacing-8: 6px;
+  --agentory-spacing-10: 8px;
+  --agentory-spacing-12: 10px;
+  --agentory-spacing-14: 11px;
+  --agentory-spacing-15: 12px;
+  --agentory-spacing-16: 13px;
+  --agentory-spacing-17: 14px;
+  --agentory-spacing-20: 16px;
+  --agentory-spacing-24: 19px;
+  --agentory-spacing-25: 20px;
+  --agentory-spacing-30: 24px;
+  --agentory-spacing-40: 32px;
+  --agentory-font-size-h2: 19px;
+  --agentory-line-height-h2: 29px;
+  --agentory-font-size-body-lg: 16px;
+  --agentory-line-height-body-lg: 24px;
+  --agentory-font-size-body: 13px;
+  --agentory-line-height-body: 19px;
+  --agentory-font-size-body-sm: 11px;
+  --agentory-line-height-body-sm: 17px;
+  --agentory-font-size-caption: 10px;
+  --agentory-line-height-caption: 14px;
+
+  min-width: 1024px;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-app);
+}
+
+.dashboard-page--sidebar-open {
+  --dashboard-sidebar-width: 162px;
+}
+
+.dashboard-content {
+  position: fixed;
+  top: var(--dashboard-header-height);
+  right: 0;
+  bottom: 0;
+  left: var(--dashboard-sidebar-width);
+  padding: var(--dashboard-page-gutter);
+  transition: left 260ms ease;
+}
+
+.dashboard-layout-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-content {
+    transition: none;
+  }
+}
+</style>

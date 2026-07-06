@@ -15,6 +15,20 @@ describe('App', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('로그인')
+    expect(wrapper.find('.auth-page').exists()).toBe(true)
+  })
+
+  it('renders the dashboard route', async () => {
+    await router.push('/dashboard')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+      },
+    })
+
+    expect(wrapper.find('.dashboard-page').exists()).toBe(true)
+    expect(wrapper.find('[data-test="dashboard-sidebar"]').exists()).toBe(true)
   })
 })
