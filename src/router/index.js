@@ -36,6 +36,21 @@ const router = createRouter({
       name: 'Dashboard',
       component: () => import('@/features/dashboard/views/DashboardView.vue'),
     },
+    {
+      path: '/work-log',
+      name: 'WorkLog',
+      component: () => import('@/features/workLog/views/WorkLogView.vue'),
+    },
+    {
+      path: '/equipment',
+      name: 'EquipmentList',
+      component: () => import('@/features/equipment/views/EquipmentListView.vue'),
+    },
+    {
+      path: '/notifications',
+      name: 'NotificationLog',
+      component: () => import('@/features/notification/views/NotificationLogView.vue'),
+    },
   ],
 })
 
