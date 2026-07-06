@@ -22,12 +22,18 @@ const screens = {
     title: '로그인',
     variant: 'login',
     fields: [
-      { id: 'userId', label: 'ID', type: 'text', value: 'employee1', autocomplete: 'username' },
+      {
+        id: 'userId',
+        label: 'ID',
+        type: 'text',
+        placeholder: 'employee1',
+        autocomplete: 'username',
+      },
       {
         id: 'password',
         label: 'Password',
         type: 'password',
-        value: '************',
+        placeholder: '************',
         autocomplete: 'current-password',
       },
     ],
@@ -44,10 +50,16 @@ const screens = {
         id: 'email',
         label: 'Email',
         type: 'email',
-        value: 'admin@metanet.co.kr',
+        placeholder: 'admin@metanet.co.kr',
         autocomplete: 'email',
       },
-      { id: 'code', label: '인증번호', type: 'text', value: '123456', autocomplete: 'one-time-code' },
+      {
+        id: 'code',
+        label: '인증번호',
+        type: 'text',
+        placeholder: '123456',
+        autocomplete: 'one-time-code',
+      },
     ],
     actions: [
       { id: 'sendCode', text: '인증번호 전송', afterField: 'email' },
@@ -63,14 +75,14 @@ const screens = {
         id: 'newPassword',
         label: '새 비밀번호 입력',
         type: 'password',
-        value: '************',
+        placeholder: '************',
         autocomplete: 'new-password',
       },
       {
         id: 'confirmPassword',
         label: '재입력',
         type: 'password',
-        value: '************',
+        placeholder: '************',
         autocomplete: 'new-password',
       },
     ],
@@ -81,21 +93,33 @@ const screens = {
     variant: 'signup',
     backTo: '/login',
     fields: [
-      { id: 'name', label: '이름', type: 'text', value: '이준호', autocomplete: 'name' },
-      { id: 'userId', label: 'ID', type: 'text', value: 'employee1', autocomplete: 'username' },
-      { id: 'department', label: '부서', type: 'text', value: '생산기술팀', autocomplete: 'organization' },
+      { id: 'name', label: '이름', type: 'text', placeholder: '이준호', autocomplete: 'name' },
+      {
+        id: 'userId',
+        label: 'ID',
+        type: 'text',
+        placeholder: 'employee1',
+        autocomplete: 'username',
+      },
+      {
+        id: 'department',
+        label: '부서',
+        type: 'text',
+        placeholder: '생산기술팀',
+        autocomplete: 'organization',
+      },
       {
         id: 'password',
         label: 'password',
         type: 'password',
-        value: '************',
+        placeholder: '************',
         autocomplete: 'new-password',
       },
       {
         id: 'email',
         label: 'email',
         type: 'email',
-        value: 'admin@metanet.co.kr',
+        placeholder: 'admin@metanet.co.kr',
         autocomplete: 'email',
       },
     ],
@@ -112,7 +136,7 @@ function resetFormValues() {
     delete formValues[key]
   })
   currentScreen.value.fields.forEach((field) => {
-    formValues[field.id] = field.value
+    formValues[field.id] = ''
   })
 }
 
@@ -156,6 +180,7 @@ watch(() => props.screen, resetFormValues, { immediate: true })
               class="auth-input"
               :type="field.type"
               :autocomplete="field.autocomplete"
+              :placeholder="field.placeholder"
             />
           </label>
 
@@ -251,6 +276,15 @@ watch(() => props.screen, resetFormValues, { immediate: true })
 
 .auth-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--agentory-color-bg-app), transparent 50%);
+}
+
+.auth-input::placeholder {
+  color: color-mix(in srgb, var(--agentory-color-text-auth), transparent 58%);
+  opacity: 1;
+}
+
+.auth-input[type='password']::placeholder {
+  color: color-mix(in srgb, var(--agentory-color-text-primary), transparent 64%);
 }
 
 .auth-link {

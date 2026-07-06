@@ -3,6 +3,7 @@ import { RouterLink } from 'vue-router'
 
 import backArrowIcon from '@/assets/icons/back-arrow.png'
 import logoImage from '@/assets/images/agentory-logo.png'
+import AuthOnboardingShowcase from '@/features/auth/components/AuthOnboardingShowcase.vue'
 
 defineProps({
   title: {
@@ -26,7 +27,9 @@ defineProps({
 
 <template>
   <main class="auth-page" :class="`auth-page--${cardVariant}`">
-    <section class="auth-visual" aria-hidden="true"></section>
+    <section class="auth-visual">
+      <AuthOnboardingShowcase />
+    </section>
 
     <section class="auth-content" :class="`auth-content--${cardVariant}`">
       <div class="auth-card" :class="`auth-card--${cardVariant}`">
@@ -94,18 +97,28 @@ defineProps({
 
 .auth-visual {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  padding: clamp(16px, 3vw, 52px);
   background: var(--agentory-color-bg-primary);
 }
 
 .auth-visual::before {
   position: absolute;
+  z-index: 0;
   inset: 0;
   background: var(--agentory-color-bg-app);
   border-top-right-radius: 150px;
   content: '';
+}
+
+.auth-visual > :deep(*) {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-content {
@@ -163,9 +176,9 @@ defineProps({
 }
 
 .auth-page--signup {
-  --auth-card-padding-bottom: clamp(24px, 3.15vh, 42px);
-  --auth-card-padding-top: clamp(24px, 3.15vh, 42px);
-  --auth-card-top: clamp(72px, 7.4vh, 110px);
+  --auth-card-padding-bottom: clamp(48px, 6.67vh, 83px);
+  --auth-card-padding-top: clamp(32px, 4.17vh, 52px);
+  --auth-card-top: clamp(110px, 7.8125vw, 150px);
   --auth-control-height: clamp(30px, 3.2vh, 39px);
   --auth-field-gap: clamp(5px, 0.7vh, 9px);
   --auth-field-margin: clamp(10px, 1.2vh, 15px);
