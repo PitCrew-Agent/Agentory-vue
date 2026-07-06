@@ -31,4 +31,46 @@ describe('App', () => {
     expect(wrapper.find('.dashboard-page').exists()).toBe(true)
     expect(wrapper.find('[data-test="dashboard-sidebar"]').exists()).toBe(true)
   })
+
+  it('renders the work log route', async () => {
+    await router.push('/work-log')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+      },
+    })
+
+    expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
+    expect(wrapper.find('[data-test="work-log-panel"]').exists()).toBe(true)
+  })
+
+  it('renders the equipment list route', async () => {
+    await router.push('/equipment')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+      },
+    })
+
+    expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
+    expect(wrapper.find('[data-test="equipment-list-panel"]').exists()).toBe(true)
+  })
+
+  it('renders the notification log route', async () => {
+    await router.push('/notifications')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+      },
+    })
+
+    expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
+    expect(wrapper.find('[data-test="notification-log-panel"]').exists()).toBe(true)
+  })
 })
