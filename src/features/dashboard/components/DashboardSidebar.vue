@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
@@ -8,6 +8,7 @@ import listIcon from '@/assets/icons/dashboard/nav-list.svg'
 import noteIcon from '@/assets/icons/dashboard/nav-note.svg'
 import storageIcon from '@/assets/icons/dashboard/nav-storage.svg'
 import sidebarToggleIcon from '@/assets/icons/dashboard/sidebar-toggle.svg'
+import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 
 const props = defineProps({
   dockWidgets: {
@@ -29,6 +30,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['restore-widget', 'toggle'])
+const { sidebarActiveIndex } = useDashboardSidebar()
 
 const iconMap = {
   bell: bellIcon,
@@ -40,6 +42,30 @@ const iconMap = {
 const toggleY = ref(32)
 const isDockOpen = ref(false)
 const hasDockWidgets = computed(() => props.dockWidgets.length > 0)
+const activeItemIndex = computed(() => props.items.findIndex((item) => item.active))
+const visualActiveIndex = ref(sidebarActiveIndex.value >= 0 ? sidebarActiveIndex.value : activeItemIndex.value)
+
+watch(
+  activeItemIndex,
+  (nextIndex) => {
+    if (nextIndex < 0) {
+      return
+    }
+
+    if (sidebarActiveIndex.value < 0) {
+      sidebarActiveIndex.value = nextIndex
+      visualActiveIndex.value = nextIndex
+      return
+    }
+
+    visualActiveIndex.value = sidebarActiveIndex.value
+    window.requestAnimationFrame(() => {
+      visualActiveIndex.value = nextIndex
+      sidebarActiveIndex.value = nextIndex
+    })
+  },
+  { immediate: true },
+)
 
 function syncTogglePosition(event) {
   const rect = event.currentTarget.getBoundingClientRect()
@@ -60,7 +86,13 @@ function restoreWidget(id) {
     :data-open="String(props.open)"
     data-test="dashboard-sidebar"
   >
-    <nav class="dashboard-sidebar__nav" aria-label="대시보드 메뉴">
+    <nav
+      class="dashboard-sidebar__nav"
+      aria-label="대시보드 메뉴"
+      :style="{ '--sidebar-active-index': visualActiveIndex }"
+    >
+      <span v-if="visualActiveIndex >= 0" class="dashboard-sidebar__active-indicator" aria-hidden="true"></span>
+
       <template v-for="item in props.items" :key="item.id">
         <RouterLink
           v-if="item.to"
@@ -162,6 +194,7 @@ function restoreWidget(id) {
 }
 
 .dashboard-sidebar__nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 29px;
@@ -171,6 +204,27 @@ function restoreWidget(id) {
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-8);
+}
+
+.dashboard-sidebar__active-indicator {
+  position: absolute;
+  z-index: 0;
+  top: calc(var(--agentory-spacing-10) + (42px + 29px) * var(--sidebar-active-index));
+  left: var(--agentory-spacing-10);
+  width: 42px;
+  height: 42px;
+  background: var(--agentory-color-bg-primary);
+  border-radius: var(--agentory-radius-8);
+  box-shadow: var(--agentory-shadow-sidebar-active);
+  pointer-events: none;
+  transition:
+    top 520ms var(--agentory-ease-elastic),
+    width 320ms var(--agentory-ease-elastic),
+    transform 420ms var(--agentory-ease-elastic);
+}
+
+.dashboard-sidebar--open .dashboard-sidebar__active-indicator {
+  width: 114px;
 }
 
 .dashboard-sidebar__item {
@@ -186,10 +240,10 @@ function restoreWidget(id) {
   border: 0;
   border-radius: var(--agentory-radius-8);
   text-decoration: none;
+  z-index: 1;
   transition:
     width 260ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
+    color 180ms ease;
 }
 
 .dashboard-sidebar--open .dashboard-sidebar__item {
@@ -198,8 +252,6 @@ function restoreWidget(id) {
 
 .dashboard-sidebar__item--active {
   color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
-  box-shadow: var(--agentory-shadow-sidebar-active);
 }
 
 .dashboard-sidebar__icon {
@@ -438,7 +490,8 @@ function restoreWidget(id) {
   .dashboard-sidebar__item,
   .dashboard-sidebar__label,
   .dashboard-sidebar__toggle,
-  .dashboard-sidebar__dock-item {
+  .dashboard-sidebar__dock-item,
+  .dashboard-sidebar__active-indicator {
     transition: none;
   }
 }

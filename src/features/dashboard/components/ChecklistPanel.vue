@@ -26,7 +26,7 @@ defineProps({
 .checklist-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-10);
+  gap: var(--agentory-spacing-14);
   min-width: 0;
   height: 100%;
   padding: var(--agentory-spacing-20) var(--agentory-spacing-16);
@@ -38,26 +38,26 @@ defineProps({
 
 .checklist-panel__header {
   display: flex;
-  flex-direction: column;
-  gap: var(--agentory-spacing-4);
+  align-items: center;
+  min-height: 28px;
   width: 100%;
-  padding-bottom: 6px;
+  padding-bottom: var(--agentory-spacing-10);
   border-bottom: 2px solid var(--agentory-color-bg-primary);
 }
 
 .checklist-panel__header h2 {
   color: var(--agentory-color-bg-primary);
   font-family: var(--agentory-font-family-checklist);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-black);
-  line-height: var(--agentory-line-height-body-sm);
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-lg);
 }
 
 .checklist-panel__list {
   display: flex;
   flex-direction: column;
   gap: var(--agentory-spacing-10);
-  padding-top: var(--agentory-spacing-4);
+  padding-top: var(--agentory-spacing-6);
 }
 
 .checklist-panel__item {

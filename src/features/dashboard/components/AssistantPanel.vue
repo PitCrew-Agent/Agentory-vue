@@ -1,5 +1,4 @@
 <script setup>
-import assistantAvatar from '@/assets/icons/dashboard/assistant-avatar.png'
 import sendIcon from '@/assets/icons/dashboard/send-up.png'
 
 defineProps({
@@ -17,8 +16,8 @@ defineProps({
 <template>
   <aside class="assistant-panel" aria-labelledby="assistant-panel-title">
     <div class="assistant-panel__header">
-      <img class="assistant-panel__avatar" :src="assistantAvatar" alt="" width="40" height="38" />
-      <h2 id="assistant-panel-title">AI 어시스턴트</h2>
+      <h2 id="assistant-panel-title">Tory</h2>
+      <span class="assistant-panel__role">AI 어시스턴트</span>
     </div>
 
     <div class="assistant-panel__divider"></div>
@@ -37,7 +36,7 @@ defineProps({
       </div>
 
       <div class="assistant-panel__input-row">
-        <textarea rows="2" placeholder="메시지를 입력해주세요." aria-label="AI 어시스턴트 메시지" />
+        <textarea rows="2" placeholder="Tory에게 메시지를 입력해주세요." aria-label="Tory 메시지" />
         <button type="button" aria-label="메시지 전송">
           <img :src="sendIcon" alt="" width="24" height="24" />
         </button>
@@ -62,24 +61,25 @@ defineProps({
 .assistant-panel__header {
   display: flex;
   align-items: center;
-  gap: var(--agentory-spacing-10);
+  gap: var(--agentory-spacing-8);
+  min-height: 28px;
   width: 100%;
-  padding: var(--agentory-spacing-15) var(--agentory-spacing-20) 6px;
-}
-
-.assistant-panel__avatar {
-  width: 40px;
-  height: 38px;
-  object-fit: cover;
-  border-radius: var(--agentory-radius-pill);
-  flex: 0 0 auto;
+  padding: var(--agentory-spacing-20) var(--agentory-spacing-20) var(--agentory-spacing-10);
 }
 
 .assistant-panel__header h2 {
-  color: rgba(50, 50, 50, 0.8);
+  color: var(--agentory-color-bg-primary);
   font-size: var(--agentory-font-size-body-lg);
-  font-weight: var(--agentory-font-weight-extra-bold, 800);
+  font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-body-lg);
+}
+
+.assistant-panel__role {
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-caption);
+  white-space: nowrap;
 }
 
 .assistant-panel__divider {

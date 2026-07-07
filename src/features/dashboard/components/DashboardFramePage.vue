@@ -1,9 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
 import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
-import { createDashboardNavigation, statusSummary } from '@/features/dashboard/mock/dashboardMock'
+import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
+import { createDashboardNavigation } from '@/features/dashboard/mock/dashboardMock'
 
 const props = defineProps({
   activeNavigationId: {
@@ -16,17 +18,31 @@ const props = defineProps({
   },
 })
 
-const isSidebarOpen = ref(false)
+const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const navigationItems = computed(() => createDashboardNavigation(props.activeNavigationId))
+const isContentLoading = ref(true)
+let contentLoadingTimer = 0
 
-function toggleSidebar() {
-  isSidebarOpen.value = !isSidebarOpen.value
+function showContentLoading() {
+  window.clearTimeout(contentLoadingTimer)
+  isContentLoading.value = true
+  contentLoadingTimer = window.setTimeout(() => {
+    isContentLoading.value = false
+  }, 620)
 }
+
+onMounted(showContentLoading)
+
+onBeforeUnmount(() => {
+  window.clearTimeout(contentLoadingTimer)
+})
+
+watch(() => props.activeNavigationId, showContentLoading)
 </script>
 
 <template>
   <main class="dashboard-frame-page" :class="{ 'dashboard-frame-page--sidebar-open': isSidebarOpen }">
-    <DashboardHeader :summary="statusSummary" />
+    <DashboardHeader />
     <DashboardSidebar
       :items="navigationItems"
       :open="isSidebarOpen"
@@ -35,7 +51,16 @@ function toggleSidebar() {
     />
 
     <section class="dashboard-frame-page__content" :aria-label="props.contentLabel">
-      <slot />
+      <Transition name="dashboard-content-loader">
+        <DashboardContentLoader v-if="isContentLoading" label="화면을 불러오는 중" />
+      </Transition>
+
+      <div
+        class="dashboard-frame-page__content-body"
+        :class="{ 'dashboard-frame-page__content-body--loading': isContentLoading }"
+      >
+        <slot />
+      </div>
     </section>
   </main>
 </template>
@@ -97,8 +122,41 @@ function toggleSidebar() {
   transition: left 260ms ease;
 }
 
+.dashboard-frame-page__content-body {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  transition:
+    opacity 260ms var(--agentory-ease-soft),
+    filter 360ms var(--agentory-ease-soft),
+    transform 440ms var(--agentory-ease-elastic);
+}
+
+.dashboard-frame-page__content-body--loading {
+  opacity: 0.38;
+  filter: blur(1px);
+  transform: translateY(8px) scale(0.992);
+}
+
+.dashboard-content-loader-enter-active,
+.dashboard-content-loader-leave-active {
+  transition:
+    opacity 220ms var(--agentory-ease-soft),
+    transform 380ms var(--agentory-ease-elastic);
+}
+
+.dashboard-content-loader-enter-from,
+.dashboard-content-loader-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dashboard-frame-page__content {
+  .dashboard-frame-page__content,
+  .dashboard-frame-page__content-body,
+  .dashboard-content-loader-enter-active,
+  .dashboard-content-loader-leave-active {
     transition: none;
   }
 }

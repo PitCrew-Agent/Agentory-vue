@@ -67,8 +67,8 @@ function selectMetric(metricId) {
           <strong>{{ equipment.type }}</strong>
         </div>
         <div class="detail-panel__info-item">
-          <span>책임자</span>
-          <strong>{{ equipment.owner }}</strong>
+          <span>부서·책임자</span>
+          <strong>{{ equipment.ownerDisplay ?? equipment.owner }}</strong>
         </div>
         <div class="detail-panel__info-item">
           <span>최근 업데이트</span>
@@ -109,7 +109,7 @@ function selectMetric(metricId) {
 .detail-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-10);
+  gap: var(--agentory-spacing-14);
   min-width: 0;
   height: 100%;
   padding: var(--agentory-spacing-20) var(--agentory-spacing-16);
@@ -122,18 +122,18 @@ function selectMetric(metricId) {
 
 .detail-panel__section-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--agentory-spacing-4);
+  align-items: center;
+  min-height: 28px;
   width: 100%;
-  padding-bottom: 6px;
+  padding-bottom: var(--agentory-spacing-10);
   border-bottom: 2px solid var(--agentory-color-bg-primary);
 }
 
 .detail-panel__section-header h2 {
   color: var(--agentory-color-bg-primary);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-black);
-  line-height: var(--agentory-line-height-body-sm);
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-lg);
 }
 
 .detail-panel__title-row {

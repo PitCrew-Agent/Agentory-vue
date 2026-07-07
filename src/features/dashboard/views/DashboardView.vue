@@ -1,72 +1,122 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
-import ChecklistPanel from '@/features/dashboard/components/ChecklistPanel.vue'
+import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import DashboardEditableWidget from '@/features/dashboard/components/DashboardEditableWidget.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
 import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
 import EquipmentChartPanel from '@/features/dashboard/components/EquipmentChartPanel.vue'
 import EquipmentDetailPanel from '@/features/dashboard/components/EquipmentDetailPanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
+import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 import {
-  dashboardNavigation,
-  selectedEquipment,
-  statusSummary,
-} from '@/features/dashboard/mock/dashboardMock'
+  factorySceneMock,
+  loadEquipmentChecklistMock,
+  loadFactory3dSceneMock,
+} from '@/features/dashboard/mock/factory3dMock'
+import { dashboardNavigation } from '@/features/dashboard/mock/dashboardMock'
 
-const isSidebarOpen = ref(false)
+const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
 const assistantMessages = []
 const quickCommands = []
+const factoryScene = reactive({
+  defaultEquipmentId: factorySceneMock.defaultEquipmentId,
+  equipmentList: factorySceneMock.equipmentList,
+  lineGroups: factorySceneMock.lineGroups,
+  statusSummary: factorySceneMock.statusSummary,
+})
+const selectedEquipmentId = ref(factoryScene.defaultEquipmentId)
 const selectedMetricId = ref('temperature')
+const selectedChecklistItems = ref([])
 const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
 let layoutResizeObserver
+let checklistRequestId = 0
+let contentLoadingTimer = 0
+const isContentLoading = ref(true)
 
-const selectedChart = computed(
-  () => selectedEquipment.charts[selectedMetricId.value] ?? selectedEquipment.charts.temperature,
+const selectedEquipment = computed(
+  () =>
+    factoryScene.equipmentList.find((equipment) => equipment.id === selectedEquipmentId.value) ??
+    factoryScene.equipmentList[0],
 )
 
-const widgetOrder = ['factory', 'detail', 'metricChart', 'checklist', 'assistant']
+const selectedChart = computed(
+  () => selectedEquipment.value.charts[selectedMetricId.value] ?? selectedEquipment.value.charts.temperature,
+)
+
+const widgetOrder = ['factory', 'detail', 'metricChart', 'assistant']
 const widgetMeta = {
-  assistant: { id: 'assistant', label: 'AI 어시스턴트', minHeight: 260, minWidth: 190 },
-  checklist: { id: 'checklist', label: '체크 리스트', minHeight: 140, minWidth: 210 },
+  assistant: { id: 'assistant', label: 'Tory', minHeight: 260, minWidth: 190 },
   detail: { id: 'detail', label: '상세 정보', minHeight: 150, minWidth: 220 },
   factory: { id: 'factory', label: '3D 공장 화면', minHeight: 240, minWidth: 340 },
   metricChart: { id: 'metricChart', label: '그래프', minHeight: 150, minWidth: 220 },
 }
 const visibleWidgetMap = reactive({
   assistant: true,
-  checklist: true,
   detail: true,
   factory: true,
   metricChart: true,
 })
 const widgetLayouts = reactive({
   assistant: { x: 75, y: 0, w: 25, h: 100 },
-  checklist: { x: 50, y: 50, w: 25, h: 50 },
-  detail: { x: 0, y: 50, w: 25, h: 50 },
-  factory: { x: 0, y: 0, w: 75, h: 50 },
-  metricChart: { x: 25, y: 50, w: 25, h: 50 },
+  detail: { x: 50, y: 0, w: 25, h: 50 },
+  factory: { x: 0, y: 0, w: 50, h: 100 },
+  metricChart: { x: 50, y: 50, w: 25, h: 50 },
 })
 const previewLayouts = reactive({})
 const defaultLayoutGrid = {
   assistant: { col: 3, cols: 1, row: 0, rows: 2 },
-  checklist: { col: 2, cols: 1, row: 1, rows: 1 },
-  detail: { col: 0, cols: 1, row: 1, rows: 1 },
-  factory: { col: 0, cols: 3, row: 0, rows: 1 },
-  metricChart: { col: 1, cols: 1, row: 1, rows: 1 },
+  detail: { col: 2, cols: 1, row: 0, rows: 1 },
+  factory: { col: 0, cols: 2, row: 0, rows: 2 },
+  metricChart: { col: 2, cols: 1, row: 1, rows: 1 },
 }
 
 const dockWidgets = computed(() =>
   widgetOrder.filter((widgetId) => !visibleWidgetMap[widgetId]).map((widgetId) => widgetMeta[widgetId]),
 )
 
-function toggleSidebar() {
-  isSidebarOpen.value = !isSidebarOpen.value
+function selectFactoryEquipment(equipmentId) {
+  const nextEquipment = factoryScene.equipmentList.find((equipment) => equipment.id === equipmentId)
+
+  if (!nextEquipment) {
+    return
+  }
+
+  selectedEquipmentId.value = equipmentId
+
+  if (!nextEquipment.charts[selectedMetricId.value]) {
+    selectedMetricId.value = 'temperature'
+  }
+}
+
+function applyFactoryScene(nextFactoryScene) {
+  factoryScene.defaultEquipmentId = nextFactoryScene.defaultEquipmentId
+  factoryScene.equipmentList = nextFactoryScene.equipmentList
+  factoryScene.lineGroups = nextFactoryScene.lineGroups
+  factoryScene.statusSummary = nextFactoryScene.statusSummary
+
+  if (!factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)) {
+    selectedEquipmentId.value = factoryScene.defaultEquipmentId
+  }
+}
+
+async function loadFactoryScene() {
+  const nextFactoryScene = await loadFactory3dSceneMock()
+  applyFactoryScene(nextFactoryScene)
+}
+
+async function loadSelectedChecklist(equipmentId) {
+  const requestId = ++checklistRequestId
+  const items = await loadEquipmentChecklistMock(equipmentId)
+
+  if (requestId === checklistRequestId) {
+    selectedChecklistItems.value = items
+  }
 }
 
 function clamp(value, min, max) {
@@ -662,7 +712,17 @@ function updateWidgetLayout(id, nextLayout) {
   })
 }
 
+function showContentLoading() {
+  window.clearTimeout(contentLoadingTimer)
+  isContentLoading.value = true
+  contentLoadingTimer = window.setTimeout(() => {
+    isContentLoading.value = false
+  }, 620)
+}
+
 onMounted(() => {
+  showContentLoading()
+  loadFactoryScene()
   applyDefaultLayouts()
 
   if (typeof ResizeObserver === 'undefined') {
@@ -684,13 +744,28 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.clearTimeout(contentLoadingTimer)
   layoutResizeObserver?.disconnect()
 })
+
+watch(selectedEquipment, (equipment) => {
+  if (!equipment.charts[selectedMetricId.value]) {
+    selectedMetricId.value = 'temperature'
+  }
+})
+
+watch(
+  selectedEquipmentId,
+  (equipmentId) => {
+    loadSelectedChecklist(equipmentId)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <main class="dashboard-page" :class="{ 'dashboard-page--sidebar-open': isSidebarOpen }">
-    <DashboardHeader :summary="statusSummary" />
+    <DashboardHeader />
     <DashboardSidebar
       :dock-widgets="dockWidgets"
       :items="dashboardNavigation"
@@ -700,7 +775,15 @@ onBeforeUnmount(() => {
     />
 
     <section class="dashboard-content" aria-label="대시보드 편집 영역">
-      <div ref="layoutBoardRef" class="dashboard-layout-board" data-test="dashboard-layout-board">
+      <Transition name="dashboard-content-loader">
+        <DashboardContentLoader v-if="isContentLoading" label="대시보드 화면을 불러오는 중" />
+      </Transition>
+
+      <div
+        class="dashboard-content__body"
+        :class="{ 'dashboard-content__body--loading': isContentLoading }"
+      >
+        <div ref="layoutBoardRef" class="dashboard-layout-board" data-test="dashboard-layout-board">
         <DashboardEditableWidget
           v-if="visibleWidgetMap.factory"
           id="factory"
@@ -712,7 +795,12 @@ onBeforeUnmount(() => {
           @stash="stashWidget('factory')"
           @update:layout="updateWidgetLayout('factory', $event)"
         >
-          <FactoryViewport />
+          <FactoryViewport
+            :checklist-items="selectedChecklistItems"
+            :lines="factoryScene.lineGroups"
+            :selected-equipment-id="selectedEquipmentId"
+            @select-equipment="selectFactoryEquipment"
+          />
         </DashboardEditableWidget>
 
         <DashboardEditableWidget
@@ -744,20 +832,6 @@ onBeforeUnmount(() => {
         </DashboardEditableWidget>
 
         <DashboardEditableWidget
-          v-if="visibleWidgetMap.checklist"
-          id="checklist"
-          :layout="getWidgetLayout('checklist')"
-          :min-width="widgetMeta.checklist.minWidth"
-          :min-height="widgetMeta.checklist.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('checklist')"
-          @update:layout="updateWidgetLayout('checklist', $event)"
-        >
-          <ChecklistPanel :items="selectedEquipment.checklist" />
-        </DashboardEditableWidget>
-
-        <DashboardEditableWidget
           v-if="visibleWidgetMap.assistant"
           id="assistant"
           :layout="getWidgetLayout('assistant')"
@@ -770,6 +844,7 @@ onBeforeUnmount(() => {
         >
           <AssistantPanel :messages="assistantMessages" :quick-commands="quickCommands" />
         </DashboardEditableWidget>
+        </div>
       </div>
     </section>
   </main>
@@ -829,6 +904,23 @@ onBeforeUnmount(() => {
   transition: left 260ms ease;
 }
 
+.dashboard-content__body {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  transition:
+    opacity 260ms var(--agentory-ease-soft),
+    filter 360ms var(--agentory-ease-soft),
+    transform 440ms var(--agentory-ease-elastic);
+}
+
+.dashboard-content__body--loading {
+  opacity: 0.38;
+  filter: blur(1px);
+  transform: translateY(8px) scale(0.992);
+}
+
 .dashboard-layout-board {
   position: relative;
   width: 100%;
@@ -837,8 +929,24 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+.dashboard-content-loader-enter-active,
+.dashboard-content-loader-leave-active {
+  transition:
+    opacity 220ms var(--agentory-ease-soft),
+    transform 380ms var(--agentory-ease-elastic);
+}
+
+.dashboard-content-loader-enter-from,
+.dashboard-content-loader-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dashboard-content {
+  .dashboard-content,
+  .dashboard-content__body,
+  .dashboard-content-loader-enter-active,
+  .dashboard-content-loader-leave-active {
     transition: none;
   }
 }

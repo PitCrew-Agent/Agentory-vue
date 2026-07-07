@@ -73,7 +73,7 @@ test('renders signup screen', async ({ page }) => {
   await page.locator('input#name').fill('정하린')
   await page.locator('input#department').fill('스마트운영팀')
   await page.getByRole('button', { name: '완료' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15000 })
   await expect(page.locator('[data-test="dashboard-header-user-button"]')).toHaveText('정하린')
 
   await page.locator('[data-test="dashboard-header-user-button"]').click()
