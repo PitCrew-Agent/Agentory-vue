@@ -1,3 +1,5 @@
+import { getAccessToken } from '@/features/auth/services/authTokenStorage'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 function joinEndpoint(baseUrl, endpoint) {
@@ -46,8 +48,15 @@ export async function apiRequest(endpoint, options = {}) {
     requestHeaders.set('Content-Type', 'application/json')
   }
 
+  const accessToken = getAccessToken()
+
+  if (accessToken && !requestHeaders.has('Authorization')) {
+    requestHeaders.set('Authorization', `Bearer ${accessToken}`)
+  }
+
   const response = await fetch(buildUrl(endpoint, params), {
     ...requestOptions,
+    credentials: requestOptions.credentials ?? 'same-origin',
     headers: requestHeaders,
     body: hasJsonBody ? JSON.stringify(body) : body,
   })
