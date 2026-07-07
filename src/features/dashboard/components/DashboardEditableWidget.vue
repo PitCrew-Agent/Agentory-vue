@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
 .dashboard-widget__header-tools {
   position: absolute;
   z-index: 8;
-  top: 10px;
+  top: 16px;
   right: 16px;
   left: 16px;
   display: flex;
@@ -418,10 +418,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   height: 24px;
   pointer-events: none;
-}
-
-.dashboard-widget[data-widget-id='assistant'] .dashboard-widget__header-tools {
-  top: 17px;
 }
 
 .dashboard-widget__move,
