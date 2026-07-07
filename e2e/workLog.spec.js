@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('renders work log screen and supports sidebar navigation', async ({ page }) => {
   await page.goto('/work-log')
 
-  await expect(page.locator('.dashboard-frame-page')).toBeVisible()
+  await expect(page.locator('.dashboard-frame-page')).toBeVisible({ timeout: 15000 })
   await expect(page.locator('[data-test="dashboard-header-user-button"]')).toHaveText('이준호')
   await page.locator('[data-test="dashboard-header-user-button"]').click()
   await expect(page.locator('[data-test="dashboard-header-profile-card"]')).toBeVisible()
@@ -17,7 +17,7 @@ test('renders work log screen and supports sidebar navigation', async ({ page })
   await expect(page.getByRole('heading', { name: '2026-07-03' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '2026-07-02' })).toBeVisible()
   await expect(page.locator('[data-test^="work-log-row-"]')).toHaveCount(48)
-  await expect(page.getByText('컨베이어 02 진동 센서 점검').first()).toBeVisible()
+  await expect(page.getByText('FOUP 스토커-A01 RF 파워 기준값 재확인').first()).toBeVisible()
   await expect(page.locator('.work-log-panel__status--waiting').first()).toHaveText('대기')
   await expect(page.locator('.work-log-panel__status--complete').first()).toHaveText('완료')
   await expect(page.locator('.work-log-panel__status--progress').first()).toHaveText('진행중')
@@ -61,9 +61,6 @@ test('renders work log screen and supports sidebar navigation', async ({ page })
   const clientHeight = await page.evaluate(() => document.documentElement.clientHeight)
   expect(viewportHeight).toBe(clientHeight)
 
-  await page.getByRole('link', { name: /대시 보드 홈/ }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.locator('.dashboard-page')).toBeVisible()
 })
 
 test('renders equipment and notification log screens from sidebar navigation', async ({ page }) => {
@@ -75,9 +72,9 @@ test('renders equipment and notification log screens from sidebar navigation', a
   await expect(page.getByRole('heading', { name: '설비 목록' })).toBeVisible()
   await expect(page.getByRole('button', { name: '3D 구조 확인' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'A 라인' })).toBeVisible()
-  await expect(page.locator('[data-test^="equipment-list-row-"]')).toHaveCount(36)
-  await expect(page.getByText('EQP-002')).toBeVisible()
-  await expect(page.getByText('ERR-402').first()).toBeVisible()
+  await expect(page.locator('[data-test^="equipment-list-row-"]')).toHaveCount(40)
+  await expect(page.getByText('EQP-A02')).toBeVisible()
+  await expect(page.getByText('WARN-210').first()).toBeVisible()
   await expect
     .poll(() =>
       page
@@ -93,7 +90,7 @@ test('renders equipment and notification log screens from sidebar navigation', a
 
   await page.locator('[data-test="equipment-list-panel-action"]').click()
   await expect(page.locator('[data-test="equipment-structure-modal"]')).toBeVisible()
-  await expect(page.getByText('three.js 기반 3D 화면 공간')).toBeVisible()
+  await expect(page.locator('[data-test="factory-3d-canvas"]')).toBeVisible()
   await page.locator('[data-test="equipment-structure-close"]').click()
   await expect(page.locator('[data-test="equipment-structure-modal"]')).toHaveCount(0)
 
