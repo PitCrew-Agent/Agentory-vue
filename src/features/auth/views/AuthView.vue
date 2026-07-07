@@ -1,395 +1,315 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import { useRouter } from 'vue-router'
+import { onBeforeUnmount, ref } from 'vue'
 
-import helpIcon from '@/assets/icons/help.png'
+import microsoftIcon from '@/assets/icons/microsoft.svg'
 import AuthShell from '@/features/auth/components/AuthShell.vue'
-import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
+import { redirectToAuthFlow } from '@/features/auth/services/authApi'
 
-const props = defineProps({
-  screen: {
-    type: String,
-    required: true,
-  },
-})
+const isAuthRedirecting = ref(false)
+const toastMessage = ref('')
 
-const router = useRouter()
-const { updateCurrentUser } = useCurrentUser()
+let toastTimeoutId
 
-const screens = {
-  login: {
-    title: '로그인',
-    variant: 'login',
-    fields: [
-      {
-        id: 'userId',
-        label: 'ID',
-        type: 'text',
-        placeholder: 'employee1',
-        autocomplete: 'username',
-      },
-      {
-        id: 'password',
-        label: 'Password',
-        type: 'password',
-        placeholder: '************',
-        autocomplete: 'current-password',
-      },
-    ],
-    link: { to: '/password/find', text: '비밀번호를 잊으셨나요?', icon: true },
-    actions: [{ id: 'login', text: '로그인' }],
-    secondaryAction: { to: '/signup', text: '회원가입' },
-  },
-  passwordFind: {
-    title: '비밀번호 찾기',
-    variant: 'password-find',
-    backTo: '/login',
-    fields: [
-      {
-        id: 'email',
-        label: 'Email',
-        type: 'email',
-        placeholder: 'admin@metanet.co.kr',
-        autocomplete: 'email',
-      },
-      {
-        id: 'code',
-        label: '인증번호',
-        type: 'text',
-        placeholder: '123456',
-        autocomplete: 'one-time-code',
-      },
-    ],
-    actions: [
-      { id: 'sendCode', text: '인증번호 전송', afterField: 'email' },
-      { id: 'verify', text: '인증' },
-    ],
-  },
-  passwordReset: {
-    title: '비밀번호 찾기',
-    variant: 'password-reset',
-    backTo: '/password/find',
-    fields: [
-      {
-        id: 'newPassword',
-        label: '새 비밀번호 입력',
-        type: 'password',
-        placeholder: '************',
-        autocomplete: 'new-password',
-      },
-      {
-        id: 'confirmPassword',
-        label: '재입력',
-        type: 'password',
-        placeholder: '************',
-        autocomplete: 'new-password',
-      },
-    ],
-    actions: [{ id: 'complete', text: '완료' }],
-  },
-  signup: {
-    title: '회원가입',
-    variant: 'signup',
-    backTo: '/login',
-    fields: [
-      { id: 'name', label: '이름', type: 'text', placeholder: '이준호', autocomplete: 'name' },
-      {
-        id: 'userId',
-        label: 'ID',
-        type: 'text',
-        placeholder: 'employee1',
-        autocomplete: 'username',
-      },
-      {
-        id: 'department',
-        label: '부서',
-        type: 'text',
-        placeholder: '생산기술팀',
-        autocomplete: 'organization',
-      },
-      {
-        id: 'password',
-        label: 'password',
-        type: 'password',
-        placeholder: '************',
-        autocomplete: 'new-password',
-      },
-      {
-        id: 'email',
-        label: 'email',
-        type: 'email',
-        placeholder: 'admin@metanet.co.kr',
-        autocomplete: 'email',
-      },
-    ],
-    actions: [{ id: 'complete', text: '완료' }],
-  },
+function showToast(message) {
+  toastMessage.value = message
+
+  if (toastTimeoutId) {
+    window.clearTimeout(toastTimeoutId)
+  }
+
+  toastTimeoutId = window.setTimeout(() => {
+    toastMessage.value = ''
+    toastTimeoutId = undefined
+  }, 2200)
 }
 
-const currentScreen = computed(() => screens[props.screen] ?? screens.login)
-const showBackButton = computed(() => currentScreen.value.variant !== 'login')
-const formValues = reactive({})
+async function startAuthRedirect(flow) {
+  if (isAuthRedirecting.value) {
+    return
+  }
 
-function resetFormValues() {
-  Object.keys(formValues).forEach((key) => {
-    delete formValues[key]
-  })
-  currentScreen.value.fields.forEach((field) => {
-    formValues[field.id] = ''
-  })
-}
+  isAuthRedirecting.value = true
 
-function actionsAfterField(fieldId) {
-  return currentScreen.value.actions.filter((action) => action.afterField === fieldId)
-}
-
-const footerActions = computed(() =>
-  currentScreen.value.actions.filter((action) => !action.afterField),
-)
-
-function handleSubmit() {
-  if (currentScreen.value.variant === 'signup') {
-    updateCurrentUser({
-      department: formValues.department,
-      name: formValues.name,
-      userId: formValues.userId,
-    })
-    router.push('/dashboard')
+  try {
+    await redirectToAuthFlow(flow)
+  } catch {
+    isAuthRedirecting.value = false
+    showToast('인증 서비스 연결에 실패했습니다.')
   }
 }
 
-watch(() => props.screen, resetFormValues, { immediate: true })
+onBeforeUnmount(() => {
+  if (toastTimeoutId) {
+    window.clearTimeout(toastTimeoutId)
+  }
+})
 </script>
 
 <template>
-  <AuthShell
-    :title="currentScreen.title"
-    :card-variant="currentScreen.variant"
-    :show-back="showBackButton"
-    :back-to="currentScreen.backTo"
-  >
-    <Transition name="auth-screen" mode="out-in">
-      <form :key="currentScreen.variant" class="auth-form" @submit.prevent="handleSubmit">
-        <template v-for="field in currentScreen.fields" :key="field.id">
-          <label class="auth-field" :for="field.id">
-            <span class="auth-label">{{ field.label }}</span>
-            <input
-              :id="field.id"
-              v-model="formValues[field.id]"
-              class="auth-input"
-              :type="field.type"
-              :autocomplete="field.autocomplete"
-              :placeholder="field.placeholder"
-            />
-          </label>
+  <div class="auth-view-root">
+    <AuthShell title="로그인" card-variant="login">
+      <section class="auth-sso" aria-labelledby="auth-sso-title">
+        <div class="auth-sso__copy">
+          <span class="auth-sso__eyebrow">Microsoft Azure SSO</span>
+          <h2 id="auth-sso-title">Microsoft Azure SSO를 활용한 로그인</h2>
+          <p>조직 계정으로 Agentory에 안전하게 접속하세요.</p>
+        </div>
+
+        <div class="auth-sso__actions">
+          <button
+            class="auth-sso__button auth-sso__button--primary"
+            type="button"
+            :disabled="isAuthRedirecting"
+            @click="startAuthRedirect('login')"
+          >
+            <img class="auth-sso__microsoft-icon" :src="microsoftIcon" alt="" />
+            <span>Microsoft로 로그인</span>
+          </button>
 
           <button
-            v-for="action in actionsAfterField(field.id)"
-            :key="action.id"
-            class="auth-button"
+            class="auth-sso__button auth-sso__button--secondary"
             type="button"
+            :disabled="isAuthRedirecting"
+            @click="startAuthRedirect('passwordReset')"
           >
-            <span>{{ action.text }}</span>
+            <span>비밀번호 찾기</span>
           </button>
-        </template>
+        </div>
 
-        <RouterLink v-if="currentScreen.link" class="auth-link" :to="currentScreen.link.to">
-          <img
-            v-if="currentScreen.link.icon"
-            class="auth-link-icon"
-            :src="helpIcon"
-            alt=""
-            width="16"
-            height="16"
-          />
-          <span>{{ currentScreen.link.text }}</span>
-        </RouterLink>
+        <p class="auth-sso__note">계정 생성과 권한 변경은 조직 관리자에게 요청해주세요.</p>
+      </section>
 
-        <button
-          v-for="action in footerActions"
-          :key="action.id"
-          class="auth-button auth-button--footer"
-          type="submit"
-        >
-          <span>{{ action.text }}</span>
-        </button>
-
-        <RouterLink
-          v-if="currentScreen.secondaryAction"
-          class="auth-secondary-button"
-          :to="currentScreen.secondaryAction.to"
-        >
-          <span>{{ currentScreen.secondaryAction.text }}</span>
-        </RouterLink>
-      </form>
-    </Transition>
-  </AuthShell>
+      <Teleport to="body">
+        <Transition name="auth-toast">
+          <div v-if="toastMessage" class="auth-toast" role="status" aria-live="polite">
+            {{ toastMessage }}
+          </div>
+        </Transition>
+      </Teleport>
+    </AuthShell>
+  </div>
 </template>
 
 <style scoped>
-.auth-form {
+.auth-view-root {
+  display: contents;
+}
+
+.auth-sso {
   display: flex;
   flex-direction: column;
-  width: var(--auth-form-width);
-}
-
-.auth-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--auth-field-gap);
-  margin-bottom: var(--auth-field-margin);
-}
-
-.auth-label,
-.auth-input,
-.auth-link,
-.auth-button,
-.auth-secondary-button {
-  font-family: var(--agentory-font-family-auth);
-  letter-spacing: 0.1em;
-}
-
-.auth-label {
-  color: var(--agentory-color-text-inverse);
-  font-size: var(--auth-label-font-size);
-  font-weight: var(--agentory-font-weight-regular);
-  line-height: 1.5;
-}
-
-.auth-input {
   width: 100%;
-  height: var(--auth-control-height);
-  padding: clamp(7px, 0.83vh, 11px) clamp(14px, 0.94vw, 22px);
-  color: var(--agentory-color-text-auth);
-  background: var(--agentory-color-bg-app);
-  border: 0;
-  border-radius: var(--auth-control-radius);
-  outline: none;
-  font-size: var(--auth-control-font-size);
-  font-weight: var(--agentory-font-weight-regular);
+  max-width: 100%;
+  font-family: var(--agentory-font-family-base);
+  animation: auth-sso-in 280ms var(--agentory-ease-soft) both;
 }
 
-.auth-input[type='password'] {
+.auth-sso__copy {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.11dvh, 12px);
+  margin-bottom: clamp(30px, 4.17dvh, 45px);
+}
+
+.auth-sso__eyebrow {
+  color: var(--agentory-color-bg-primary);
+  font-size: clamp(13px, 0.83vw, 16px);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  letter-spacing: var(--agentory-letter-spacing-default);
+  line-height: 1.4;
+}
+
+.auth-sso h2 {
+  margin: 0;
   color: var(--agentory-color-text-primary);
+  font-size: clamp(21px, 1.46vw, 28px);
+  font-weight: var(--agentory-font-weight-bold);
+  letter-spacing: var(--agentory-letter-spacing-default);
+  line-height: 1.35;
 }
 
-.auth-input:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--agentory-color-bg-app), transparent 50%);
+.auth-sso p {
+  margin: 0;
+  color: var(--agentory-color-text-muted);
+  font-size: clamp(13px, 0.94vw, 18px);
+  font-weight: var(--agentory-font-weight-regular);
+  letter-spacing: var(--agentory-letter-spacing-default);
+  line-height: 1.6;
 }
 
-.auth-input::placeholder {
-  color: color-mix(in srgb, var(--agentory-color-text-auth), transparent 58%);
-  opacity: 1;
+.auth-sso__actions {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.39dvh, 15px);
+  margin-bottom: clamp(18px, 2.13dvh, 24px);
 }
 
-.auth-input[type='password']::placeholder {
-  color: color-mix(in srgb, var(--agentory-color-text-primary), transparent 64%);
-}
-
-.auth-link {
+.auth-sso__button {
   display: inline-flex;
   align-items: center;
-  gap: clamp(4px, 0.31vw, 7px);
-  width: fit-content;
-  margin: 0 0 clamp(22px, 2.13vh, 27px);
-  color: var(--agentory-color-text-inverse);
-  font-size: var(--auth-link-font-size);
-  font-weight: var(--agentory-font-weight-regular);
+  justify-content: center;
+  gap: var(--agentory-spacing-10);
+  width: 100%;
+  height: var(--auth-control-height);
+  padding: 0 clamp(18px, 1.56vw, 30px);
+  border: 0;
+  border-radius: var(--auth-control-radius);
+  font-family: var(--agentory-font-family-base);
+  font-size: var(--auth-control-font-size);
+  font-weight: var(--agentory-font-weight-medium);
+  letter-spacing: var(--agentory-letter-spacing-default);
   line-height: 1.5;
+  cursor: pointer;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
-.auth-link-icon {
-  width: clamp(12px, 0.83vw, 18px);
-  height: clamp(12px, 0.83vw, 18px);
+.auth-sso__button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.auth-sso__button--primary {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
+}
+
+.auth-sso__button--secondary {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-auth-secondary);
+}
+
+.auth-sso__microsoft-icon {
+  width: clamp(18px, 1.25vw, 24px);
+  height: clamp(18px, 1.25vw, 24px);
   object-fit: contain;
 }
 
-.auth-button {
+.auth-sso__note {
+  max-width: 26em;
+}
+
+.auth-toast {
+  position: fixed;
+  z-index: 1000;
+  top: clamp(24px, 4.44dvh, 48px);
+  left: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: var(--auth-control-height);
-  margin-bottom: var(--auth-field-margin);
+  min-height: clamp(42px, 5dvh, 54px);
+  padding: 0 clamp(22px, 1.88vw, 36px);
+  overflow: hidden;
   color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
-  border: 0;
-  border-radius: var(--auth-control-radius);
-  font-size: var(--auth-control-font-size);
-  font-weight: var(--agentory-font-weight-regular);
-  line-height: 1.5;
+  background:
+    radial-gradient(
+      circle at 22% 0%,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 6%),
+      transparent 38%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--agentory-color-bg-primary), transparent 34%),
+      color-mix(in srgb, var(--agentory-color-bg-primary), transparent 56%) 42%,
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 72%)
+    );
+  border: 1px solid color-mix(in srgb, var(--agentory-color-border-inverse), transparent 32%);
+  border-radius: var(--agentory-radius-pill);
+  box-shadow:
+    0 18px 48px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%),
+    0 8px 20px color-mix(in srgb, var(--agentory-color-text-primary), transparent 86%),
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 4%),
+    inset 0 -10px 24px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%);
+  backdrop-filter: blur(26px) saturate(220%) contrast(118%);
+  -webkit-backdrop-filter: blur(26px) saturate(220%) contrast(118%);
+  font-family: var(--agentory-font-family-base);
+  font-size: var(--auth-control-font-size, 16px);
+  font-weight: var(--agentory-font-weight-medium);
+  letter-spacing: var(--agentory-letter-spacing-default);
+  pointer-events: none;
+  text-shadow: 0 1px 8px color-mix(in srgb, var(--agentory-color-text-primary), transparent 70%);
+  transform: translateX(-50%);
 }
 
-.auth-button--footer {
-  margin-top: 0;
-  margin-bottom: 0;
+.auth-toast::before {
+  position: absolute;
+  inset: -80% -34%;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 22%,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 18%) 42%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse at 72% 18%,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 14%),
+      transparent 36%
+    );
+  content: '';
+  opacity: 0.9;
+  pointer-events: none;
+  transform: rotate(-8deg);
 }
 
-.auth-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: var(--auth-control-height);
-  margin-top: clamp(12px, 1.11vh, 15px);
-  color: var(--agentory-color-text-inverse);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-inverse), transparent 38%);
-  border-radius: var(--auth-control-radius);
-  background: rgba(248, 249, 246, 0.08);
-  font-size: var(--auth-control-font-size);
-  font-weight: var(--agentory-font-weight-regular);
-  line-height: 1.5;
+.auth-toast::after {
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  box-shadow:
+    inset 10px 0 22px color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 78%),
+    inset -14px 0 26px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 60%);
+  content: '';
+  pointer-events: none;
+}
+
+.auth-toast-enter-active,
+.auth-toast-leave-active {
   transition:
-    background 180ms ease,
-    border-color 180ms ease;
+    opacity 220ms ease,
+    transform 280ms var(--agentory-ease-soft);
 }
 
-.auth-screen-enter-active,
-.auth-screen-leave-active {
-  transition:
-    opacity 200ms ease,
-    transform 240ms ease;
-}
-
-.auth-screen-enter-from {
+.auth-toast-enter-from,
+.auth-toast-leave-to {
   opacity: 0;
-  transform: translateY(12px);
-}
-
-.auth-screen-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
+  transform: translate(-50%, -12px);
 }
 
 @media (hover: hover) {
-  .auth-link:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
-
-  .auth-button:hover {
+  .auth-sso__button:hover:not(:disabled) {
     filter: brightness(0.96);
-  }
-
-  .auth-secondary-button:hover {
-    background: rgba(248, 249, 246, 0.14);
-    border-color: var(--agentory-color-border-inverse);
   }
 }
 
 @media (max-width: 520px) {
-  .auth-form,
-  .auth-input,
-  .auth-button {
+  .auth-sso__button {
     width: 100%;
   }
 }
 
+@keyframes auth-sso-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .auth-screen-enter-active,
-  .auth-screen-leave-active {
+  .auth-toast-enter-active,
+  .auth-toast-leave-active {
     transition: none;
+  }
+
+  .auth-sso {
+    animation: none;
   }
 }
 </style>

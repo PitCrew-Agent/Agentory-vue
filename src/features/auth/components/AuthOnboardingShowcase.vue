@@ -35,10 +35,17 @@ const slides = [
   },
 ]
 
+const serviceSummaryLines = [
+  '3D 공장 모니터링과 장비 위험 알림,',
+  'AI 근거 문서까지 한 화면에서 확인하세요.',
+]
+
 const rotationIndex = ref(0)
 let rotationTimer
 
-const activeIndex = computed(() => ((rotationIndex.value % slides.length) + slides.length) % slides.length)
+const activeIndex = computed(
+  () => ((rotationIndex.value % slides.length) + slides.length) % slides.length,
+)
 
 const ringStyle = computed(() => ({
   '--showcase-ring-angle': `${rotationIndex.value * -carouselStep}deg`,
@@ -56,7 +63,6 @@ function getPanelStyle(index) {
 
   return {
     '--showcase-back-opacity': isActive ? '0' : '0.72',
-    '--showcase-copy-opacity': isActive ? '1' : '0',
     '--showcase-front-opacity': isActive ? '1' : '0.2',
     '--showcase-panel-angle': `${index * carouselStep}deg`,
     '--showcase-panel-scale': isActive ? '1' : '0.92',
@@ -110,15 +116,11 @@ onBeforeUnmount(stopRotation)
           @click="setActiveSlide(index)"
         >
           <span class="auth-onboarding__face auth-onboarding__face--front">
-            <img class="auth-onboarding__image" :src="slide.image" :alt="slide.titleLines.join(' ')" />
-            <span class="auth-onboarding__copy">
-              <strong>
-                <span v-for="line in slide.titleLines" :key="line">{{ line }}</span>
-              </strong>
-              <span class="auth-onboarding__description">
-                <span v-for="line in slide.descriptionLines" :key="line">{{ line }}</span>
-              </span>
-            </span>
+            <img
+              class="auth-onboarding__image"
+              :src="slide.image"
+              :alt="slide.titleLines.join(' ')"
+            />
           </span>
 
           <span class="auth-onboarding__face auth-onboarding__face--back" aria-hidden="true">
@@ -127,6 +129,10 @@ onBeforeUnmount(stopRotation)
         </button>
       </div>
     </div>
+
+    <p class="auth-onboarding__summary">
+      <span v-for="line in serviceSummaryLines" :key="line">{{ line }}</span>
+    </p>
 
     <div class="auth-onboarding__controls" aria-label="온보딩 화면 선택">
       <button
@@ -145,19 +151,19 @@ onBeforeUnmount(stopRotation)
 
 <style scoped>
 .auth-onboarding {
-  --showcase-image-size: clamp(340px, 24vw, 680px);
-  --showcase-panel-height: clamp(435px, 64dvh, 690px);
-  --showcase-panel-width: clamp(315px, 34vw, 540px);
-  --showcase-radius: clamp(225px, 20vw, 340px);
-  --showcase-image-text-gap: 10px;
-  --showcase-stage-height: clamp(420px, 68dvh, 720px);
-  --showcase-stage-width: clamp(350px, 43vw, 690px);
+  --showcase-image-size: clamp(250px, 20.31vw, 390px);
+  --showcase-panel-height: var(--showcase-image-size);
+  --showcase-panel-width: var(--showcase-image-size);
+  --showcase-radius: clamp(150px, 12.92vw, 248px);
+  --showcase-stage-height: var(--showcase-image-size);
+  --showcase-stage-width: clamp(300px, 27.08vw, 520px);
 
   display: grid;
+  align-content: center;
   justify-items: center;
   width: min(100%, var(--showcase-stage-width));
-  max-height: calc(100dvh - clamp(24px, 5dvh, 72px));
-  color: var(--agentory-color-text-primary);
+  min-height: 0;
+  color: var(--agentory-color-text-inverse);
 }
 
 .auth-onboarding__stage {
@@ -165,7 +171,7 @@ onBeforeUnmount(stopRotation)
   width: min(100%, var(--showcase-stage-width));
   height: var(--showcase-stage-height);
   perspective: clamp(820px, 64vw, 1180px);
-  perspective-origin: center 48%;
+  perspective-origin: center 50%;
 }
 
 .auth-onboarding__ring {
@@ -208,7 +214,7 @@ onBeforeUnmount(stopRotation)
   align-content: center;
   justify-items: center;
   overflow: hidden;
-  border-radius: var(--agentory-radius-22);
+  border-radius: var(--agentory-radius-10);
   backface-visibility: hidden;
   transition: opacity 520ms ease;
 }
@@ -246,54 +252,37 @@ onBeforeUnmount(stopRotation)
 .auth-onboarding__image {
   width: var(--showcase-image-size);
   height: var(--showcase-image-size);
-  margin-bottom: var(--showcase-image-text-gap);
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
 }
 
-.auth-onboarding__copy {
+.auth-onboarding__summary {
   display: grid;
-  gap: clamp(1px, 0.24dvh, 3px);
-  width: min(100%, clamp(290px, 30vw, 470px));
-  opacity: var(--showcase-copy-opacity);
+  gap: var(--agentory-spacing-4);
+  width: min(100%, clamp(320px, 29vw, 560px));
+  margin: 10px 0 0;
+  color: var(--agentory-color-text-inverse);
+  font-family: var(--agentory-font-family-base);
+  font-size: clamp(15px, 1.04vw, 20px);
+  font-weight: var(--agentory-font-weight-regular);
+  line-height: 1.35;
+  letter-spacing: 0.1em;
   text-align: center;
-  transition: opacity 300ms ease;
-}
-
-.auth-onboarding__copy strong {
-  display: grid;
-  color: var(--agentory-color-text-primary);
-  font-family: var(--agentory-font-family-base);
-  font-size: clamp(21px, 1.72vw, 32px);
-  font-weight: var(--agentory-font-weight-black);
-  line-height: 1.12;
-  letter-spacing: var(--agentory-letter-spacing-default);
-  word-break: keep-all;
-}
-
-.auth-onboarding__description {
-  display: grid;
-  color: var(--agentory-color-text-muted);
-  font-family: var(--agentory-font-family-base);
-  font-size: clamp(12px, 0.9vw, 16px);
-  font-weight: var(--agentory-font-weight-medium);
-  line-height: 1.34;
-  letter-spacing: var(--agentory-letter-spacing-default);
   word-break: keep-all;
 }
 
 .auth-onboarding__controls {
   display: flex;
   gap: var(--agentory-spacing-8);
-  margin-top: clamp(36px, 4dvh, 52px);
+  margin-top: clamp(18px, 2.6dvh, 28px);
 }
 
 .auth-onboarding__control {
   width: clamp(7px, 0.56vw, 9px);
   height: clamp(7px, 0.56vw, 9px);
   padding: 0;
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 74%);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 62%);
   border: 0;
   border-radius: var(--agentory-radius-pill);
   transition:
@@ -303,30 +292,19 @@ onBeforeUnmount(stopRotation)
 
 .auth-onboarding__control--active {
   width: clamp(22px, 1.65vw, 32px);
-  background: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-bg-app);
 }
 
 @media (max-height: 760px) {
   .auth-onboarding {
-    --showcase-image-size: clamp(275px, 35vw, 430px);
-    --showcase-panel-height: clamp(365px, 60dvh, 500px);
-    --showcase-panel-width: clamp(290px, 31vw, 410px);
-    --showcase-radius: clamp(205px, 18vw, 285px);
-    --showcase-stage-height: clamp(360px, 63dvh, 480px);
-  }
-
-  .auth-onboarding__copy {
-    gap: 2px;
-  }
-
-  .auth-onboarding__image {
-    margin-bottom: var(--showcase-image-text-gap);
+    --showcase-image-size: clamp(220px, 27vw, 320px);
+    --showcase-radius: clamp(136px, 15vw, 210px);
   }
 }
 
 @media (max-width: 1280px) {
   .auth-onboarding {
-    --showcase-stage-width: clamp(330px, 40vw, 540px);
+    --showcase-stage-width: clamp(330px, 39vw, 500px);
   }
 }
 

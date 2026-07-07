@@ -27,98 +27,90 @@ defineProps({
 
 <template>
   <main class="auth-page" :class="`auth-page--${cardVariant}`">
-    <section class="auth-visual">
-      <AuthOnboardingShowcase />
-    </section>
+    <div class="auth-layout-frame">
+      <section class="auth-content" :class="`auth-content--${cardVariant}`">
+        <div class="auth-card" :class="`auth-card--${cardVariant}`">
+          <div class="auth-form-wrap">
+            <div class="auth-title-row" :class="{ 'auth-title-row--with-back': showBack }">
+              <span class="auth-back-space" :class="{ 'auth-back-space--visible': showBack }">
+                <RouterLink
+                  v-if="showBack"
+                  class="auth-back-link"
+                  :to="backTo"
+                  aria-label="이전 화면으로 이동"
+                >
+                  <img class="auth-back-icon" :src="backArrowIcon" alt="" width="30" height="30" />
+                </RouterLink>
+              </span>
+              <h1 class="auth-title">{{ title }}</h1>
+            </div>
+            <slot />
+          </div>
+        </div>
+      </section>
 
-    <section class="auth-content" :class="`auth-content--${cardVariant}`">
-      <div class="auth-card" :class="`auth-card--${cardVariant}`">
-        <div class="auth-header" :class="{ 'auth-header--with-back': showBack }">
-          <span class="auth-back-space" :class="{ 'auth-back-space--visible': showBack }">
-            <Transition name="auth-back">
-              <RouterLink
-                v-if="showBack"
-                class="auth-back-link"
-                :to="backTo"
-                aria-label="이전 화면으로 이동"
-              >
-                <img class="auth-back-icon" :src="backArrowIcon" alt="" width="30" height="30" />
-              </RouterLink>
-            </Transition>
-          </span>
-          <img class="auth-logo" :src="logoImage" alt="Agentory" width="266" height="49" />
+      <section class="auth-visual">
+        <div class="auth-visual-panel">
+          <img class="auth-logo" :src="logoImage" alt="Agentory" width="402" height="74" />
+          <AuthOnboardingShowcase />
         </div>
-        <div class="auth-form-wrap">
-          <Transition name="auth-title" mode="out-in">
-            <h1 :key="title" class="auth-title">{{ title }}</h1>
-          </Transition>
-          <slot />
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 </template>
 
 <style scoped>
 .auth-page {
-  --auth-back-gap: 4px;
+  --auth-back-gap: var(--agentory-spacing-6);
   --auth-back-size: 30px;
-  --auth-card-height: clamp(420px, 53.25vh, 662px);
-  --auth-card-height-password-find: clamp(445px, 54.9vh, 682px);
-  --auth-card-height-password-reset: clamp(380px, 46.75vh, 581px);
-  --auth-card-height-signup: clamp(440px, 54.6vh, 679px);
-  --auth-card-padding-bottom: clamp(48px, 6.67vh, 83px);
-  --auth-card-padding-top: clamp(32px, 4.17vh, 52px);
-  --auth-card-padding-x: clamp(52px, 3.75vw, 84px);
-  --auth-card-top: clamp(110px, 7.8125vw, 150px);
-  --auth-card-width: clamp(330px, 21.95vw, 486px);
-  --auth-control-font-size: clamp(11px, 0.73vw, 16px);
-  --auth-control-height: clamp(32px, 3.7vh, 46px);
-  --auth-control-radius: var(--agentory-radius-5);
-  --auth-field-gap: clamp(10px, 1.2vh, 16px);
-  --auth-field-margin: clamp(18px, 2.32vh, 29px);
-  --auth-form-gap: clamp(18px, 2.5vh, 32px);
-  --auth-form-width: clamp(215px, 14.12vw, 318px);
-  --auth-label-font-size: clamp(11px, 0.73vw, 16px);
-  --auth-link-font-size: clamp(10px, 0.68vw, 15px);
-  --auth-logo-height: clamp(34px, 4.07vh, 50px);
-  --auth-logo-width: clamp(190px, 12.45vw, 286px);
-  --auth-title-font-size: clamp(25px, 1.67vw, 37px);
-  --auth-title-line-height: clamp(38px, 4.54vh, 56px);
-  --auth-title-margin: clamp(17px, 2.13vh, 27px);
+  --auth-card-padding-bottom: clamp(40px, 6.73dvh, 72px);
+  --auth-card-padding-top: clamp(30px, 4.26dvh, 46px);
+  --auth-card-padding-x: clamp(32px, 2.5vw, 48px);
+  --auth-card-offset-bottom: clamp(24px, 3.7dvh, 40px);
+  --auth-card-offset-top: clamp(50px, 6.85dvh, 74px);
+  --auth-card-width: calc(var(--auth-form-width) + (var(--auth-card-padding-x) * 2));
+  --auth-control-font-size: clamp(14px, 0.99vw, 19px);
+  --auth-control-height: clamp(42px, 5.19dvh, 56px);
+  --auth-control-radius: var(--agentory-radius-10);
+  --auth-field-gap: clamp(7px, 1.11dvh, 12px);
+  --auth-field-margin: clamp(15px, 2.04dvh, 22px);
+  --auth-form-width: clamp(300px, 24.69vw, 474px);
+  --auth-label-font-size: clamp(14px, 0.99vw, 19px);
+  --auth-link-font-size: clamp(12px, 0.73vw, 14px);
+  --auth-logo-width: clamp(190px, 14.9vw, 286px);
+  --auth-title-font-size: clamp(24px, 1.56vw, 30px);
+  --auth-title-line-height: clamp(34px, 4.17dvh, 45px);
+  --auth-title-margin: clamp(18px, 2.31dvh, 25px);
 
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--agentory-color-bg-app);
-}
-
-.auth-visual {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: clamp(24px, 4.45dvh, 48px) clamp(24px, 5vw, 96px);
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    var(--agentory-color-bg-app) 0%,
+    var(--agentory-color-bg-auth-gradient-soft) 77.404%,
+    var(--agentory-color-bg-auth-gradient-mid) 94.712%,
+    var(--agentory-color-bg-primary) 100%
+  );
+}
+
+.auth-layout-frame {
+  display: grid;
+  grid-template-columns: 751fr 869fr;
+  width: min(
+    1280px,
+    calc(100vw - clamp(48px, 8vw, 120px)),
+    calc((100dvh - clamp(72px, 9dvh, 96px)) * 1.5385)
+  );
+  aspect-ratio: 1280 / 832;
   min-height: 0;
   overflow: hidden;
-  padding: clamp(16px, 3vw, 52px);
-  background: var(--agentory-color-bg-primary);
-}
-
-.auth-visual::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
   background: var(--agentory-color-bg-app);
-  border-top-right-radius: 150px;
-  content: '';
-}
-
-.auth-visual > :deep(*) {
-  position: relative;
-  z-index: 1;
+  border-radius: var(--agentory-radius-22);
 }
 
 .auth-content {
@@ -130,70 +122,94 @@ defineProps({
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: var(--auth-card-top) var(--agentory-spacing-40) var(--agentory-spacing-40);
+  padding: var(--auth-card-offset-top) 0 var(--auth-card-offset-bottom);
   background: var(--agentory-color-bg-app);
 }
 
 .auth-content::before {
   position: absolute;
-  inset: 0;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  width: clamp(180px, 16vw, 300px);
+  height: clamp(180px, 16vw, 300px);
   background: var(--agentory-color-bg-primary);
-  border-bottom-left-radius: 150px;
   content: '';
+  pointer-events: none;
+}
+
+.auth-content::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: var(--agentory-color-bg-app);
+  border-top-right-radius: clamp(92px, 7.82vw, 150px);
+  content: '';
+  pointer-events: none;
+}
+
+.auth-visual {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--agentory-color-bg-app);
+}
+
+.auth-visual-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3.7dvh, 40px);
+  min-height: 0;
+  padding: clamp(28px, 4.63dvh, 50px) clamp(24px, 3.13vw, 40px);
+  background: var(--agentory-color-bg-primary);
+  border-top-right-radius: var(--agentory-radius-22);
+  border-bottom-right-radius: var(--agentory-radius-22);
+  border-bottom-left-radius: clamp(92px, 7.82vw, 150px);
 }
 
 .auth-card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   width: var(--auth-card-width);
-  max-height: calc(100dvh - var(--auth-card-top) - var(--agentory-spacing-40));
-  min-height: min(var(--auth-card-height), calc(100dvh - var(--auth-card-top) - var(--agentory-spacing-40)));
+  max-width: calc(100% - clamp(28px, 5vw, 90px));
+  max-height: 100%;
+  min-height: min(610px, 100%);
   padding: var(--auth-card-padding-top) var(--auth-card-padding-x) var(--auth-card-padding-bottom);
-  border: 1px solid var(--agentory-color-border-inverse);
   border-radius: var(--agentory-radius-10);
-  background: var(--agentory-color-bg-glass-light);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--agentory-color-bg-auth-panel);
   backdrop-filter: var(--agentory-blur-auth-panel);
   transition:
     width 220ms ease,
     min-height 220ms ease,
     padding 220ms ease;
+  scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 42%) transparent;
+  scrollbar-width: thin;
 }
 
-.auth-card--password-find {
-  --auth-card-height: var(--auth-card-height-password-find);
+.auth-card::-webkit-scrollbar {
+  width: 4px;
 }
 
-.auth-card--password-reset {
-  --auth-card-height: var(--auth-card-height-password-reset);
-  background: var(--agentory-color-bg-glass-white);
-}
-
-.auth-card--signup {
-  --auth-card-height: var(--auth-card-height-signup);
-  background: var(--agentory-color-bg-glass-white);
+.auth-card::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 42%);
+  border-radius: var(--agentory-radius-pill);
 }
 
 .auth-page--signup {
-  --auth-card-padding-bottom: clamp(48px, 6.67vh, 83px);
-  --auth-card-padding-top: clamp(32px, 4.17vh, 52px);
-  --auth-card-top: clamp(110px, 7.8125vw, 150px);
-  --auth-control-height: clamp(30px, 3.2vh, 39px);
-  --auth-field-gap: clamp(5px, 0.7vh, 9px);
-  --auth-field-margin: clamp(10px, 1.2vh, 15px);
-  --auth-title-line-height: clamp(32px, 3.6vh, 44px);
-  --auth-title-margin: clamp(8px, 1vh, 14px);
-}
-
-.auth-header {
-  display: flex;
-  align-items: center;
-  width: var(--auth-form-width);
-}
-
-.auth-header--with-back {
-  gap: 0;
+  --auth-card-padding-bottom: clamp(32px, 4.81dvh, 52px);
+  --auth-field-gap: clamp(5px, 0.65dvh, 7px);
+  --auth-field-margin: clamp(7px, 0.93dvh, 10px);
+  --auth-label-font-size: clamp(13px, 0.89vw, 17px);
 }
 
 .auth-back-space {
@@ -203,6 +219,7 @@ defineProps({
   height: var(--auth-back-size);
   margin-right: 0;
   overflow: hidden;
+  visibility: hidden;
   transition:
     width 240ms ease,
     margin-right 240ms ease;
@@ -211,11 +228,10 @@ defineProps({
 .auth-back-space--visible {
   width: var(--auth-back-size);
   margin-right: var(--auth-back-gap);
+  visibility: visible;
 }
 
 .auth-back-link {
-  position: absolute;
-  inset: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -227,30 +243,39 @@ defineProps({
 .auth-back-icon {
   width: var(--auth-back-size);
   height: var(--auth-back-size);
+  filter: brightness(0) saturate(100%) invert(40%) sepia(99%) saturate(2223%) hue-rotate(199deg)
+    brightness(93%) contrast(91%);
   object-fit: contain;
 }
 
 .auth-logo {
   flex: 0 0 auto;
   width: var(--auth-logo-width);
-  height: var(--auth-logo-height);
+  height: auto;
   object-fit: contain;
   transition:
     width 240ms ease,
     transform 240ms ease;
 }
 
-.auth-header--with-back .auth-logo {
-  width: calc(var(--auth-form-width) - var(--auth-back-size) - var(--auth-back-gap));
+.auth-form-wrap {
+  width: var(--auth-form-width);
+  max-width: 100%;
 }
 
-.auth-form-wrap {
-  margin-top: var(--auth-form-gap);
+.auth-title-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 var(--auth-title-margin);
+  overflow: hidden;
 }
 
 .auth-title {
-  margin: 0 0 var(--auth-title-margin);
-  color: var(--agentory-color-text-inverse);
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--agentory-color-text-primary);
   font-family: var(--agentory-font-family-base);
   font-size: var(--auth-title-font-size);
   font-weight: var(--agentory-font-weight-black);
@@ -258,38 +283,8 @@ defineProps({
   letter-spacing: var(--agentory-letter-spacing-default);
 }
 
-.auth-back-enter-active,
-.auth-back-leave-active {
-  transition:
-    opacity 180ms ease,
-    transform 220ms ease;
-}
-
-.auth-back-enter-from,
-.auth-back-leave-to {
-  opacity: 0;
-  transform: translateX(10px);
-}
-
-.auth-title-enter-active,
-.auth-title-leave-active {
-  transition:
-    opacity 180ms ease,
-    transform 220ms ease;
-}
-
-.auth-title-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-
-.auth-title-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
 @media (max-width: 1024px) {
-  .auth-page {
+  .auth-layout-frame {
     grid-template-columns: 1fr;
   }
 
@@ -298,43 +293,52 @@ defineProps({
   }
 
   .auth-content {
-    padding: var(--auth-card-top) var(--agentory-spacing-24) var(--agentory-spacing-24);
-    background: var(--agentory-color-bg-primary);
+    background: var(--agentory-color-bg-app);
   }
 
   .auth-content::before {
     display: none;
+  }
+
+  .auth-content::after {
+    border-top-right-radius: 0;
   }
 }
 
 @media (max-width: 520px) {
   .auth-page {
     --auth-back-gap: 6px;
-    --auth-card-padding-bottom: 44px;
-    --auth-card-padding-top: 40px;
+    --auth-card-padding-bottom: 36px;
+    --auth-card-padding-top: 34px;
     --auth-card-padding-x: 28px;
     --auth-form-width: min(100%, 300px);
-    --auth-logo-width: min(239px, 100%);
-  }
-
-  .auth-content {
-    padding: var(--auth-card-top) var(--agentory-spacing-16) var(--agentory-spacing-16);
+    padding: var(--agentory-spacing-16);
   }
 
   .auth-card {
     width: 100%;
     min-height: auto;
+    max-width: calc(100% - var(--agentory-spacing-24));
+  }
+
+  .auth-title-row {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .auth-back-space {
+    width: 0;
+  }
+
+  .auth-back-space--visible {
+    width: var(--auth-back-size);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-back-enter-active,
-  .auth-back-leave-active,
   .auth-back-space,
   .auth-card,
-  .auth-logo,
-  .auth-title-enter-active,
-  .auth-title-leave-active {
+  .auth-logo {
     transition: none;
   }
 }
