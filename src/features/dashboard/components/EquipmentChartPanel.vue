@@ -25,7 +25,7 @@ defineProps({
 .chart-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-6);
+  gap: var(--agentory-spacing-14);
   min-width: 0;
   height: 100%;
   padding: var(--agentory-spacing-20) var(--agentory-spacing-14) var(--agentory-spacing-10);
@@ -37,18 +37,18 @@ defineProps({
 
 .chart-panel__section-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--agentory-spacing-4);
+  align-items: center;
+  min-height: 28px;
   width: 100%;
-  padding-bottom: 6px;
+  padding-bottom: var(--agentory-spacing-10);
   border-bottom: 2px solid var(--agentory-color-bg-primary);
 }
 
 .chart-panel__section-header h2 {
   color: var(--agentory-color-bg-primary);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-black);
-  line-height: var(--agentory-line-height-body-sm);
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-lg);
 }
 
 .chart-panel__body {
@@ -56,7 +56,6 @@ defineProps({
   min-height: 0;
   flex: 1 1 auto;
   align-items: stretch;
-  padding-top: 2px;
   overflow: hidden;
 }
 
