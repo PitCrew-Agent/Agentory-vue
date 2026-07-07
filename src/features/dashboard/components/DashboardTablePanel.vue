@@ -330,6 +330,18 @@ defineExpose({
   font-weight: var(--agentory-font-weight-semi-bold);
 }
 
+.dashboard-table-panel__cell--fit {
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.dashboard-table-panel__cell--fill {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dashboard-table-panel__cell--center {
   display: flex;
   justify-content: center;
