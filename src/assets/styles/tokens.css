@@ -1,6 +1,10 @@
 :root {
   --agentory-color-bg-app: #f8f9f6;
   --agentory-color-bg-primary: #237ce2;
+  --agentory-color-bg-auth-gradient-soft: #8dbaec;
+  --agentory-color-bg-auth-gradient-mid: #589be7;
+  --agentory-color-bg-auth-secondary: #5e90df;
+  --agentory-color-bg-auth-panel: rgba(248, 249, 246, 0.8);
   --agentory-color-bg-primary-glass: rgba(35, 124, 226, 0.6);
   --agentory-color-bg-glass-light: rgba(248, 249, 246, 0.1);
   --agentory-color-bg-glass-white: rgba(255, 255, 255, 0.1);
@@ -26,7 +30,7 @@
   --agentory-color-alert-warning: #f97316;
 
   --agentory-font-family-base:
-    Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Pretendard, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --agentory-font-family-auth: Poppins, var(--agentory-font-family-base);
   --agentory-font-family-chart: var(--agentory-font-family-base);
   --agentory-font-family-checklist: var(--agentory-font-family-base);
@@ -101,7 +105,11 @@
   --agentory-shadow-control-strong: 0 0 6px rgba(0, 0, 0, 0.6);
   --agentory-shadow-sidebar-active: 0 0 8px rgba(0, 0, 0, 0.6);
   --agentory-blur-glass: blur(4px);
+  --agentory-blur-glass-strong: blur(12px) saturate(155%);
+  --agentory-blur-glass-intense: blur(18px) saturate(185%);
   --agentory-blur-auth-panel: blur(6px);
+  --agentory-ease-elastic: cubic-bezier(0.16, 1.18, 0.34, 1);
+  --agentory-ease-soft: cubic-bezier(0.2, 0.82, 0.28, 1);
 
   --color-primary: var(--agentory-color-bg-primary);
   --color-secondary: var(--agentory-color-bg-primary);
