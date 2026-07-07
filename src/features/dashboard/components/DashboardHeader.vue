@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
@@ -9,12 +9,13 @@ import offlineStatusIcon from '@/assets/icons/dashboard/status-offline.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
 import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
+import { logoutAuthSession } from '@/features/auth/services/authApi'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
 defineProps({
   summary: {
     type: Array,
-    required: true,
+    default: () => [],
   },
 })
 
@@ -26,11 +27,12 @@ const statusIconMap = {
 }
 
 const router = useRouter()
-const { currentUser, logoutCurrentUser } = useCurrentUser()
+const { currentUser, loadCurrentUser, logoutCurrentUser } = useCurrentUser()
 const { markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
+const currentUserName = computed(() => currentUser.name || currentUser.email || '사용자')
 
 function toggleNotificationPanel() {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -42,18 +44,28 @@ function toggleProfilePanel() {
   isNotificationOpen.value = false
 }
 
-function handleLogout() {
-  logoutCurrentUser()
-  isProfileOpen.value = false
-  router.push('/login')
+async function handleLogout() {
+  try {
+    await logoutAuthSession()
+  } catch {
+    // 토큰이 없거나 만료되어도 클라이언트 세션은 정리한다.
+  } finally {
+    logoutCurrentUser()
+    isProfileOpen.value = false
+    router.push('/login')
+  }
 }
+
+onMounted(() => {
+  loadCurrentUser()
+})
 </script>
 
 <template>
   <header class="dashboard-header">
     <img class="dashboard-header__logo" :src="logoImage" alt="Agentory" width="266" height="49" />
 
-    <ul class="dashboard-header__summary" aria-label="설비 상태 요약">
+    <ul v-if="summary.length" class="dashboard-header__summary" aria-label="설비 상태 요약">
       <li
         v-for="item in summary"
         :key="item.id"
@@ -143,7 +155,7 @@ function handleLogout() {
           data-test="dashboard-header-user-button"
           @click="toggleProfilePanel"
         >
-          {{ currentUser.name }}
+          {{ currentUserName }}
         </button>
 
         <section
@@ -155,15 +167,19 @@ function handleLogout() {
           <dl class="dashboard-header__profile-list">
             <div>
               <dt>이름</dt>
-              <dd data-test="dashboard-header-profile-name">{{ currentUser.name }}</dd>
+              <dd data-test="dashboard-header-profile-name">{{ currentUser.name || '-' }}</dd>
             </div>
             <div>
-              <dt>아이디</dt>
-              <dd data-test="dashboard-header-profile-user-id">{{ currentUser.userId }}</dd>
+              <dt>이메일</dt>
+              <dd data-test="dashboard-header-profile-user-id">{{ currentUser.email || '-' }}</dd>
             </div>
             <div>
-              <dt>부서</dt>
-              <dd data-test="dashboard-header-profile-department">{{ currentUser.department }}</dd>
+              <dt>권한</dt>
+              <dd data-test="dashboard-header-profile-department">{{ currentUser.role || '-' }}</dd>
+            </div>
+            <div>
+              <dt>상태</dt>
+              <dd>{{ currentUser.status || '-' }}</dd>
             </div>
           </dl>
 
@@ -192,8 +208,8 @@ function handleLogout() {
   align-items: center;
   gap: var(--agentory-spacing-10);
   height: var(--dashboard-header-height, 90px);
-  padding: var(--agentory-spacing-10) var(--agentory-spacing-25)
-    var(--agentory-spacing-10) var(--agentory-spacing-40);
+  padding: var(--agentory-spacing-10) var(--agentory-spacing-25) var(--agentory-spacing-10)
+    var(--agentory-spacing-40);
   background: var(--agentory-color-bg-primary);
 }
 
