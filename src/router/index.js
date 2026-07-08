@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
+import { useAuthStore } from '@/stores/authStore'
 
-const authRouteNames = new Set(['Login', 'PasswordFind', 'PasswordReset', 'Signup'])
+const authRouteNames = new Set(['Login'])
 const protectedRouteNames = new Set(['Dashboard', 'WorkLog', 'EquipmentList', 'NotificationLog'])
 const shouldBypassAuthGuard = import.meta.env.MODE === 'test'
 
@@ -17,21 +17,6 @@ const router = createRouter({
       path: '/login',
       name: 'Login',
       component: () => import('@/features/auth/views/AuthView.vue'),
-    },
-    {
-      path: '/password/find',
-      name: 'PasswordFind',
-      redirect: { name: 'Login' },
-    },
-    {
-      path: '/password/reset',
-      name: 'PasswordReset',
-      redirect: { name: 'Login' },
-    },
-    {
-      path: '/signup',
-      name: 'Signup',
-      redirect: { name: 'Login' },
     },
     {
       path: '/dashboard',
@@ -53,6 +38,10 @@ const router = createRouter({
       name: 'NotificationLog',
       component: () => import('@/features/notification/views/NotificationLogView.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: { name: 'Login' },
+    },
   ],
 })
 
@@ -61,10 +50,10 @@ router.beforeEach(async (to) => {
     return true
   }
 
-  const { isCurrentUserAuthenticated, loadCurrentUser } = useCurrentUser()
+  const authStore = useAuthStore()
 
   if (authRouteNames.has(to.name)) {
-    const isAuthenticated = await loadCurrentUser()
+    const isAuthenticated = await authStore.loadCurrentUser()
 
     if (isAuthenticated) {
       return { name: 'Dashboard', replace: true }
@@ -74,7 +63,7 @@ router.beforeEach(async (to) => {
   }
 
   if (protectedRouteNames.has(to.name)) {
-    const isAuthenticated = isCurrentUserAuthenticated.value || (await loadCurrentUser())
+    const isAuthenticated = authStore.isAuthenticated || (await authStore.loadCurrentUser())
 
     if (!isAuthenticated) {
       return { name: 'Login', replace: true }

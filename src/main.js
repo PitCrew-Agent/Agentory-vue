@@ -3,14 +3,26 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import { AUTH_SESSION_EXPIRED_EVENT } from './features/auth/constants/authEvents'
+import { useAuthStore } from './stores/authStore'
 
 import './assets/styles/reset.css'
 import './assets/styles/tokens.css'
 import './assets/styles/global.css'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
+
+window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, () => {
+  const authStore = useAuthStore(pinia)
+  authStore.logoutCurrentUser()
+
+  if (router.currentRoute.value.name !== 'Login') {
+    router.replace({ name: 'Login' })
+  }
+})
 
 app.mount('#app')

@@ -5,7 +5,7 @@ import { RouterView, useRoute } from 'vue-router'
 const route = useRoute()
 const isRouteLoading = ref(false)
 const dashboardRouteNames = new Set(['Dashboard', 'WorkLog', 'EquipmentList', 'NotificationLog'])
-const authRouteNames = new Set(['Login', 'Signup', 'PasswordFind', 'PasswordReset'])
+const authRouteNames = new Set(['Login'])
 let loadingTimer = 0
 
 function isDashboardRoute(routeTarget = route) {
