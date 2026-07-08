@@ -3,10 +3,10 @@ import { computed, reactive, ref } from 'vue'
 
 import closeIcon from '@/assets/icons/dashboard/close.svg'
 import pencilIcon from '@/assets/icons/dashboard/action-pencil.png'
+import { workLogStatusMap } from '@/constants/workLogStatus'
 import { useAuthStore } from '@/stores/authStore'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
-import { workLogStatusMap } from '@/features/workLog/mock/workLogMock'
 
 const props = defineProps({
   groups: {

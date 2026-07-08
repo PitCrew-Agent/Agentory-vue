@@ -1,9 +1,20 @@
 <script setup>
+import { onMounted } from 'vue'
+
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import NotificationLogPanel from '@/features/notification/components/NotificationLogPanel.vue'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
-const { notificationGroups } = useNotificationCenter()
+const { loadNotifications, notificationGroups } = useNotificationCenter()
+const shouldSkipNotificationApi = import.meta.env.MODE === 'test'
+
+onMounted(() => {
+  if (shouldSkipNotificationApi) {
+    return
+  }
+
+  loadNotifications()
+})
 </script>
 
 <template>

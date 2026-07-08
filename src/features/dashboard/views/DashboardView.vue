@@ -9,44 +9,56 @@ import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.v
 import EquipmentChartPanel from '@/features/dashboard/components/EquipmentChartPanel.vue'
 import EquipmentDetailPanel from '@/features/dashboard/components/EquipmentDetailPanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
+import { dashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
+import { createEmptyMetricChart } from '@/features/dashboard/constants/equipmentMetrics'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 import {
-  factorySceneMock,
-  loadEquipmentChecklistMock,
-  loadFactory3dSceneMock,
-} from '@/features/dashboard/mock/factory3dMock'
-import { dashboardNavigation } from '@/features/dashboard/mock/dashboardMock'
+  createEmptyEquipment,
+  createEmptyFactoryScene,
+  fetchEquipmentTelemetry,
+  fetchFactoryScene,
+} from '@/features/dashboard/services/telemetryApi'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
 const assistantMessages = []
 const quickCommands = []
+const shouldSkipDashboardApi = import.meta.env.MODE === 'test'
+const initialFactoryScene = createEmptyFactoryScene()
 const factoryScene = reactive({
-  defaultEquipmentId: factorySceneMock.defaultEquipmentId,
-  equipmentList: factorySceneMock.equipmentList,
-  lineGroups: factorySceneMock.lineGroups,
-  statusSummary: factorySceneMock.statusSummary,
+  defaultEquipmentId: initialFactoryScene.defaultEquipmentId,
+  equipmentList: initialFactoryScene.equipmentList,
+  lineGroups: initialFactoryScene.lineGroups,
+  statusSummary: initialFactoryScene.statusSummary,
 })
 const selectedEquipmentId = ref(factoryScene.defaultEquipmentId)
 const selectedMetricId = ref('temperature')
-const selectedChecklistItems = ref([])
 const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
 let layoutResizeObserver
-let checklistRequestId = 0
 let contentLoadingTimer = 0
+let factorySceneInterval = 0
+let factorySceneRequestId = 0
+let selectedTelemetryInterval = 0
+let selectedTelemetryRequestId = 0
 const isContentLoading = ref(true)
 
 const selectedEquipment = computed(
   () =>
     factoryScene.equipmentList.find((equipment) => equipment.id === selectedEquipmentId.value) ??
-    factoryScene.equipmentList[0],
+    factoryScene.equipmentList[0] ??
+    createEmptyEquipment(),
 )
 
+const selectedChecklistItems = computed(() => selectedEquipment.value.checklist ?? [])
+
 const selectedChart = computed(
-  () => selectedEquipment.value.charts[selectedMetricId.value] ?? selectedEquipment.value.charts.temperature,
+  () =>
+    selectedEquipment.value.charts?.[selectedMetricId.value] ??
+    selectedEquipment.value.charts?.temperature ??
+    createEmptyMetricChart(selectedMetricId.value),
 )
 
 const widgetOrder = ['factory', 'detail', 'metricChart', 'assistant']
@@ -100,23 +112,75 @@ function applyFactoryScene(nextFactoryScene) {
   factoryScene.lineGroups = nextFactoryScene.lineGroups
   factoryScene.statusSummary = nextFactoryScene.statusSummary
 
-  if (!factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)) {
+  if (!selectedEquipmentId.value || !factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)) {
     selectedEquipmentId.value = factoryScene.defaultEquipmentId
   }
 }
 
 async function loadFactoryScene() {
-  const nextFactoryScene = await loadFactory3dSceneMock()
-  applyFactoryScene(nextFactoryScene)
+  const requestId = ++factorySceneRequestId
+
+  try {
+    const nextFactoryScene = await fetchFactoryScene()
+
+    if (requestId !== factorySceneRequestId) {
+      return
+    }
+
+    applyFactoryScene(nextFactoryScene)
+
+    if (selectedEquipmentId.value) {
+      await loadSelectedEquipmentTelemetry(selectedEquipmentId.value)
+    }
+  } catch {
+    if (!factoryScene.equipmentList.length) {
+      applyFactoryScene(createEmptyFactoryScene())
+    }
+  }
 }
 
-async function loadSelectedChecklist(equipmentId) {
-  const requestId = ++checklistRequestId
-  const items = await loadEquipmentChecklistMock(equipmentId)
-
-  if (requestId === checklistRequestId) {
-    selectedChecklistItems.value = items
+function updateEquipmentTelemetry(updatedEquipment) {
+  if (!updatedEquipment?.id) {
+    return
   }
+
+  factoryScene.equipmentList = factoryScene.equipmentList.map((equipment) =>
+    equipment.id === updatedEquipment.id ? updatedEquipment : equipment,
+  )
+  factoryScene.lineGroups = factoryScene.lineGroups.map((line) => ({
+    ...line,
+    equipment: line.equipment.map((equipment) =>
+      equipment.id === updatedEquipment.id ? updatedEquipment : equipment,
+    ),
+  }))
+}
+
+async function loadSelectedEquipmentTelemetry(equipmentId) {
+  if (!equipmentId) {
+    return
+  }
+
+  const requestId = ++selectedTelemetryRequestId
+
+  try {
+    const updatedEquipment = await fetchEquipmentTelemetry(equipmentId, selectedEquipment.value)
+
+    if (requestId === selectedTelemetryRequestId) {
+      updateEquipmentTelemetry(updatedEquipment)
+    }
+  } catch {
+    // 인증 또는 네트워크 오류 시 기존 실데이터를 유지하고 임시 데이터로 대체하지 않는다.
+  }
+}
+
+function startRealtimePolling() {
+  window.clearInterval(factorySceneInterval)
+  window.clearInterval(selectedTelemetryInterval)
+  factorySceneInterval = window.setInterval(loadFactoryScene, 15000)
+  selectedTelemetryInterval = window.setInterval(
+    () => loadSelectedEquipmentTelemetry(selectedEquipmentId.value),
+    5000,
+  )
 }
 
 function clamp(value, min, max) {
@@ -722,7 +786,12 @@ function showContentLoading() {
 
 onMounted(() => {
   showContentLoading()
-  loadFactoryScene()
+
+  if (!shouldSkipDashboardApi) {
+    loadFactoryScene()
+    startRealtimePolling()
+  }
+
   applyDefaultLayouts()
 
   if (typeof ResizeObserver === 'undefined') {
@@ -745,11 +814,13 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(contentLoadingTimer)
+  window.clearInterval(factorySceneInterval)
+  window.clearInterval(selectedTelemetryInterval)
   layoutResizeObserver?.disconnect()
 })
 
 watch(selectedEquipment, (equipment) => {
-  if (!equipment.charts[selectedMetricId.value]) {
+  if (!equipment.charts?.[selectedMetricId.value]) {
     selectedMetricId.value = 'temperature'
   }
 })
@@ -757,9 +828,8 @@ watch(selectedEquipment, (equipment) => {
 watch(
   selectedEquipmentId,
   (equipmentId) => {
-    loadSelectedChecklist(equipmentId)
+    loadSelectedEquipmentTelemetry(equipmentId)
   },
-  { immediate: true },
 )
 </script>
 

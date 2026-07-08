@@ -4,14 +4,18 @@ import { ref } from 'vue'
 import structureIcon from '@/assets/icons/dashboard/action-3d-object.png'
 import closeIcon from '@/assets/icons/dashboard/close.svg'
 import listIcon from '@/assets/icons/dashboard/nav-list.svg'
+import { equipmentStatusMap } from '@/constants/equipmentStatus'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
-import { equipmentStatusMap } from '@/features/equipment/mock/equipmentListMock'
 
 defineProps({
   groups: {
     type: Array,
     required: true,
+  },
+  lineGroups: {
+    type: Array,
+    default: () => [],
   },
 })
 
@@ -118,7 +122,7 @@ function scrollToLine(lineId) {
           >
             <img :src="closeIcon" alt="" width="22" height="22" />
           </button>
-          <FactoryViewport />
+          <FactoryViewport :lines="lineGroups" />
         </section>
       </div>
     </Transition>
@@ -312,10 +316,6 @@ function scrollToLine(lineId) {
 
 .equipment-list-panel__status-dot--normal {
   background: var(--agentory-color-status-normal);
-}
-
-.equipment-list-panel__status-dot--offline {
-  background: var(--agentory-color-status-offline);
 }
 
 .equipment-list-panel__status-dot--warning {

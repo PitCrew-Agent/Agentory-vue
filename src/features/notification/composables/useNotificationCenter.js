@@ -1,14 +1,13 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
-import { notificationLogGroups } from '@/features/notification/mock/notificationLogMock'
+import {
+  fetchNotificationGroups,
+  markAllNotificationsReadRequest,
+  markNotificationReadRequest,
+} from '@/features/notification/services/notificationApi'
 
-const userId = 'employee1'
-const notificationGroups = reactive(
-  notificationLogGroups.map((group) => ({
-    ...group,
-    rows: group.rows.map((row) => ({ ...row })),
-  })),
-)
+const notificationGroups = reactive([])
+const isNotificationLoading = ref(false)
 
 const notifications = computed(() =>
   notificationGroups.flatMap((group) =>
@@ -23,27 +22,72 @@ const unreadNotifications = computed(() =>
   notifications.value.filter((notification) => notification.readStatus === 'unread'),
 )
 
-function setNotificationReadStatus(id, readStatus) {
+function replaceNotificationGroups(groups) {
+  notificationGroups.splice(
+    0,
+    notificationGroups.length,
+    ...groups.map((group) => ({
+      ...group,
+      rows: group.rows.map((row) => ({ ...row })),
+    })),
+  )
+}
+
+function findNotification(id) {
+  return notificationGroups.flatMap((group) => group.rows).find((row) => row.id === id)
+}
+
+async function loadNotifications(options) {
+  isNotificationLoading.value = true
+
+  try {
+    const groups = await fetchNotificationGroups(options)
+
+    replaceNotificationGroups(groups)
+    return groups
+  } catch {
+    replaceNotificationGroups([])
+    return []
+  } finally {
+    isNotificationLoading.value = false
+  }
+}
+
+async function setNotificationReadStatus(id, readStatus) {
   const target = notificationGroups.flatMap((group) => group.rows).find((row) => row.id === id)
 
   if (target) {
+    if (readStatus === 'read' && target.readStatus !== 'read') {
+      try {
+        await markNotificationReadRequest(id)
+      } catch {
+        return
+      }
+    }
+
     target.readStatus = readStatus
   }
 }
 
-function toggleNotificationReadStatus(id) {
-  const target = notificationGroups.flatMap((group) => group.rows).find((row) => row.id === id)
+async function toggleNotificationReadStatus(id) {
+  const target = findNotification(id)
 
   if (target) {
-    target.readStatus = target.readStatus === 'read' ? 'unread' : 'read'
+    await setNotificationReadStatus(id, target.readStatus === 'read' ? 'unread' : 'read')
   }
 }
 
 function markNotificationRead(id) {
-  setNotificationReadStatus(id, 'read')
+  return setNotificationReadStatus(id, 'read')
 }
 
-function markAllNotificationsRead() {
+async function markAllNotificationsRead() {
+  try {
+    await markAllNotificationsReadRequest()
+  } catch {
+    return
+  }
+
   notificationGroups.forEach((group) => {
     group.rows.forEach((row) => {
       row.readStatus = 'read'
@@ -53,6 +97,8 @@ function markAllNotificationsRead() {
 
 export function useNotificationCenter() {
   return {
+    isNotificationLoading,
+    loadNotifications,
     markAllNotificationsRead,
     markNotificationRead,
     notificationGroups,
@@ -60,6 +106,5 @@ export function useNotificationCenter() {
     setNotificationReadStatus,
     toggleNotificationReadStatus,
     unreadNotifications,
-    userId,
   }
 }

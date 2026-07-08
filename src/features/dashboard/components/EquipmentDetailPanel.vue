@@ -4,7 +4,6 @@ import pressureIcon from '@/assets/icons/dashboard/metric-pressure.png'
 import rfPowerIcon from '@/assets/icons/dashboard/metric-rf-power.svg'
 import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
 import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
-import offlineStatusIcon from '@/assets/icons/dashboard/status-offline.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import temperatureIcon from '@/assets/icons/dashboard/metric-temperature.png'
 
@@ -31,7 +30,6 @@ const metricIconMap = {
 const statusIconMap = {
   danger: dangerStatusIcon,
   normal: normalStatusIcon,
-  offline: offlineStatusIcon,
   warning: warningStatusIcon,
 }
 
@@ -48,16 +46,22 @@ function selectMetric(metricId) {
 
     <div class="detail-panel__title-row">
       <h3>{{ equipment.name }}</h3>
-      <span class="detail-panel__status" :class="`detail-panel__status--${equipment.status.tone}`">
-        <img
-          class="detail-panel__status-icon"
-          :src="statusIconMap[equipment.status.tone]"
-          alt=""
-          width="17"
-          height="17"
-        />
-        {{ equipment.status.label }}
-      </span>
+      <Transition name="detail-status-flow" mode="out-in">
+        <span
+          :key="equipment.status.tone"
+          class="detail-panel__status"
+          :class="`detail-panel__status--${equipment.status.tone}`"
+        >
+          <img
+            class="detail-panel__status-icon"
+            :src="statusIconMap[equipment.status.tone]"
+            alt=""
+            width="17"
+            height="17"
+          />
+          {{ equipment.status.label }}
+        </span>
+      </Transition>
     </div>
 
     <div class="detail-panel__body">
@@ -94,10 +98,12 @@ function selectMetric(metricId) {
           <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
           <div>
             <span>{{ metric.label }}</span>
-            <strong>
-              {{ metric.value }}
-              <small v-if="metric.unit">{{ metric.unit }}</small>
-            </strong>
+            <Transition name="detail-value-flow" mode="out-in">
+              <strong :key="`${metric.id}-${metric.value}-${metric.unit}`">
+                {{ metric.value }}
+                <small v-if="metric.unit">{{ metric.unit }}</small>
+              </strong>
+            </Transition>
           </div>
         </button>
       </div>
@@ -166,6 +172,10 @@ function selectMetric(metricId) {
   font-weight: var(--agentory-font-weight-medium);
   line-height: var(--agentory-line-height-body);
   white-space: nowrap;
+  transition:
+    background-color 260ms var(--agentory-ease-soft),
+    color 260ms var(--agentory-ease-soft),
+    transform 320ms var(--agentory-ease-elastic);
 }
 
 .detail-panel__status-icon {
@@ -296,6 +306,27 @@ function selectMetric(metricId) {
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: 1.5;
   white-space: nowrap;
+}
+
+.detail-status-flow-enter-active,
+.detail-status-flow-leave-active,
+.detail-value-flow-enter-active,
+.detail-value-flow-leave-active {
+  transition:
+    opacity 260ms var(--agentory-ease-soft),
+    transform 360ms var(--agentory-ease-elastic);
+}
+
+.detail-status-flow-enter-from,
+.detail-value-flow-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.detail-status-flow-leave-to,
+.detail-value-flow-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .detail-panel__metric small {

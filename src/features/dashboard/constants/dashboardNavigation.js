@@ -1,7 +1,3 @@
-import { factoryEquipmentList, factoryStatusSummary } from '@/features/dashboard/mock/factory3dMock'
-
-export const statusSummary = factoryStatusSummary
-
 const dashboardNavigationItems = [
   {
     id: 'dashboard',
@@ -37,5 +33,3 @@ export function createDashboardNavigation(activeId = 'dashboard') {
 }
 
 export const dashboardNavigation = createDashboardNavigation('dashboard')
-
-export const selectedEquipment = factoryEquipmentList[0]
