@@ -1,17 +1,14 @@
-import { http } from '@/services/api/http'
-
-import {
-  clearAuthTokens,
-  getRefreshTokenPayload,
-  writeAuthTokens,
-} from '@/features/auth/services/authTokenStorage'
+import { buildApiUrl, http } from '@/services/api/http'
 
 const AUTH_API_PREFIX = '/api/v1/auth'
 
 const authFlowEndpointMap = {
   login: `${AUTH_API_PREFIX}/login`,
   passwordReset: `${AUTH_API_PREFIX}/password-reset`,
-  signup: `${AUTH_API_PREFIX}/signup`,
+}
+
+const authRedirectEndpointMap = {
+  login: `${AUTH_API_PREFIX}/login/redirect`,
 }
 
 function getAuthFlowEndpoint(flow) {
@@ -29,10 +26,17 @@ export async function requestAuthUrl(flow) {
 }
 
 export async function redirectToAuthFlow(flow) {
+  const redirectEndpoint = authRedirectEndpointMap[flow]
+
+  if (redirectEndpoint) {
+    window.location.assign(buildApiUrl(redirectEndpoint))
+    return
+  }
+
   const response = await requestAuthUrl(flow)
 
   if (!response?.authorization_url) {
-    throw new Error('Authorization URL is missing')
+    throw new Error('Auth redirect URL is missing')
   }
 
   window.location.assign(response.authorization_url)
@@ -43,15 +47,9 @@ export async function fetchCurrentAuthUser() {
 }
 
 export async function refreshAuthTokens() {
-  const response = await http.post(`${AUTH_API_PREFIX}/refresh`, getRefreshTokenPayload())
-  writeAuthTokens(response)
-
-  return response
+  return http.post(`${AUTH_API_PREFIX}/refresh`)
 }
 
 export async function logoutAuthSession() {
-  const response = await http.post(`${AUTH_API_PREFIX}/logout`, getRefreshTokenPayload())
-  clearAuthTokens()
-
-  return response
+  return http.post(`${AUTH_API_PREFIX}/logout`)
 }

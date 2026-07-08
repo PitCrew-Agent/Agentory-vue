@@ -1,85 +1,35 @@
 import { test, expect } from '@playwright/test'
 
-async function expectTopOffsetWithoutScroll(page) {
-  const metrics = await page.locator('.auth-card').evaluate((card) => {
-    const rect = card.getBoundingClientRect()
-    const probe = document.createElement('div')
-    probe.style.position = 'absolute'
-    probe.style.top = 'var(--auth-card-top)'
-    document.querySelector('.auth-page').appendChild(probe)
-    const expectedTop = Number.parseFloat(window.getComputedStyle(probe).top)
-    probe.remove()
+async function expectAuthScreenWithoutScroll(page) {
+  const metrics = await page.evaluate(() => ({
+    noScroll:
+      document.documentElement.scrollWidth <= window.innerWidth &&
+      document.documentElement.scrollHeight <= window.innerHeight,
+    hasInput: Boolean(document.querySelector('input')),
+  }))
 
-    return {
-      topDelta: Math.abs(rect.top - expectedTop),
-      noScroll:
-        document.documentElement.scrollHeight <= window.innerHeight &&
-        document.body.scrollHeight <= window.innerHeight,
-    }
-  })
-
-  expect(metrics.topDelta).toBeLessThanOrEqual(1)
   expect(metrics.noScroll).toBe(true)
+  expect(metrics.hasInput).toBe(false)
 }
 
-test('visits the login screen by default', async ({ page }) => {
+test('visits the Microsoft SSO login screen by default', async ({ page }) => {
   await page.goto('/')
+
+  await expect(page).toHaveURL(/\/login$/)
   await expect(page.locator('h1')).toHaveText('로그인')
-  await expect(page.locator('input#userId')).toHaveValue('')
-  await expect(page.locator('input#userId')).toHaveAttribute('placeholder', 'employee1')
-  await expect(page.getByLabel('이전 화면으로 이동')).toHaveCount(0)
-  await expect(page.getByRole('link', { name: '비밀번호를 잊으셨나요?' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '회원가입' })).toBeVisible()
-  await expectTopOffsetWithoutScroll(page)
-
-  await page.getByRole('link', { name: '회원가입' }).click()
-  await expect(page).toHaveURL(/\/signup$/)
+  await expect(page.getByRole('heading', { name: '조직 계정으로 접속' })).toBeVisible()
+  await expect(page.getByText('Microsoft Azure SSO')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Microsoft로 계속' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '비밀번호 찾기' })).toBeVisible()
+  await expectAuthScreenWithoutScroll(page)
 })
 
-test('renders password recovery flow screens', async ({ page }) => {
-  await page.goto('/password/find')
-  await expect(page.locator('h1')).toHaveText('비밀번호 찾기')
-  await expect(page.locator('input#email')).toHaveValue('')
-  await expect(page.locator('input#email')).toHaveAttribute('placeholder', 'admin@metanet.co.kr')
-  await expect(page.getByRole('button', { name: '인증번호 전송' })).toBeVisible()
-  await expect(page.getByLabel('이전 화면으로 이동')).toBeVisible()
-  await expectTopOffsetWithoutScroll(page)
+test('redirects removed auth routes to login', async ({ page }) => {
+  for (const path of ['/password/find', '/password/reset', '/signup']) {
+    await page.goto(path)
 
-  await page.goto('/password/reset')
-  await expect(page.locator('h1')).toHaveText('비밀번호 찾기')
-  await expect(page.locator('input#newPassword')).toBeVisible()
-  await expect(page.getByRole('button', { name: '완료' })).toBeVisible()
-  await expect(page.getByLabel('이전 화면으로 이동')).toBeVisible()
-  await expectTopOffsetWithoutScroll(page)
-
-  await page.getByLabel('이전 화면으로 이동').click()
-  await expect(page).toHaveURL(/\/password\/find$/)
-})
-
-test('renders signup screen', async ({ page }) => {
-  await page.goto('/signup')
-  await expect(page.locator('h1')).toHaveText('회원가입')
-  await expect(page.locator('input#name')).toHaveValue('')
-  await expect(page.locator('input#name')).toHaveAttribute('placeholder', '이준호')
-  await expect(page.locator('input#userId')).toHaveValue('')
-  await expect(page.locator('input#userId')).toHaveAttribute('placeholder', 'employee1')
-  await expect(page.locator('input#department')).toHaveValue('')
-  await expect(page.locator('input#department')).toHaveAttribute('placeholder', '생산기술팀')
-  await expect(page.locator('input#email')).toHaveValue('')
-  await expect(page.locator('input#email')).toHaveAttribute('placeholder', 'admin@metanet.co.kr')
-  await expect(page.getByLabel('이전 화면으로 이동')).toBeVisible()
-  await expectTopOffsetWithoutScroll(page)
-
-  await page.locator('input#name').fill('정하린')
-  await page.locator('input#department').fill('스마트운영팀')
-  await page.getByRole('button', { name: '완료' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15000 })
-  await expect(page.locator('[data-test="dashboard-header-user-button"]')).toHaveText('정하린')
-
-  await page.locator('[data-test="dashboard-header-user-button"]').click()
-  await expect(page.locator('[data-test="dashboard-header-profile-name"]')).toHaveText('정하린')
-  await expect(page.locator('[data-test="dashboard-header-profile-user-id"]')).toHaveText('employee1')
-  await expect(page.locator('[data-test="dashboard-header-profile-department"]')).toHaveText(
-    '스마트운영팀',
-  )
+    await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByRole('heading', { name: '조직 계정으로 접속' })).toBeVisible()
+    await expectAuthScreenWithoutScroll(page)
+  }
 })

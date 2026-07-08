@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 
 import closeIcon from '@/assets/icons/dashboard/close.svg'
 import pencilIcon from '@/assets/icons/dashboard/action-pencil.png'
-import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
+import { useAuthStore } from '@/stores/authStore'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import { workLogStatusMap } from '@/features/workLog/mock/workLogMock'
@@ -16,11 +16,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['create-log'])
-const { currentUser } = useCurrentUser()
+const authStore = useAuthStore()
 const tablePanelRef = ref(null)
 const isCreateModalOpen = ref(false)
 const createLogForm = reactive({
-  operator: currentUser.name,
+  operator: authStore.currentUser.name,
   status: 'waiting',
   task: '',
   time: '',
@@ -60,7 +60,7 @@ function getCurrentTime() {
 }
 
 function openCreateModal() {
-  createLogForm.operator = currentUser.name
+  createLogForm.operator = authStore.currentUser.name
   createLogForm.status = 'waiting'
   createLogForm.task = ''
   createLogForm.time = getCurrentTime()

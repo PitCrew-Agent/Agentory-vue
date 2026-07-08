@@ -8,8 +8,7 @@ import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
 import offlineStatusIcon from '@/assets/icons/dashboard/status-offline.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
-import { useCurrentUser } from '@/features/auth/composables/useCurrentUser'
-import { logoutAuthSession } from '@/features/auth/services/authApi'
+import { useAuthStore } from '@/stores/authStore'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
 defineProps({
@@ -27,12 +26,13 @@ const statusIconMap = {
 }
 
 const router = useRouter()
-const { currentUser, loadCurrentUser, logoutCurrentUser } = useCurrentUser()
+const authStore = useAuthStore()
 const { markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
-const currentUserName = computed(() => currentUser.name || currentUser.email || '사용자')
+const currentUser = computed(() => authStore.currentUser)
+const currentUserName = computed(() => authStore.currentUserName)
 
 function toggleNotificationPanel() {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -45,19 +45,13 @@ function toggleProfilePanel() {
 }
 
 async function handleLogout() {
-  try {
-    await logoutAuthSession()
-  } catch {
-    // 토큰이 없거나 만료되어도 클라이언트 세션은 정리한다.
-  } finally {
-    logoutCurrentUser()
-    isProfileOpen.value = false
-    router.push('/login')
-  }
+  await authStore.logout()
+  isProfileOpen.value = false
+  router.push('/login')
 }
 
 onMounted(() => {
-  loadCurrentUser()
+  authStore.loadCurrentUser()
 })
 </script>
 

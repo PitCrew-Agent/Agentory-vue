@@ -1,91 +1,70 @@
-import { getAccessToken } from '@/features/auth/services/authTokenStorage'
+import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/features/auth/constants/authEvents'
 
-function joinEndpoint(baseUrl, endpoint) {
-  if (!baseUrl || /^https?:\/\//.test(endpoint)) {
-    return endpoint
+function getRequiredEnv(key) {
+  const value = import.meta.env[key]
+
+  if (!value) {
+    throw new Error(`${key} is required`)
   }
 
-  return `${baseUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`
+  return value
 }
 
-function buildUrl(endpoint, params) {
-  const origin = globalThis.location?.origin ?? 'http://localhost'
-  const url = new URL(joinEndpoint(API_BASE_URL, endpoint), origin)
+const API_BASE_URL = getRequiredEnv('VITE_API_BASE_URL')
+const API_TIMEOUT_MS = Number(getRequiredEnv('VITE_API_TIMEOUT_MS'))
 
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value))
-      }
-    })
-  }
-
-  return url.toString()
+if (!Number.isFinite(API_TIMEOUT_MS)) {
+  throw new Error('VITE_API_TIMEOUT_MS must be a number')
 }
 
-async function parseResponse(response) {
-  const contentType = response.headers.get('content-type') ?? ''
-
-  if (response.status === 204) {
-    return null
-  }
-
-  if (contentType.includes('application/json')) {
-    return response.json()
-  }
-
-  return response.text()
+export function buildApiUrl(endpoint) {
+  return new URL(endpoint, API_BASE_URL).toString()
 }
 
-export async function apiRequest(endpoint, options = {}) {
-  const { params, headers, body, ...requestOptions } = options
-  const requestHeaders = new Headers(headers)
-  const hasJsonBody = body !== undefined && body !== null && !(body instanceof FormData)
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT_MS,
+  withCredentials: true,
+})
 
-  if (hasJsonBody && !requestHeaders.has('Content-Type')) {
-    requestHeaders.set('Content-Type', 'application/json')
-  }
+apiClient.interceptors.response.use(
+  (response) => {
+    if (response.status === 204) {
+      return null
+    }
 
-  const accessToken = getAccessToken()
+    return response.data
+  },
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT))
+    }
 
-  if (accessToken && !requestHeaders.has('Authorization')) {
-    requestHeaders.set('Authorization', `Bearer ${accessToken}`)
-  }
+    const apiError = new Error('API request failed')
+    apiError.status = error.response?.status
+    apiError.data = error.response?.data
+    apiError.cause = error
 
-  const response = await fetch(buildUrl(endpoint, params), {
-    ...requestOptions,
-    credentials: requestOptions.credentials ?? 'same-origin',
-    headers: requestHeaders,
-    body: hasJsonBody ? JSON.stringify(body) : body,
-  })
-  const data = await parseResponse(response)
-
-  if (!response.ok) {
-    const error = new Error('API request failed')
-    error.status = response.status
-    error.data = data
-    throw error
-  }
-
-  return data
-}
+    return Promise.reject(apiError)
+  },
+)
 
 export const http = {
   get(endpoint, options) {
-    return apiRequest(endpoint, { ...options, method: 'GET' })
+    return apiClient.get(endpoint, options)
   },
   post(endpoint, body, options) {
-    return apiRequest(endpoint, { ...options, method: 'POST', body })
+    return apiClient.post(endpoint, body, options)
   },
   put(endpoint, body, options) {
-    return apiRequest(endpoint, { ...options, method: 'PUT', body })
+    return apiClient.put(endpoint, body, options)
   },
   patch(endpoint, body, options) {
-    return apiRequest(endpoint, { ...options, method: 'PATCH', body })
+    return apiClient.patch(endpoint, body, options)
   },
   remove(endpoint, options) {
-    return apiRequest(endpoint, { ...options, method: 'DELETE' })
+    return apiClient.delete(endpoint, options)
   },
 }

@@ -1,19 +1,24 @@
 import { describe, it, expect } from 'vitest'
 
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import App from '../App.vue'
 import router from '../router'
+
+function mountApp() {
+  return mount(App, {
+    global: {
+      plugins: [createPinia(), router],
+    },
+  })
+}
 
 describe('App', () => {
   it('renders the login route by default', async () => {
     await router.push('/')
     await router.isReady()
 
-    const wrapper = mount(App, {
-      global: {
-        plugins: [router],
-      },
-    })
+    const wrapper = mountApp()
 
     expect(wrapper.find('.auth-page').exists()).toBe(true)
   })
@@ -22,11 +27,7 @@ describe('App', () => {
     await router.push('/dashboard')
     await router.isReady()
 
-    const wrapper = mount(App, {
-      global: {
-        plugins: [router],
-      },
-    })
+    const wrapper = mountApp()
 
     expect(wrapper.find('.dashboard-page').exists()).toBe(true)
     expect(wrapper.find('[data-test="dashboard-sidebar"]').exists()).toBe(true)
@@ -36,11 +37,7 @@ describe('App', () => {
     await router.push('/work-log')
     await router.isReady()
 
-    const wrapper = mount(App, {
-      global: {
-        plugins: [router],
-      },
-    })
+    const wrapper = mountApp()
 
     expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
     expect(wrapper.find('[data-test="work-log-panel"]').exists()).toBe(true)
@@ -50,11 +47,7 @@ describe('App', () => {
     await router.push('/equipment')
     await router.isReady()
 
-    const wrapper = mount(App, {
-      global: {
-        plugins: [router],
-      },
-    })
+    const wrapper = mountApp()
 
     expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
     expect(wrapper.find('[data-test="equipment-list-panel"]').exists()).toBe(true)
@@ -64,11 +57,7 @@ describe('App', () => {
     await router.push('/notifications')
     await router.isReady()
 
-    const wrapper = mount(App, {
-      global: {
-        plugins: [router],
-      },
-    })
+    const wrapper = mountApp()
 
     expect(wrapper.find('.dashboard-frame-page').exists()).toBe(true)
     expect(wrapper.find('[data-test="notification-log-panel"]').exists()).toBe(true)
