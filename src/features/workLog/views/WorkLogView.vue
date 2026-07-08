@@ -1,19 +1,15 @@
 <script setup>
-import { reactive } from 'vue'
+import { onMounted, ref } from 'vue'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import WorkLogPanel from '@/features/workLog/components/WorkLogPanel.vue'
-import { workLogGroups } from '@/features/workLog/mock/workLogMock'
+import { createWorkLogRequest, fetchWorkLogGroups } from '@/features/workLog/services/workLogApi'
 
-const workLogGroupState = reactive(
-  workLogGroups.map((group) => ({
-    ...group,
-    logs: group.logs.map((log) => ({ ...log })),
-  })),
-)
+const workLogGroupState = ref([])
+const shouldSkipWorkLogApi = import.meta.env.MODE === 'test'
 
-function createWorkLog(log) {
-  let targetGroup = workLogGroupState.find((group) => group.id === log.date)
+function insertWorkLog(log) {
+  let targetGroup = workLogGroupState.value.find((group) => group.id === log.date)
 
   if (!targetGroup) {
     targetGroup = {
@@ -21,11 +17,37 @@ function createWorkLog(log) {
       id: log.date,
       logs: [],
     }
-    workLogGroupState.unshift(targetGroup)
+    workLogGroupState.value.unshift(targetGroup)
   }
 
   targetGroup.logs.unshift(log)
 }
+
+async function loadWorkLogs() {
+  try {
+    workLogGroupState.value = await fetchWorkLogGroups()
+  } catch {
+    workLogGroupState.value = []
+  }
+}
+
+async function createWorkLog(log) {
+  try {
+    const createdLog = await createWorkLogRequest(log)
+
+    insertWorkLog(createdLog)
+  } catch {
+    // 저장 실패 시 임시 데이터로 대체하지 않는다.
+  }
+}
+
+onMounted(() => {
+  if (shouldSkipWorkLogApi) {
+    return
+  }
+
+  loadWorkLogs()
+})
 </script>
 
 <template>

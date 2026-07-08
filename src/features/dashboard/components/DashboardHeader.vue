@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
 import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
 import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
-import offlineStatusIcon from '@/assets/icons/dashboard/status-offline.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
 import { useAuthStore } from '@/stores/authStore'
@@ -21,15 +20,15 @@ defineProps({
 const statusIconMap = {
   danger: dangerStatusIcon,
   normal: normalStatusIcon,
-  offline: offlineStatusIcon,
   warning: warningStatusIcon,
 }
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { markNotificationRead, unreadNotifications } = useNotificationCenter()
+const { loadNotifications, markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
+const shouldSkipHeaderApi = import.meta.env.MODE === 'test'
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
 const currentUser = computed(() => authStore.currentUser)
 const currentUserName = computed(() => authStore.currentUserName)
@@ -52,6 +51,10 @@ async function handleLogout() {
 
 onMounted(() => {
   authStore.loadCurrentUser()
+
+  if (!shouldSkipHeaderApi) {
+    loadNotifications()
+  }
 })
 </script>
 
@@ -264,10 +267,6 @@ onMounted(() => {
 
 .dashboard-header__status--danger strong {
   color: var(--agentory-color-status-danger);
-}
-
-.dashboard-header__status--offline strong {
-  color: var(--agentory-color-status-offline);
 }
 
 .dashboard-header__tools {

@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
-import { notificationReadStatusMap } from '@/features/notification/mock/notificationLogMock'
+import { notificationReadStatusMap } from '@/constants/notificationStatus'
 
 defineProps({
   groups: {
@@ -43,7 +43,7 @@ function getCodeTone(code) {
     return 'warning'
   }
 
-  return 'offline'
+  return 'normal'
 }
 
 function openBulkConfirm() {
@@ -199,8 +199,8 @@ function scrollToDate(date) {
   color: var(--agentory-color-status-danger-text);
 }
 
-.notification-log-panel__code--offline {
-  color: var(--agentory-color-alert-offline);
+.notification-log-panel__code--normal {
+  color: var(--agentory-color-bg-primary);
 }
 
 .notification-log-panel__code--warning {

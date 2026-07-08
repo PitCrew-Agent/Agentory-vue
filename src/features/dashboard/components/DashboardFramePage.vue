@@ -4,8 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
 import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
+import { createDashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
-import { createDashboardNavigation } from '@/features/dashboard/mock/dashboardMock'
 
 const props = defineProps({
   activeNavigationId: {

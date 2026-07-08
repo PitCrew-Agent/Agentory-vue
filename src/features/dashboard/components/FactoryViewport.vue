@@ -3,18 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
+import { equipmentStatusMap, equipmentStatusOrder } from '@/constants/equipmentStatus'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
-import {
-  defaultFactoryEquipmentId,
-  factoryLineGroups,
-} from '@/features/dashboard/mock/factory3dMock'
 
-const statusSummaryOrder = [
-  { id: 'normal', label: '양호' },
-  { id: 'warning', label: '주의' },
-  { id: 'danger', label: '위험' },
-  { id: 'offline', label: '오프라인' },
-]
+const statusSummaryOrder = equipmentStatusOrder.map((statusId) => ({
+  id: statusId,
+  label: equipmentStatusMap[statusId].label,
+}))
 
 const props = defineProps({
   checklistItems: {
@@ -23,11 +18,11 @@ const props = defineProps({
   },
   lines: {
     type: Array,
-    default: () => factoryLineGroups,
+    default: () => [],
   },
   selectedEquipmentId: {
     type: String,
-    default: defaultFactoryEquipmentId,
+    default: '',
   },
 })
 
@@ -36,7 +31,7 @@ const emit = defineEmits(['select-equipment'])
 const canvasRef = ref(null)
 const viewportRef = ref(null)
 const canRenderScene = ref(true)
-const currentSelectedEquipmentId = ref(props.selectedEquipmentId || defaultFactoryEquipmentId)
+const currentSelectedEquipmentId = ref(props.selectedEquipmentId || '')
 const isLineSelectorOpen = ref(false)
 const isAlertChecklistOpen = ref(false)
 const isLineSceneLoading = ref(false)
@@ -138,7 +133,6 @@ function getScenePalette() {
     floor: getCssToken('--agentory-color-bg-app', '#f8f9f6'),
     muted: getCssToken('--agentory-color-bg-muted', '#d9d9d9'),
     normal: getCssToken('--agentory-color-status-normal', '#00ff37'),
-    offline: getCssToken('--agentory-color-status-offline', '#d9d9d9'),
     panel: getCssToken('--agentory-color-bg-surface', '#ededed'),
     warning: getCssToken('--agentory-color-status-warning', '#f4c300'),
   }
@@ -1068,7 +1062,9 @@ onBeforeUnmount(() => {
         >
           <span class="factory-viewport__status-dot" aria-hidden="true"></span>
           <span>{{ item.label }}</span>
-          <strong>{{ item.count }}</strong>
+          <Transition name="factory-status-count" mode="out-in">
+            <strong :key="`${item.id}-${item.count}`">{{ item.count }}</strong>
+          </Transition>
         </li>
       </ul>
 
@@ -1170,7 +1166,11 @@ onBeforeUnmount(() => {
       >
         <span class="factory-viewport__label-dot"></span>
         <strong>{{ label.equipment.name }}</strong>
-        <small>{{ label.equipment.status.label }}</small>
+        <Transition name="factory-label-status" mode="out-in">
+          <small :key="`${label.equipment.id}-${label.equipment.status.tone}`">
+            {{ label.equipment.status.label }}
+          </small>
+        </Transition>
       </button>
     </div>
 
@@ -1277,8 +1277,9 @@ onBeforeUnmount(() => {
 .factory-viewport__status-dot {
   width: 8px;
   height: 8px;
-  background: var(--agentory-color-status-offline);
+  background: var(--agentory-color-bg-muted);
   border-radius: var(--agentory-radius-pill);
+  transition: background-color 320ms var(--agentory-ease-soft);
 }
 
 .factory-viewport__status-item--normal .factory-viewport__status-dot {
@@ -1298,6 +1299,27 @@ onBeforeUnmount(() => {
   font-weight: var(--agentory-font-weight-semi-bold);
 }
 
+.factory-status-count-enter-active,
+.factory-status-count-leave-active,
+.factory-label-status-enter-active,
+.factory-label-status-leave-active {
+  transition:
+    opacity 240ms var(--agentory-ease-soft),
+    transform 320ms var(--agentory-ease-elastic);
+}
+
+.factory-status-count-enter-from,
+.factory-label-status-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.factory-status-count-leave-to,
+.factory-label-status-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .factory-viewport__status-item--normal strong {
   color: var(--agentory-color-status-normal-text);
 }
@@ -1308,10 +1330,6 @@ onBeforeUnmount(() => {
 
 .factory-viewport__status-item--danger strong {
   color: var(--agentory-color-status-danger);
-}
-
-.factory-viewport__status-item--offline strong {
-  color: var(--agentory-color-status-offline);
 }
 
 .factory-viewport__camera-tools {
@@ -1689,8 +1707,9 @@ onBeforeUnmount(() => {
 .factory-viewport__label-dot {
   width: 9px;
   height: 9px;
-  background: var(--agentory-color-status-offline);
+  background: var(--agentory-color-bg-muted);
   border-radius: var(--agentory-radius-pill);
+  transition: background-color 320ms var(--agentory-ease-soft);
 }
 
 .factory-viewport__label--normal .factory-viewport__label-dot {
