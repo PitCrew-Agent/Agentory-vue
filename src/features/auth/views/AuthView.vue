@@ -51,8 +51,8 @@ onBeforeUnmount(() => {
       <section class="auth-sso" aria-labelledby="auth-sso-title">
         <div class="auth-sso__copy">
           <span class="auth-sso__eyebrow">Microsoft Azure SSO</span>
-          <h2 id="auth-sso-title">Microsoft Azure SSO를 활용한 로그인</h2>
-          <p>조직 계정으로 Agentory에 안전하게 접속하세요.</p>
+          <h2 id="auth-sso-title">조직 계정으로 접속</h2>
+          <p>Agentory를 안전하게 시작하세요.</p>
         </div>
 
         <div class="auth-sso__actions">
@@ -63,7 +63,7 @@ onBeforeUnmount(() => {
             @click="startAuthRedirect('login')"
           >
             <img class="auth-sso__microsoft-icon" :src="microsoftIcon" alt="" />
-            <span>Microsoft로 로그인</span>
+            <span>Microsoft로 계속</span>
           </button>
 
           <button
@@ -76,7 +76,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <p class="auth-sso__note">계정 생성과 권한 변경은 조직 관리자에게 요청해주세요.</p>
+        <p class="auth-sso__note">계정과 권한은 관리자에게 요청하세요.</p>
       </section>
 
       <Teleport to="body">
@@ -100,6 +100,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   width: 100%;
   max-width: 100%;
+  min-height: clamp(260px, 32dvh, 350px);
   font-family: var(--agentory-font-family-base);
   animation: auth-sso-in 280ms var(--agentory-ease-soft) both;
 }
@@ -107,13 +108,13 @@ onBeforeUnmount(() => {
 .auth-sso__copy {
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1.11dvh, 12px);
-  margin-bottom: clamp(30px, 4.17dvh, 45px);
+  gap: clamp(6px, 0.83dvh, 9px);
+  margin-bottom: clamp(24px, 3.43dvh, 36px);
 }
 
 .auth-sso__eyebrow {
   color: var(--agentory-color-bg-primary);
-  font-size: clamp(13px, 0.83vw, 16px);
+  font-size: clamp(12px, 0.78vw, 15px);
   font-weight: var(--agentory-font-weight-semi-bold);
   letter-spacing: var(--agentory-letter-spacing-default);
   line-height: 1.4;
@@ -122,16 +123,16 @@ onBeforeUnmount(() => {
 .auth-sso h2 {
   margin: 0;
   color: var(--agentory-color-text-primary);
-  font-size: clamp(21px, 1.46vw, 28px);
+  font-size: clamp(24px, 1.67vw, 32px);
   font-weight: var(--agentory-font-weight-bold);
   letter-spacing: var(--agentory-letter-spacing-default);
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .auth-sso p {
   margin: 0;
   color: var(--agentory-color-text-muted);
-  font-size: clamp(13px, 0.94vw, 18px);
+  font-size: clamp(13px, 0.89vw, 17px);
   font-weight: var(--agentory-font-weight-regular);
   letter-spacing: var(--agentory-letter-spacing-default);
   line-height: 1.6;
@@ -140,8 +141,8 @@ onBeforeUnmount(() => {
 .auth-sso__actions {
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 1.39dvh, 15px);
-  margin-bottom: clamp(18px, 2.13dvh, 24px);
+  gap: clamp(10px, 1.3dvh, 14px);
+  margin-bottom: clamp(14px, 1.94dvh, 21px);
 }
 
 .auth-sso__button {
@@ -177,8 +178,9 @@ onBeforeUnmount(() => {
 }
 
 .auth-sso__button--secondary {
-  color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-auth-secondary);
+  color: var(--agentory-color-bg-primary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 62%);
 }
 
 .auth-sso__microsoft-icon {
@@ -189,6 +191,7 @@ onBeforeUnmount(() => {
 
 .auth-sso__note {
   max-width: 26em;
+  font-size: clamp(12px, 0.78vw, 15px);
 }
 
 .auth-toast {
