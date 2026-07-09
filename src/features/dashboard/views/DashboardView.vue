@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
+import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import DashboardEditableWidget from '@/features/dashboard/components/DashboardEditableWidget.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
@@ -12,18 +13,24 @@ import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue
 import { dashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { createEmptyMetricChart } from '@/features/dashboard/constants/equipmentMetrics'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
+import { streamChatQuery } from '@/features/dashboard/services/chatApi'
 import {
   createEmptyEquipment,
   createEmptyFactoryScene,
   fetchEquipmentTelemetry,
+  fetchEquipmentSuggestions,
   fetchFactoryScene,
 } from '@/features/dashboard/services/telemetryApi'
+import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
+const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
-const assistantMessages = []
-const quickCommands = []
+const assistantMessages = ref([])
+const assistantSessionId = createAssistantSessionId()
+const isAssistantLoading = ref(false)
+const quickCommands = ref([])
 const shouldSkipDashboardApi = import.meta.env.MODE === 'test'
 const initialFactoryScene = createEmptyFactoryScene()
 const factoryScene = reactive({
@@ -38,11 +45,16 @@ const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
 let layoutResizeObserver
-let contentLoadingTimer = 0
+let contentLoadingFrame = 0
 let factorySceneInterval = 0
 let factorySceneRequestId = 0
 let selectedTelemetryInterval = 0
 let selectedTelemetryRequestId = 0
+let assistantSuggestionRequestId = 0
+let assistantSuggestionSignature = ''
+let assistantTypingMessageId = ''
+let assistantTypingQueue = ''
+let assistantTypingTimer = 0
 const isContentLoading = ref(true)
 
 const selectedEquipment = computed(
@@ -60,6 +72,36 @@ const selectedChart = computed(
     selectedEquipment.value.charts?.temperature ??
     createEmptyMetricChart(selectedMetricId.value),
 )
+
+function getEquipmentFocusMetricId(equipment) {
+  const charts = equipment?.charts ?? {}
+  const isAlarmStatus = ['warning', 'danger'].includes(equipment?.status?.tone)
+  const alarmMetricId = isAlarmStatus
+    ? (equipment.alarmMetricIds ?? []).find((metricId) => charts[metricId])
+    : ''
+
+  if (alarmMetricId) {
+    return alarmMetricId
+  }
+
+  if (charts[selectedMetricId.value]) {
+    return selectedMetricId.value
+  }
+
+  if (charts.temperature) {
+    return 'temperature'
+  }
+
+  return Object.keys(charts)[0] ?? 'temperature'
+}
+
+function syncSelectedMetricWithEquipment(equipment) {
+  const nextMetricId = getEquipmentFocusMetricId(equipment)
+
+  if (selectedMetricId.value !== nextMetricId) {
+    selectedMetricId.value = nextMetricId
+  }
+}
 
 const widgetOrder = ['factory', 'detail', 'metricChart', 'assistant']
 const widgetMeta = {
@@ -92,6 +134,265 @@ const dockWidgets = computed(() =>
   widgetOrder.filter((widgetId) => !visibleWidgetMap[widgetId]).map((widgetId) => widgetMeta[widgetId]),
 )
 
+function createAssistantSessionId() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (character) =>
+        (
+          Number(character) ^
+          (Math.random() * 16) >>
+            (Number(character) / 4)
+        ).toString(16),
+      )
+}
+
+function createAssistantMessage(role, text, extra = {}) {
+  return {
+    createdAt: new Date().toISOString(),
+    id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role,
+    text,
+    ...extra,
+  }
+}
+
+function updateAssistantMessage(messageId, updater) {
+  assistantMessages.value = assistantMessages.value.map((message) =>
+    message.id === messageId ? updater(message) : message,
+  )
+}
+
+function appendAssistantText(messageId, text) {
+  if (!text) {
+    return
+  }
+
+  if (assistantTypingMessageId !== messageId) {
+    window.clearTimeout(assistantTypingTimer)
+    assistantTypingMessageId = messageId
+    assistantTypingQueue = ''
+    assistantTypingTimer = 0
+  }
+
+  assistantTypingQueue += text
+
+  if (!assistantTypingTimer) {
+    flushAssistantTypingQueue()
+  }
+}
+
+function flushAssistantTypingQueue(options = {}) {
+  window.clearTimeout(assistantTypingTimer)
+  assistantTypingTimer = 0
+
+  if (!assistantTypingQueue || !assistantTypingMessageId) {
+    return
+  }
+
+  const characterCount = options.immediate
+    ? assistantTypingQueue.length
+    : Math.min(
+        assistantTypingQueue.length,
+        assistantTypingQueue.length > 240 ? 32 : assistantTypingQueue.length > 80 ? 18 : 8,
+      )
+  const nextText = assistantTypingQueue.slice(0, characterCount)
+
+  assistantTypingQueue = assistantTypingQueue.slice(characterCount)
+  updateAssistantMessage(assistantTypingMessageId, (message) => ({
+    ...message,
+    text: `${message.text ?? ''}${nextText}`,
+  }))
+
+  if (assistantTypingQueue) {
+    assistantTypingTimer = window.setTimeout(flushAssistantTypingQueue, 18)
+  }
+}
+
+function addAssistantStreamEvent(messageId, streamEvent) {
+  if (!streamEvent?.label) {
+    return
+  }
+
+  const nextEvent = {
+    detail: streamEvent.detail,
+    id: `${streamEvent.type || 'status'}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    label: streamEvent.label,
+    name: streamEvent.name,
+    type: streamEvent.type ?? 'status',
+  }
+
+  updateAssistantMessage(messageId, (message) => ({
+    ...message,
+    streamEvents: [...(message.streamEvents ?? []), nextEvent].slice(-12),
+  }))
+}
+
+function getAssistantErrorMessage(error) {
+  if (error?.status === 401) {
+    return '로그인 세션이 만료되었습니다. 다시 로그인해주세요.'
+  }
+
+  if (error?.message && error.message !== 'Chat stream request failed') {
+    return error.message
+  }
+
+  return 'Agent 응답을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
+}
+
+function createEquipmentSuggestionSignature(equipment) {
+  if (!equipment?.id) {
+    return ''
+  }
+
+  return [equipment.id, equipment.status?.tone ?? '', equipment.alarmCode ?? ''].join(':')
+}
+
+function createAssistantRequestMessage(message) {
+  return [
+    message,
+    '',
+    '---',
+    '응답 형식 지시:',
+    '답변은 처음부터 Markdown 섹션으로 작성해줘.',
+    '각 섹션은 `## 핵심 요약`, `## 원인`, `## 권장 조치`, `## 근거`처럼 짧은 제목으로 나눠줘.',
+    '본문은 짧은 문단 또는 `-` 목록을 사용하고, 불필요한 섹션은 생략해줘.',
+    '수치 비교가 필요하면 Markdown 표를 유지해서 작성해줘.',
+  ].join('\n')
+}
+
+function applySuggestedQuestions(suggestedQuestions = []) {
+  quickCommands.value = suggestedQuestions.map((question, index) => ({
+    id: `suggested-${index + 1}-${question}`,
+    label: question,
+    message: question,
+  }))
+}
+
+async function loadAssistantSuggestions(equipment) {
+  const requestId = ++assistantSuggestionRequestId
+
+  quickCommands.value = []
+
+  if (!equipment?.id || shouldSkipDashboardApi || isAssistantLoading.value) {
+    return
+  }
+
+  try {
+    const suggestions = await fetchEquipmentSuggestions(equipment.id)
+
+    if (requestId === assistantSuggestionRequestId) {
+      applySuggestedQuestions(suggestions)
+    }
+  } catch {
+    if (requestId === assistantSuggestionRequestId) {
+      quickCommands.value = []
+    }
+  }
+}
+
+async function sendAssistantMessage(message) {
+  const nextMessage = message.trim()
+
+  if (!nextMessage || isAssistantLoading.value) {
+    return
+  }
+
+  const requestEquipmentId = selectedEquipment.value.id || selectedEquipmentId.value
+
+  if (!requestEquipmentId) {
+    assistantMessages.value = [
+      ...assistantMessages.value,
+      createAssistantMessage('user', nextMessage),
+      createAssistantMessage('assistant', '장비 정보를 불러온 뒤 다시 질문해주세요.', {
+        tone: 'error',
+      }),
+    ]
+    return
+  }
+
+  const assistantMessage = createAssistantMessage('assistant', '', {
+    isStreaming: true,
+    streamEvents: [
+      {
+        id: `stream-start-${Date.now()}`,
+        label: 'Tory가 요청을 확인 중입니다',
+        type: 'start',
+      },
+    ],
+  })
+
+  assistantMessages.value = [...assistantMessages.value, createAssistantMessage('user', nextMessage)]
+  assistantMessages.value = [...assistantMessages.value, assistantMessage]
+  assistantSuggestionRequestId += 1
+  quickCommands.value = []
+  isAssistantLoading.value = true
+  let hasReceivedDelta = false
+
+  try {
+    const response = await streamChatQuery({
+      equipmentId: requestEquipmentId,
+      message: createAssistantRequestMessage(nextMessage),
+      onEvent: (streamEvent) => {
+        if (streamEvent.kind === 'delta') {
+          hasReceivedDelta = true
+          appendAssistantText(assistantMessage.id, streamEvent.text)
+          return
+        }
+
+        if (streamEvent.kind === 'status') {
+          addAssistantStreamEvent(assistantMessage.id, streamEvent)
+          return
+        }
+
+        if (streamEvent.kind === 'error') {
+          throw new Error(streamEvent.message)
+        }
+
+        if (streamEvent.kind === 'final') {
+          if (streamEvent.answer && !hasReceivedDelta) {
+            appendAssistantText(assistantMessage.id, streamEvent.answer)
+          }
+
+          updateAssistantMessage(assistantMessage.id, (nextAssistantMessage) => ({
+            ...nextAssistantMessage,
+            citations: streamEvent.citations,
+            reasoningSteps: streamEvent.reasoningSteps,
+          }))
+        }
+      },
+      sessionId: assistantSessionId,
+    })
+
+    if (response.answer && !hasReceivedDelta) {
+      appendAssistantText(assistantMessage.id, response.answer)
+    }
+
+    flushAssistantTypingQueue({ immediate: true })
+    updateAssistantMessage(assistantMessage.id, (nextAssistantMessage) => ({
+      ...nextAssistantMessage,
+      createdAt: new Date().toISOString(),
+      citations: response.citations,
+      isStreaming: false,
+      reasoningSteps: response.reasoningSteps,
+      streamEvents: [],
+      text: nextAssistantMessage.text || response.answer || '답변을 찾지 못했습니다.',
+    }))
+  } catch (error) {
+    window.clearTimeout(assistantTypingTimer)
+    assistantTypingMessageId = ''
+    assistantTypingQueue = ''
+    updateAssistantMessage(assistantMessage.id, () =>
+      createAssistantMessage('assistant', getAssistantErrorMessage(error), {
+        tone: 'error',
+      }),
+    )
+    quickCommands.value = []
+  } finally {
+    isAssistantLoading.value = false
+    loadAssistantSuggestions(selectedEquipment.value)
+  }
+}
+
 function selectFactoryEquipment(equipmentId) {
   const nextEquipment = factoryScene.equipmentList.find((equipment) => equipment.id === equipmentId)
 
@@ -100,16 +401,42 @@ function selectFactoryEquipment(equipmentId) {
   }
 
   selectedEquipmentId.value = equipmentId
+  syncSelectedMetricWithEquipment(nextEquipment)
+}
 
-  if (!nextEquipment.charts[selectedMetricId.value]) {
-    selectedMetricId.value = 'temperature'
+function hasChartPoints(equipment) {
+  return Object.values(equipment?.charts ?? {}).some((chart) => chart.points?.length)
+}
+
+function mergeEquipmentWithPreviousTelemetry(equipment, previousEquipmentMap) {
+  const previousEquipment = previousEquipmentMap.get(equipment.id)
+
+  if (!previousEquipment) {
+    return equipment
+  }
+
+  return {
+    ...equipment,
+    charts: hasChartPoints(previousEquipment) ? previousEquipment.charts : equipment.charts,
   }
 }
 
 function applyFactoryScene(nextFactoryScene) {
+  const previousEquipmentMap = new Map(
+    factoryScene.equipmentList.map((equipment) => [equipment.id, equipment]),
+  )
+  const nextEquipmentList = nextFactoryScene.equipmentList.map((equipment) =>
+    mergeEquipmentWithPreviousTelemetry(equipment, previousEquipmentMap),
+  )
+  const nextEquipmentMap = new Map(nextEquipmentList.map((equipment) => [equipment.id, equipment]))
+  const nextLineGroups = nextFactoryScene.lineGroups.map((line) => ({
+    ...line,
+    equipment: line.equipment.map((equipment) => nextEquipmentMap.get(equipment.id) ?? equipment),
+  }))
+
   factoryScene.defaultEquipmentId = nextFactoryScene.defaultEquipmentId
-  factoryScene.equipmentList = nextFactoryScene.equipmentList
-  factoryScene.lineGroups = nextFactoryScene.lineGroups
+  factoryScene.equipmentList = nextEquipmentList
+  factoryScene.lineGroups = nextLineGroups
   factoryScene.statusSummary = nextFactoryScene.statusSummary
 
   if (!selectedEquipmentId.value || !factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)) {
@@ -776,21 +1103,53 @@ function updateWidgetLayout(id, nextLayout) {
   })
 }
 
-function showContentLoading() {
-  window.clearTimeout(contentLoadingTimer)
+function requestContentRenderFrame(callback) {
+  return typeof window.requestAnimationFrame === 'function'
+    ? window.requestAnimationFrame(callback)
+    : window.setTimeout(callback, 16)
+}
+
+function cancelContentLoadingFrame() {
+  if (!contentLoadingFrame) {
+    return
+  }
+
+  if (typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(contentLoadingFrame)
+  } else {
+    window.clearTimeout(contentLoadingFrame)
+  }
+
+  contentLoadingFrame = 0
+}
+
+function hideContentLoadingAfterRender() {
+  cancelContentLoadingFrame()
+
+  nextTick(() => {
+    contentLoadingFrame = requestContentRenderFrame(() => {
+      contentLoadingFrame = requestContentRenderFrame(() => {
+        contentLoadingFrame = 0
+        isContentLoading.value = false
+      })
+    })
+  })
+}
+
+async function loadInitialDashboardContent() {
+  cancelContentLoadingFrame()
   isContentLoading.value = true
-  contentLoadingTimer = window.setTimeout(() => {
-    isContentLoading.value = false
-  }, 620)
+
+  if (!shouldSkipDashboardApi) {
+    await Promise.allSettled([loadFactoryScene(), startAlertToastStream()])
+    startRealtimePolling()
+  }
+
+  hideContentLoadingAfterRender()
 }
 
 onMounted(() => {
-  showContentLoading()
-
-  if (!shouldSkipDashboardApi) {
-    loadFactoryScene()
-    startRealtimePolling()
-  }
+  loadInitialDashboardContent()
 
   applyDefaultLayouts()
 
@@ -813,15 +1172,22 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.clearTimeout(contentLoadingTimer)
+  window.clearTimeout(assistantTypingTimer)
+  cancelContentLoadingFrame()
   window.clearInterval(factorySceneInterval)
   window.clearInterval(selectedTelemetryInterval)
+  stopAlertToastStream()
   layoutResizeObserver?.disconnect()
 })
 
 watch(selectedEquipment, (equipment) => {
-  if (!equipment.charts?.[selectedMetricId.value]) {
-    selectedMetricId.value = 'temperature'
+  syncSelectedMetricWithEquipment(equipment)
+
+  const nextSuggestionSignature = createEquipmentSuggestionSignature(equipment)
+
+  if (nextSuggestionSignature !== assistantSuggestionSignature) {
+    assistantSuggestionSignature = nextSuggestionSignature
+    loadAssistantSuggestions(equipment)
   }
 })
 
@@ -843,6 +1209,8 @@ watch(
       @restore-widget="restoreWidget"
       @toggle="toggleSidebar"
     />
+
+    <DashboardAlertToast :toast="alertToast" />
 
     <section class="dashboard-content" aria-label="대시보드 편집 영역">
       <Transition name="dashboard-content-loader">
@@ -912,7 +1280,12 @@ watch(
           @stash="stashWidget('assistant')"
           @update:layout="updateWidgetLayout('assistant', $event)"
         >
-          <AssistantPanel :messages="assistantMessages" :quick-commands="quickCommands" />
+          <AssistantPanel
+            :is-loading="isAssistantLoading"
+            :messages="assistantMessages"
+            :quick-commands="quickCommands"
+            @send-message="sendAssistantMessage"
+          />
         </DashboardEditableWidget>
         </div>
       </div>

@@ -5,7 +5,7 @@ import DashboardFramePage from '@/features/dashboard/components/DashboardFramePa
 import NotificationLogPanel from '@/features/notification/components/NotificationLogPanel.vue'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
-const { loadNotifications, notificationGroups } = useNotificationCenter()
+const { isNotificationLoading, loadNotifications, notificationGroups } = useNotificationCenter()
 const shouldSkipNotificationApi = import.meta.env.MODE === 'test'
 
 onMounted(() => {
@@ -18,7 +18,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <DashboardFramePage active-navigation-id="notification" content-label="알림 이력 영역">
+  <DashboardFramePage
+    active-navigation-id="notification"
+    content-label="알림 이력 영역"
+    :is-loading="isNotificationLoading"
+  >
     <NotificationLogPanel :groups="notificationGroups" />
   </DashboardFramePage>
 </template>

@@ -47,20 +47,32 @@ function selectMetric(metricId) {
     <div class="detail-panel__title-row">
       <h3>{{ equipment.name }}</h3>
       <Transition name="detail-status-flow" mode="out-in">
-        <span
-          :key="equipment.status.tone"
-          class="detail-panel__status"
-          :class="`detail-panel__status--${equipment.status.tone}`"
-        >
-          <img
-            class="detail-panel__status-icon"
-            :src="statusIconMap[equipment.status.tone]"
-            alt=""
-            width="17"
-            height="17"
-          />
-          {{ equipment.status.label }}
-        </span>
+        <div :key="`${equipment.status.tone}-${equipment.alarmCode}`" class="detail-panel__status-row">
+          <span
+            class="detail-panel__status"
+            :class="`detail-panel__status--${equipment.status.tone}`"
+          >
+            <img
+              class="detail-panel__status-icon"
+              :src="statusIconMap[equipment.status.tone]"
+              alt=""
+              width="17"
+              height="17"
+            />
+            {{ equipment.status.label }}
+          </span>
+          <span
+            v-if="
+              ['warning', 'danger'].includes(equipment.status.tone) &&
+              equipment.alarmCode &&
+              equipment.alarmCode !== '-'
+            "
+            class="detail-panel__alarm-code"
+            :class="`detail-panel__alarm-code--${equipment.status.tone}`"
+          >
+            {{ equipment.alarmCode }}
+          </span>
+        </div>
       </Transition>
     </div>
 
@@ -71,7 +83,7 @@ function selectMetric(metricId) {
           <strong>{{ equipment.type }}</strong>
         </div>
         <div class="detail-panel__info-item">
-          <span>부서·책임자</span>
+          <span>책임자</span>
           <strong>{{ equipment.ownerDisplay ?? equipment.owner }}</strong>
         </div>
         <div class="detail-panel__info-item">
@@ -160,6 +172,15 @@ function selectMetric(metricId) {
   white-space: nowrap;
 }
 
+.detail-panel__status-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--agentory-spacing-6);
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
 .detail-panel__status {
   display: inline-flex;
   align-items: center;
@@ -178,11 +199,48 @@ function selectMetric(metricId) {
     transform 320ms var(--agentory-ease-elastic);
 }
 
+.detail-panel__status--warning {
+  color: color-mix(in srgb, var(--agentory-color-status-warning), var(--agentory-color-text-primary) 28%);
+  background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 82%);
+}
+
+.detail-panel__status--danger {
+  color: var(--agentory-color-status-danger-text);
+  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 88%);
+}
+
 .detail-panel__status-icon {
   width: 14px;
   height: 14px;
   object-fit: contain;
   flex: 0 0 auto;
+}
+
+.detail-panel__alarm-code {
+  display: inline-flex;
+  align-items: center;
+  max-width: 112px;
+  min-height: 25px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-10);
+  overflow: hidden;
+  color: var(--agentory-color-status-danger-text);
+  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 88%);
+  border-radius: var(--agentory-radius-pill);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-bold);
+  line-height: var(--agentory-line-height-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-panel__alarm-code--warning {
+  color: color-mix(in srgb, var(--agentory-color-status-warning), var(--agentory-color-text-primary) 26%);
+  background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 84%);
+}
+
+.detail-panel__alarm-code--danger {
+  color: var(--agentory-color-status-danger-text);
+  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 88%);
 }
 
 .detail-panel__body {

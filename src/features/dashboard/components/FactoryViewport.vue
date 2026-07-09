@@ -104,9 +104,11 @@ let hasCompletedInitialOverview = false
 let hasFocusedEquipmentByInteraction = false
 let isLineOverviewFocused = true
 let shouldFocusLineOverview = false
+let statusSnapshotLineId = ''
 
 const equipmentGroups = new Map()
 const labelAnchors = new Map()
+const equipmentStatusSnapshot = new Map()
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -737,6 +739,73 @@ function toggleLineSelector() {
   isLineSelectorOpen.value = !isLineSelectorOpen.value
 }
 
+function rememberActiveEquipmentStatuses() {
+  equipmentStatusSnapshot.clear()
+  activeEquipmentList.value.forEach((equipment) => {
+    equipmentStatusSnapshot.set(equipment.id, equipment.status?.tone ?? 'normal')
+  })
+  statusSnapshotLineId = selectedLine.value?.id ?? ''
+}
+
+function isAlertTone(tone) {
+  return ['warning', 'danger'].includes(tone)
+}
+
+function getPriorityAlertEquipment(excludeEquipmentId = '') {
+  return ['danger', 'warning']
+    .map((tone) =>
+      activeEquipmentList.value.find(
+        (equipment) =>
+          equipment.id !== excludeEquipmentId && equipment.status?.tone === tone,
+      ),
+    )
+    .find(Boolean)
+}
+
+function focusChangedAlertEquipment() {
+  const lineId = selectedLine.value?.id ?? ''
+
+  if (!lineId || statusSnapshotLineId !== lineId || equipmentStatusSnapshot.size === 0) {
+    rememberActiveEquipmentStatuses()
+    return
+  }
+
+  const selectedEquipment = activeEquipmentList.value.find(
+    (equipment) => equipment.id === currentSelectedEquipmentId.value,
+  )
+  const selectedPreviousTone = equipmentStatusSnapshot.get(selectedEquipment?.id)
+  const selectedNextTone = selectedEquipment?.status?.tone ?? 'normal'
+  const hasSelectedRecovered =
+    Boolean(selectedEquipment) && isAlertTone(selectedPreviousTone) && selectedNextTone === 'normal'
+  const priorityAlertEquipment = getPriorityAlertEquipment(
+    hasSelectedRecovered ? selectedEquipment.id : '',
+  )
+  const alertEquipment = activeEquipmentList.value.find((equipment) => {
+    const previousTone = equipmentStatusSnapshot.get(equipment.id)
+    const nextTone = equipment.status?.tone
+
+    return isAlertTone(nextTone) && previousTone !== nextTone
+  })
+
+  rememberActiveEquipmentStatuses()
+
+  if (hasSelectedRecovered) {
+    if (priorityAlertEquipment) {
+      selectEquipment(priorityAlertEquipment.id)
+      return
+    }
+
+    setLineOverviewFocus()
+    return
+  }
+
+  if (!alertEquipment || alertEquipment.id === currentSelectedEquipmentId.value) {
+    return
+  }
+
+  selectEquipment(alertEquipment.id)
+}
+
 function syncLineWithEquipment(equipmentId) {
   const equipment = equipmentById.value[equipmentId]
 
@@ -863,7 +932,7 @@ function updateLabels() {
       (item) =>
         `${item.equipment.id}:${Math.round(item.screenX)}:${Math.round(item.screenY)}:${
           item.visible
-        }:${item.isSelected}:${item.zIndex}`,
+        }:${item.isSelected}:${item.zIndex}:${item.equipment.status?.tone}:${item.equipment.status?.label}`,
     )
     .join('|')
 
@@ -963,6 +1032,7 @@ function setupScene() {
   }
 
   buildActiveLine()
+  rememberActiveEquipmentStatuses()
   resizeScene()
   setLineOverviewFocus(true)
   hasCompletedInitialOverview = true
@@ -1004,9 +1074,29 @@ watch(
 )
 
 watch(
+  () => selectedEquipment.value?.status?.tone,
+  (statusTone) => {
+    if (!statusTone) {
+      return
+    }
+
+    if (['warning', 'danger'].includes(statusTone) && !isLineOverviewFocused) {
+      isAlertChecklistOpen.value = true
+    }
+
+    if (!['warning', 'danger'].includes(statusTone)) {
+      isAlertChecklistOpen.value = false
+    }
+
+    updateLabels()
+  },
+)
+
+watch(
   () => selectedLine.value?.id,
   () => {
     buildActiveLine()
+    rememberActiveEquipmentStatuses()
     updateSelectionVisuals()
 
     if (!activeEquipmentList.value.some((equipment) => equipment.id === currentSelectedEquipmentId.value)) {
@@ -1032,6 +1122,17 @@ watch(
 
       setLineOverviewFocus()
     })
+  },
+)
+
+watch(
+  () =>
+    activeEquipmentList.value
+      .map((equipment) => `${equipment.id}:${equipment.status?.tone ?? 'normal'}`)
+      .join('|'),
+  () => {
+    updateLabels()
+    focusChangedAlertEquipment()
   },
 )
 

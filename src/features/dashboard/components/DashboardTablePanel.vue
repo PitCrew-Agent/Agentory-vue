@@ -143,6 +143,10 @@ defineExpose({
 
 <style scoped>
 .dashboard-table-panel {
+  --dashboard-table-body-inset: var(--agentory-spacing-10);
+  --dashboard-table-content-left: var(--agentory-spacing-60);
+  --dashboard-table-content-right: var(--agentory-spacing-20);
+
   display: flex;
   width: 100%;
   height: 100%;
@@ -287,28 +291,30 @@ defineExpose({
 
 .dashboard-table-panel__table-header {
   min-height: 54px;
-  padding: var(--agentory-spacing-15) var(--agentory-spacing-30) var(--agentory-spacing-15)
-    var(--agentory-spacing-60);
+  padding: var(--agentory-spacing-15)
+    calc(var(--dashboard-table-content-right) + var(--dashboard-table-body-inset))
+    var(--agentory-spacing-15)
+    calc(var(--dashboard-table-content-left) + var(--dashboard-table-body-inset));
   color: var(--agentory-color-text-inverse);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-bold);
-  line-height: 1.1;
+  line-height: var(--agentory-line-height-body);
 }
 
 .dashboard-table-panel__table-body {
   display: flex;
   flex-direction: column;
-  padding: 0 var(--agentory-spacing-10) var(--agentory-spacing-10);
+  padding: 0 var(--dashboard-table-body-inset) var(--dashboard-table-body-inset);
 }
 
 .dashboard-table-panel__row {
   min-height: 84px;
-  padding: var(--agentory-spacing-24) var(--agentory-spacing-20) var(--agentory-spacing-24)
-    var(--agentory-spacing-60);
+  padding: var(--agentory-spacing-24) var(--dashboard-table-content-right)
+    var(--agentory-spacing-24) var(--dashboard-table-content-left);
   color: var(--agentory-color-text-primary);
   background: var(--agentory-color-bg-app);
   font-size: var(--agentory-font-size-body);
-  line-height: 1.1;
+  line-height: var(--agentory-line-height-body);
 }
 
 .dashboard-table-panel__row:nth-child(even) {
@@ -318,6 +324,7 @@ defineExpose({
 .dashboard-table-panel__cell {
   min-width: 0;
   overflow: hidden;
+  line-height: var(--agentory-line-height-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

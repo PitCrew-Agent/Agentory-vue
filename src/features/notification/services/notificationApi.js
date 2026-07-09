@@ -1,5 +1,5 @@
 import { normalizeNotificationReadStatus } from '@/constants/notificationStatus'
-import { http } from '@/services/api/http'
+import { buildApiUrl, http } from '@/services/api/http'
 
 function formatDate(value) {
   const date = new Date(value)
@@ -25,16 +25,20 @@ function formatDateTime(value) {
   ).padStart(2, '0')}`
 }
 
-function normalizeNotification(item) {
+export function getNotificationGroupDate(item) {
+  return formatDate(item.occurred_at ?? item.occurredAt)
+}
+
+export function normalizeNotification(item) {
   return {
-    code: item.alarm_code,
-    equipmentCode: item.equipment_id,
-    equipmentId: item.equipment_id,
+    code: item.alarm_code ?? item.code,
+    equipmentCode: item.equipment_id ?? item.equipmentId,
+    equipmentId: item.equipment_id ?? item.equipmentId,
     id: item.id,
     lineId: '',
     message: item.message,
-    occurredAt: formatDateTime(item.occurred_at),
-    readStatus: normalizeNotificationReadStatus(item.is_read),
+    occurredAt: formatDateTime(item.occurred_at ?? item.occurredAt),
+    readStatus: normalizeNotificationReadStatus(item.is_read ?? item.isRead),
   }
 }
 
@@ -74,4 +78,35 @@ export function markNotificationReadRequest(notificationId) {
 
 export function markAllNotificationsReadRequest() {
   return http.post('/api/v1/notifications/read-all')
+}
+
+export function subscribeNotificationStream({ afterId = 0, onError, onNotification } = {}) {
+  if (typeof EventSource === 'undefined') {
+    return () => {}
+  }
+
+  const streamUrl = new URL(buildApiUrl('/api/v1/notifications/stream'))
+  streamUrl.searchParams.set('after_id', String(afterId))
+
+  const eventSource = new EventSource(streamUrl.toString(), {
+    withCredentials: true,
+  })
+
+  function handleNotification(event) {
+    try {
+      onNotification?.(JSON.parse(event.data))
+    } catch (error) {
+      onError?.(error)
+    }
+  }
+
+  eventSource.addEventListener('notification', handleNotification)
+  eventSource.onerror = (event) => {
+    onError?.(event)
+  }
+
+  return () => {
+    eventSource.removeEventListener('notification', handleNotification)
+    eventSource.close()
+  }
 }

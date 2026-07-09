@@ -2,8 +2,11 @@ import { computed, reactive, ref } from 'vue'
 
 import {
   fetchNotificationGroups,
+  getNotificationGroupDate,
   markAllNotificationsReadRequest,
   markNotificationReadRequest,
+  normalizeNotification,
+  subscribeNotificationStream,
 } from '@/features/notification/services/notificationApi'
 
 const notificationGroups = reactive([])
@@ -35,6 +38,51 @@ function replaceNotificationGroups(groups) {
 
 function findNotification(id) {
   return notificationGroups.flatMap((group) => group.rows).find((row) => row.id === id)
+}
+
+function getLatestNotificationId() {
+  return Math.max(
+    0,
+    ...notificationGroups
+      .flatMap((group) => group.rows)
+      .map((row) => Number(row.id))
+      .filter(Number.isFinite),
+  )
+}
+
+function sortNotificationGroups() {
+  notificationGroups.sort((first, second) => second.date.localeCompare(first.date))
+  notificationGroups.forEach((group) => {
+    group.rows.sort((first, second) => second.occurredAt.localeCompare(first.occurredAt))
+  })
+}
+
+function addNotification(rawNotification) {
+  const row = normalizeNotification(rawNotification)
+
+  if (!row.id || findNotification(row.id)) {
+    return null
+  }
+
+  const date = getNotificationGroupDate(rawNotification)
+  let group = notificationGroups.find((item) => item.date === date)
+
+  if (!group) {
+    group = {
+      date,
+      id: date,
+      rows: [],
+    }
+    notificationGroups.push(group)
+  }
+
+  group.rows.push(row)
+  sortNotificationGroups()
+
+  return {
+    ...row,
+    date,
+  }
 }
 
 async function loadNotifications(options) {
@@ -95,8 +143,22 @@ async function markAllNotificationsRead() {
   })
 }
 
+function startNotificationStream({ onNotification } = {}) {
+  return subscribeNotificationStream({
+    afterId: getLatestNotificationId(),
+    onNotification(rawNotification) {
+      const notification = addNotification(rawNotification)
+
+      if (notification) {
+        onNotification?.(notification)
+      }
+    },
+  })
+}
+
 export function useNotificationCenter() {
   return {
+    addNotification,
     isNotificationLoading,
     loadNotifications,
     markAllNotificationsRead,
@@ -104,6 +166,7 @@ export function useNotificationCenter() {
     notificationGroups,
     notifications,
     setNotificationReadStatus,
+    startNotificationStream,
     toggleNotificationReadStatus,
     unreadNotifications,
   }
