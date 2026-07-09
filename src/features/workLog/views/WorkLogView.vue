@@ -6,6 +6,9 @@ import WorkLogPanel from '@/features/workLog/components/WorkLogPanel.vue'
 import { createWorkLogRequest, fetchWorkLogGroups } from '@/features/workLog/services/workLogApi'
 
 const workLogGroupState = ref([])
+const isWorkLogLoading = ref(false)
+const isWorkLogSubmitting = ref(false)
+const workLogErrorMessage = ref('')
 const shouldSkipWorkLogApi = import.meta.env.MODE === 'test'
 
 function insertWorkLog(log) {
@@ -24,20 +27,43 @@ function insertWorkLog(log) {
 }
 
 async function loadWorkLogs() {
+  isWorkLogLoading.value = true
+  workLogErrorMessage.value = ''
+
   try {
     workLogGroupState.value = await fetchWorkLogGroups()
   } catch {
     workLogGroupState.value = []
+    workLogErrorMessage.value = '작업 로그를 불러오지 못했습니다.'
+  } finally {
+    isWorkLogLoading.value = false
   }
 }
 
-async function createWorkLog(log) {
+async function createWorkLog(log, controls = {}) {
+  if (isWorkLogSubmitting.value) {
+    return
+  }
+
+  isWorkLogSubmitting.value = true
+  workLogErrorMessage.value = ''
+
   try {
     const createdLog = await createWorkLogRequest(log)
 
     insertWorkLog(createdLog)
+    controls.onSuccess?.()
+
+    try {
+      workLogGroupState.value = await fetchWorkLogGroups()
+    } catch {
+      workLogErrorMessage.value = '작업 로그는 저장됐지만 목록을 다시 불러오지 못했습니다.'
+    }
   } catch {
-    // 저장 실패 시 임시 데이터로 대체하지 않는다.
+    workLogErrorMessage.value = '작업 로그를 저장하지 못했습니다.'
+    controls.onError?.()
+  } finally {
+    isWorkLogSubmitting.value = false
   }
 }
 
@@ -51,7 +77,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <DashboardFramePage active-navigation-id="workLog" content-label="작업 로그 영역">
-    <WorkLogPanel :groups="workLogGroupState" @create-log="createWorkLog" />
+  <DashboardFramePage
+    active-navigation-id="workLog"
+    content-label="작업 로그 영역"
+    :is-loading="isWorkLogLoading"
+  >
+    <WorkLogPanel
+      :error-message="workLogErrorMessage"
+      :groups="workLogGroupState"
+      :is-loading="isWorkLogLoading"
+      :is-submitting="isWorkLogSubmitting"
+      @create-log="createWorkLog"
+    />
   </DashboardFramePage>
 </template>
