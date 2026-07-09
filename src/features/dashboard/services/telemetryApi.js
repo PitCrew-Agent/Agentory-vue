@@ -48,6 +48,49 @@ function compactText(value) {
   return String(value ?? '').trim()
 }
 
+function camelToSnake(value) {
+  return String(value ?? '').replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+}
+
+function normalizeMetricSource(value) {
+  return compactText(value)
+    .replace(/[()[\]{}]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .toLowerCase()
+}
+
+function getMetricIdFromSource(value) {
+  const normalizedValue = normalizeMetricSource(value)
+
+  if (!normalizedValue) {
+    return ''
+  }
+
+  return (
+    metricIds.find((metricId) => {
+      const config = metricConfigs[metricId]
+      const candidates = [
+        metricId,
+        camelToSnake(metricId),
+        config.apiKey,
+        config.icon,
+        config.label,
+      ].map(normalizeMetricSource)
+
+      return candidates.includes(normalizedValue)
+    }) ?? ''
+  )
+}
+
+function normalizeAlarmMetricIds(alarmMetrics, previousMetricIds = []) {
+  const rawItems = Array.isArray(alarmMetrics)
+    ? alarmMetrics
+    : compactText(alarmMetrics).split(/[,\s]+/).filter(Boolean)
+  const normalizedMetricIds = rawItems.map(getMetricIdFromSource).filter(Boolean)
+
+  return normalizedMetricIds.length ? [...new Set(normalizedMetricIds)] : previousMetricIds
+}
+
 function toNumber(value) {
   const numberValue = Number(value)
 
@@ -118,6 +161,38 @@ function getMetricRawValue(source, metricId) {
   return toNumber(source?.[config.apiKey])
 }
 
+function getPointStatus(point, index, pointCount, detail) {
+  const pointStatus = point.status ?? point.status_level ?? point.statusTone ?? point.status_tone
+
+  if (pointStatus) {
+    return normalizeEquipmentStatus(pointStatus)
+  }
+
+  if (index === pointCount - 1 && detail.status) {
+    return normalizeEquipmentStatus(detail.status)
+  }
+
+  return null
+}
+
+function getMetricThresholdStatus(metricId, value) {
+  const thresholds = metricConfigs[metricId]?.thresholds
+
+  if (!thresholds || value === null) {
+    return null
+  }
+
+  if (value <= thresholds.lsl || value >= thresholds.usl) {
+    return equipmentStatusMap.danger
+  }
+
+  if (value <= thresholds.lcl || value >= thresholds.ucl) {
+    return equipmentStatusMap.warning
+  }
+
+  return equipmentStatusMap.normal
+}
+
 function createMetrics(detail = {}) {
   return metricIds.map((metricId) => {
     const config = metricConfigs[metricId]
@@ -140,33 +215,62 @@ function createMetricChart(metricId, series = [], detail = {}) {
   }
 
   const points = series
-    .map((point) => ({
-      time: formatTimePart(point.timestamp, false),
-      value: getMetricRawValue(point, metricId),
-    }))
+    .map((point, index) => {
+      const value = getMetricRawValue(point, metricId)
+      const status =
+        getMetricThresholdStatus(metricId, value) ?? getPointStatus(point, index, series.length, detail)
+
+      return {
+        alarmCode: compactText(point.alarm_code ?? point.alarmCode) || detail.alarm_code || '',
+        statusLabel: status?.label ?? '',
+        statusTone: status?.tone ?? 'normal',
+        time: formatTimePart(point.timestamp, false),
+        timestamp: point.timestamp ?? '',
+        value,
+      }
+    })
     .filter((point) => point.value !== null)
 
   if (!points.length) {
     const currentValue = getMetricRawValue(detail, metricId)
+    const status =
+      getMetricThresholdStatus(metricId, currentValue) ??
+      (detail.status ? normalizeEquipmentStatus(detail.status) : null)
 
     if (currentValue !== null) {
       points.push({
+        alarmCode: detail.alarm_code ?? '',
+        statusLabel: status?.label ?? '',
+        statusTone: status?.tone ?? 'normal',
         time: formatTimePart(detail.updated_at ?? new Date().toISOString(), false),
+        timestamp: detail.updated_at ?? '',
         value: currentValue,
       })
     }
   }
 
   const values = points.map((point) => point.value)
-  const minValue = values.length ? Math.min(config.min, ...values) : config.min
-  const maxValue = values.length ? Math.max(config.max, ...values) : config.max
-  const padding = Math.max((maxValue - minValue) * 0.06, 1)
+  const thresholdValues = Object.values(config.thresholds ?? {}).filter((value) => Number.isFinite(value))
+  const scaleValues = [...values, ...thresholdValues]
+  const configRange = Math.max(config.max - config.min, 1)
+  const dataMinValue = scaleValues.length ? Math.min(...scaleValues) : config.min
+  const dataMaxValue = scaleValues.length ? Math.max(...scaleValues) : config.max
+  const dataCenterValue = (dataMinValue + dataMaxValue) / 2
+  const precisionRange = config.precision === 0 ? 8 : 24 * 10 ** -config.precision
+  const minimumRange = Math.max(configRange * 0.14, precisionRange)
+  const visibleRange = Math.max(dataMaxValue - dataMinValue, minimumRange)
+  const padding = Math.max(visibleRange * 0.12, config.precision === 0 ? 2 : 0.4)
+  const minValue = dataCenterValue - visibleRange / 2
+  const maxValue = dataCenterValue + visibleRange / 2
 
   return {
     max: Number((maxValue + padding).toFixed(config.precision)),
     min: Number((minValue - padding).toFixed(config.precision)),
     points,
+    precision: config.precision,
+    thresholds: config.thresholds,
     title: `${config.label}(${config.unit})`,
+    unit: config.unit,
   }
 }
 
@@ -257,6 +361,7 @@ function createBaseEquipment(statusItem, line, equipmentIndex) {
   const displayOrder = toNumber(statusItem.display_order) ?? equipmentIndex + 1
 
   return {
+    alarmMetricIds: [],
     alarmCode: compactText(statusItem.alarm_code) || '-',
     bayZone: compactText(statusItem.bay_zone),
     charts: createEmptyMetricCharts(),
@@ -290,10 +395,15 @@ function applyEquipmentDetail(equipment, detail = {}) {
   const managerName = compactText(detail.manager_name) || '-'
   const processType = compactText(detail.process_type) || equipment.type
   const alarmCode = compactText(detail.alarm_code) || equipment.alarmCode
+  const alarmMetricIds = normalizeAlarmMetricIds(
+    detail.alarm_metrics ?? detail.alarmMetrics,
+    equipment.alarmMetricIds ?? [],
+  )
   const status = detail.status ? normalizeEquipmentStatus(detail.status) : equipment.status
 
   return {
     ...equipment,
+    alarmMetricIds,
     alarmCode,
     checklist: normalizeChecklist(detail.checklist ?? equipment.checklist, equipment.id),
     inspectedAt: formatDatePart(detail.last_inspection_at) || equipment.inspectedAt,
@@ -342,6 +452,7 @@ export function createEmptyFactoryScene() {
 
 export function createEmptyEquipment() {
   return {
+    alarmMetricIds: [],
     charts: createEmptyMetricCharts(),
     checklist: [],
     id: '',
@@ -365,6 +476,18 @@ async function fetchEquipmentDetail(equipmentId) {
 
 async function fetchEquipmentSeries(equipmentId) {
   return http.get(`/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/series`)
+}
+
+export async function fetchEquipmentSuggestions(equipmentId) {
+  const response = await http.get(
+    `/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/suggestions`,
+  )
+  const suggestions = Array.isArray(response) ? response : response?.suggestions
+
+  return (suggestions ?? [])
+    .map((suggestion) => compactText(suggestion))
+    .filter(Boolean)
+    .slice(0, 3)
 }
 
 export async function fetchFactoryScene() {

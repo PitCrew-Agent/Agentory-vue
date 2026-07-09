@@ -25,10 +25,10 @@ defineProps({
 .chart-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-14);
+  gap: var(--agentory-spacing-8);
   min-width: 0;
   height: 100%;
-  padding: var(--agentory-spacing-20) var(--agentory-spacing-14) var(--agentory-spacing-10);
+  padding: var(--agentory-spacing-16) var(--agentory-spacing-10) var(--agentory-spacing-8);
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-16);
@@ -38,9 +38,9 @@ defineProps({
 .chart-panel__section-header {
   display: flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 26px;
   width: 100%;
-  padding-bottom: var(--agentory-spacing-10);
+  padding-bottom: var(--agentory-spacing-8);
   border-bottom: 2px solid var(--agentory-color-bg-primary);
 }
 

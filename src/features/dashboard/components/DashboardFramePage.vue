@@ -1,11 +1,13 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
 import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
 import { createDashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
+import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
 
 const props = defineProps({
   activeNavigationId: {
@@ -16,28 +18,88 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  isLoading: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
+const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
 const navigationItems = computed(() => createDashboardNavigation(props.activeNavigationId))
 const isContentLoading = ref(true)
-let contentLoadingTimer = 0
+const shouldSkipFrameApi = import.meta.env.MODE === 'test'
+let contentLoadingFrame = 0
 
-function showContentLoading() {
-  window.clearTimeout(contentLoadingTimer)
-  isContentLoading.value = true
-  contentLoadingTimer = window.setTimeout(() => {
-    isContentLoading.value = false
-  }, 620)
+function requestRenderFrame(callback) {
+  return typeof window.requestAnimationFrame === 'function'
+    ? window.requestAnimationFrame(callback)
+    : window.setTimeout(callback, 16)
 }
 
-onMounted(showContentLoading)
+function cancelRenderFrame() {
+  if (!contentLoadingFrame) {
+    return
+  }
+
+  if (typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(contentLoadingFrame)
+  } else {
+    window.clearTimeout(contentLoadingFrame)
+  }
+
+  contentLoadingFrame = 0
+}
+
+function hideContentLoadingAfterRender() {
+  cancelRenderFrame()
+
+  nextTick(() => {
+    contentLoadingFrame = requestRenderFrame(() => {
+      contentLoadingFrame = requestRenderFrame(() => {
+        contentLoadingFrame = 0
+
+        if (!props.isLoading) {
+          isContentLoading.value = false
+        }
+      })
+    })
+  })
+}
+
+function showContentLoading() {
+  cancelRenderFrame()
+  isContentLoading.value = true
+  hideContentLoadingAfterRender()
+}
+
+onMounted(() => {
+  showContentLoading()
+
+  if (!shouldSkipFrameApi) {
+    startAlertToastStream()
+  }
+})
 
 onBeforeUnmount(() => {
-  window.clearTimeout(contentLoadingTimer)
+  cancelRenderFrame()
+  stopAlertToastStream()
 })
 
 watch(() => props.activeNavigationId, showContentLoading)
+
+watch(
+  () => props.isLoading,
+  (isLoading) => {
+    if (isLoading) {
+      cancelRenderFrame()
+      isContentLoading.value = true
+      return
+    }
+
+    hideContentLoadingAfterRender()
+  },
+)
 </script>
 
 <template>
@@ -50,7 +112,9 @@ watch(() => props.activeNavigationId, showContentLoading)
       @toggle="toggleSidebar"
     />
 
-    <section class="dashboard-frame-page__content" :aria-label="props.contentLabel">
+    <DashboardAlertToast :toast="alertToast" />
+
+    <section class="dashboard-frame-page__content" :aria-busy="isContentLoading" :aria-label="props.contentLabel">
       <Transition name="dashboard-content-loader">
         <DashboardContentLoader v-if="isContentLoading" label="화면을 불러오는 중" />
       </Transition>

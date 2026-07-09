@@ -35,11 +35,13 @@ const readStatusOptions = [
 ]
 
 function getCodeTone(code) {
-  if (code.startsWith('ERR')) {
+  const normalizedCode = String(code ?? '').trim().toUpperCase()
+
+  if (/^(ERR|ERROR|DNG|DANGER|CRIT)/.test(normalizedCode)) {
     return 'danger'
   }
 
-  if (code.startsWith('WARN')) {
+  if (/^(WRN|WARN|WARNING)/.test(normalizedCode)) {
     return 'warning'
   }
 
@@ -204,7 +206,7 @@ function scrollToDate(date) {
 }
 
 .notification-log-panel__code--warning {
-  color: var(--agentory-color-alert-warning);
+  color: var(--agentory-color-status-warning);
 }
 
 .notification-log-panel__message {
