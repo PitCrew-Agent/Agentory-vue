@@ -25,8 +25,8 @@ const isStructureOpen = ref(false)
 
 const equipmentColumns = [
   { key: 'equipmentId', label: '장비 ID', cellClass: 'dashboard-table-panel__cell--light' },
-  { key: 'name', label: '장비명', cellClass: 'dashboard-table-panel__cell--strong dashboard-table-panel__cell--fit' },
-  { key: 'type', label: '유형', cellClass: 'dashboard-table-panel__cell--strong dashboard-table-panel__cell--fit' },
+  { key: 'name', label: '장비명', cellClass: 'dashboard-table-panel__cell--strong' },
+  { key: 'type', label: '유형', cellClass: 'dashboard-table-panel__cell--strong' },
   { key: 'status', label: '상태' },
   { key: 'temperature', label: '온도', cellClass: 'dashboard-table-panel__cell--strong' },
   { key: 'pressure', label: '압력', cellClass: 'dashboard-table-panel__cell--strong' },
@@ -52,10 +52,10 @@ function scrollToLine(lineId) {
       action-label="3D 구조 확인"
       :action-icon="structureIcon"
       :columns="equipmentColumns"
-      column-gap="24px"
+      column-gap="20px"
       :groups="groups"
-      grid-template-columns="80px max-content max-content 74px 58px 70px 70px 74px 72px minmax(180px, 1fr)"
-      table-min-width="1180px"
+      grid-template-columns="92px 136px 124px 78px 72px 82px 82px 92px 88px minmax(220px, 1fr)"
+      table-min-width="1290px"
       @action="isStructureOpen = true"
     >
       <template #title-actions>
