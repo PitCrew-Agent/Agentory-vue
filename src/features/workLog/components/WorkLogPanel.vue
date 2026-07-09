@@ -9,9 +9,21 @@ import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCa
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 
 const props = defineProps({
+  errorMessage: {
+    type: String,
+    default: '',
+  },
   groups: {
     type: Array,
     required: true,
+  },
+  isLoading: {
+    type: Boolean,
+    default: false,
+  },
+  isSubmitting: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -47,6 +59,8 @@ const statusOptions = computed(() =>
   })),
 )
 
+const operatorName = computed(() => authStore.currentUserName || '사용자')
+
 function getToday() {
   const now = new Date()
 
@@ -60,7 +74,7 @@ function getCurrentTime() {
 }
 
 function openCreateModal() {
-  createLogForm.operator = authStore.currentUser.name
+  createLogForm.operator = operatorName.value
   createLogForm.status = 'waiting'
   createLogForm.task = ''
   createLogForm.time = getCurrentTime()
@@ -72,17 +86,26 @@ function closeCreateModal() {
 }
 
 function submitCreateLog() {
+  if (props.isSubmitting) {
+    return
+  }
+
   const date = getToday()
 
-  emit('create-log', {
-    date,
-    id: `log-${date.replaceAll('-', '')}-${Date.now()}`,
-    operator: createLogForm.operator,
-    status: createLogForm.status,
-    task: createLogForm.task.trim() || '작업 내용 미입력',
-    time: createLogForm.time,
-  })
-  closeCreateModal()
+  emit(
+    'create-log',
+    {
+      date,
+      id: `log-${date.replaceAll('-', '')}-${Date.now()}`,
+      operator: createLogForm.operator,
+      status: createLogForm.status,
+      task: createLogForm.task.trim() || '작업 내용 미입력',
+      time: createLogForm.time,
+    },
+    {
+      onSuccess: closeCreateModal,
+    },
+  )
 }
 
 function scrollToDate(date) {
@@ -123,6 +146,13 @@ function scrollToDate(date) {
       </template>
     </DashboardTablePanel>
 
+    <p v-if="isLoading" class="work-log-panel__state" data-test="work-log-loading">
+      작업 로그를 불러오는 중입니다.
+    </p>
+    <p v-else-if="errorMessage" class="work-log-panel__state work-log-panel__state--error" data-test="work-log-error">
+      {{ errorMessage }}
+    </p>
+
     <Transition name="work-log-modal">
       <div
         v-if="isCreateModalOpen"
@@ -139,6 +169,7 @@ function scrollToDate(date) {
               class="work-log-panel__modal-close"
               type="button"
               aria-label="작업 로그 작성 닫기"
+              :disabled="isSubmitting"
               @click="closeCreateModal"
             >
               <img :src="closeIcon" alt="" width="20" height="20" />
@@ -162,6 +193,7 @@ function scrollToDate(date) {
               rows="4"
               data-test="work-log-form-task"
               placeholder="작업 내용을 입력하세요"
+              :disabled="isSubmitting"
             ></textarea>
           </label>
 
@@ -177,6 +209,7 @@ function scrollToDate(date) {
                 }"
                 type="button"
                 :data-test="`work-log-form-status-${option.value}`"
+                :disabled="isSubmitting"
                 @click="createLogForm.status = option.value"
               >
                 {{ option.label }}
@@ -184,7 +217,18 @@ function scrollToDate(date) {
             </div>
           </fieldset>
 
-          <button class="work-log-panel__submit" type="submit" data-test="work-log-form-submit">저장</button>
+          <p v-if="errorMessage" class="work-log-panel__modal-error" data-test="work-log-form-error">
+            {{ errorMessage }}
+          </p>
+
+          <button
+            class="work-log-panel__submit"
+            type="submit"
+            data-test="work-log-form-submit"
+            :disabled="isSubmitting"
+          >
+            {{ isSubmitting ? '저장 중' : '저장' }}
+          </button>
         </form>
       </div>
     </Transition>
@@ -198,6 +242,26 @@ function scrollToDate(date) {
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.work-log-panel__state {
+  position: absolute;
+  right: var(--agentory-spacing-24);
+  bottom: var(--agentory-spacing-20);
+  z-index: 6;
+  margin: 0;
+  padding: var(--agentory-spacing-8) var(--agentory-spacing-12);
+  color: var(--agentory-color-bg-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 8%);
+  border-radius: var(--agentory-radius-pill);
+  box-shadow: var(--agentory-shadow-control);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+}
+
+.work-log-panel__state--error,
+.work-log-panel__modal-error {
+  color: var(--agentory-color-status-danger-text);
 }
 
 .work-log-modal-enter-active,
@@ -264,6 +328,11 @@ function scrollToDate(date) {
   cursor: pointer;
 }
 
+.work-log-panel__modal-close:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
 .work-log-panel__modal-close img {
   width: 20px;
   height: 20px;
@@ -296,6 +365,11 @@ function scrollToDate(date) {
   font-size: var(--agentory-font-size-body);
   font-family: var(--agentory-font-family-base);
   outline: none;
+}
+
+.work-log-panel__field input:disabled,
+.work-log-panel__field textarea:disabled {
+  opacity: 0.64;
 }
 
 .work-log-panel__field textarea {
@@ -333,6 +407,11 @@ function scrollToDate(date) {
   cursor: pointer;
 }
 
+.work-log-panel__status-option:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
 .work-log-panel__status-option--active {
   color: var(--agentory-color-text-inverse);
   background: var(--agentory-color-bg-primary);
@@ -347,6 +426,18 @@ function scrollToDate(date) {
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-medium);
   cursor: pointer;
+}
+
+.work-log-panel__submit:disabled {
+  opacity: 0.54;
+  cursor: default;
+}
+
+.work-log-panel__modal-error {
+  margin: 0;
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
 }
 
 :global(.work-log-panel__status) {

@@ -27,6 +27,10 @@ function toLocalDateTime(date, time) {
   return `${date}T${time || '00:00'}:00`
 }
 
+function normalizeWorkLogItems(items) {
+  return Array.isArray(items) ? items : []
+}
+
 function normalizeWorkLog(item) {
   const date = formatDate(item.started_at)
 
@@ -66,12 +70,13 @@ function groupWorkLogs(items) {
 export async function fetchWorkLogGroups() {
   const workLogs = await http.get('/api/v1/work-logs')
 
-  return groupWorkLogs(workLogs)
+  return groupWorkLogs(normalizeWorkLogItems(workLogs))
 }
 
 export async function createWorkLogRequest(log) {
   const createdLog = await http.post('/api/v1/work-logs', {
     content: log.task.trim(),
+    ended_at: null,
     started_at: toLocalDateTime(log.date, log.time),
     status: toWorkLogStatusLabel(log.status),
   })
