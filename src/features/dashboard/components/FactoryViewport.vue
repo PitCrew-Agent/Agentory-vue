@@ -103,6 +103,7 @@ let lineSceneLoadingTimer = 0
 let overviewAlertFocusTimer = 0
 let hasCompletedInitialOverview = false
 let hasFocusedEquipmentByInteraction = false
+let hasManualFocusOverride = false
 let isLineOverviewFocused = true
 let shouldFocusLineOverview = false
 let statusSnapshotLineId = ''
@@ -628,10 +629,19 @@ function clearOverviewAlertFocusTimer() {
   overviewAlertFocusTimer = 0
 }
 
+function markManualFocusOverride() {
+  hasManualFocusOverride = true
+  clearOverviewAlertFocusTimer()
+}
+
+function resumeAutomaticAlertFocus() {
+  hasManualFocusOverride = false
+}
+
 function scheduleOverviewAlertFocus() {
   clearOverviewAlertFocusTimer()
 
-  if (!isLineOverviewFocused) {
+  if (hasManualFocusOverride || !isLineOverviewFocused) {
     return
   }
 
@@ -652,7 +662,7 @@ function scheduleOverviewAlertFocus() {
     const nextAlertEquipment = getPriorityAlertEquipment()
 
     if (nextAlertEquipment) {
-      selectEquipment(nextAlertEquipment.id)
+      selectEquipment(nextAlertEquipment.id, { autoFocus: true })
     }
   }, 5000)
 }
@@ -720,6 +730,7 @@ function setLineOverviewFocus(immediate = false) {
 }
 
 function focusLineOverview() {
+  resumeAutomaticAlertFocus()
   setLineOverviewFocus()
 }
 
@@ -738,7 +749,12 @@ function selectEquipment(equipmentId, options = {}) {
     return
   }
 
-  clearOverviewAlertFocusTimer()
+  if (options.manual) {
+    markManualFocusOverride()
+  } else {
+    clearOverviewAlertFocusTimer()
+  }
+
   currentSelectedEquipmentId.value = equipmentId
   selectedLineId.value = equipment.lineId
   updateSelectionVisuals()
@@ -761,6 +777,7 @@ function selectLine(lineId) {
     showLineSceneLoading()
   }
 
+  markManualFocusOverride()
   shouldFocusLineOverview = true
   selectedLineId.value = lineId
   isAlertChecklistOpen.value = false
@@ -828,6 +845,10 @@ function focusChangedAlertEquipment() {
 
   rememberActiveEquipmentStatuses()
 
+  if (hasManualFocusOverride) {
+    return
+  }
+
   if (hasSelectedRecovered) {
     if (priorityAlertEquipment) {
       if (isLineOverviewFocused) {
@@ -835,7 +856,7 @@ function focusChangedAlertEquipment() {
         return
       }
 
-      selectEquipment(priorityAlertEquipment.id)
+      selectEquipment(priorityAlertEquipment.id, { autoFocus: true })
       return
     }
 
@@ -852,7 +873,7 @@ function focusChangedAlertEquipment() {
     return
   }
 
-  selectEquipment(alertEquipment.id)
+  selectEquipment(alertEquipment.id, { autoFocus: true })
 }
 
 function syncLineWithEquipment(equipmentId) {
@@ -881,6 +902,7 @@ function handlePointerDown(event) {
 }
 
 function handleCameraInteractionStart() {
+  markManualFocusOverride()
   targetFocus = null
 }
 
@@ -906,7 +928,7 @@ function handlePointerUp(event) {
   const equipmentId = hit?.object?.userData?.equipmentId
 
   if (equipmentId) {
-    selectEquipment(equipmentId)
+    selectEquipment(equipmentId, { manual: true })
   }
 }
 
@@ -1313,7 +1335,7 @@ onBeforeUnmount(() => {
           zIndex: label.zIndex,
         }"
         :aria-pressed="label.isSelected"
-        @click="selectEquipment(label.equipment.id)"
+        @click="selectEquipment(label.equipment.id, { manual: true })"
       >
         <span class="factory-viewport__label-dot"></span>
         <strong>{{ label.equipment.name }}</strong>

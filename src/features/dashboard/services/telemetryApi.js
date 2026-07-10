@@ -263,7 +263,10 @@ function createMetricChart(metricId, series = [], detail = {}) {
   const precisionRange = config.precision === 0 ? 8 : 24 * 10 ** -config.precision
   const minimumRange = Math.max(configRange * 0.14, precisionRange)
   const visibleRange = Math.max(dataMaxValue - dataMinValue, minimumRange)
-  const padding = Math.max(visibleRange * 0.12, config.precision === 0 ? 2 : 0.4)
+  const padding = Math.max(
+    visibleRange * 0.04,
+    config.precision === 0 ? 0.8 : 8 * 10 ** -config.precision,
+  )
   const minValue = dataCenterValue - visibleRange / 2
   const maxValue = dataCenterValue + visibleRange / 2
 

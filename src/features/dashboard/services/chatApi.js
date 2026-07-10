@@ -26,6 +26,72 @@ function normalizeSuggestedQuestions(questions = []) {
     .slice(0, 4)
 }
 
+function normalizeChatTrace(trace = {}) {
+  if (!trace || typeof trace !== 'object') {
+    return {
+      citations: [],
+      reasoningSteps: [],
+      suggestedQuestions: [],
+    }
+  }
+
+  const citations = trace.citations ?? trace.sources ?? []
+  const reasoningSteps = trace.reasoning_steps ?? trace.reasoningSteps ?? trace.steps ?? []
+  const suggestedQuestions = trace.suggested_questions ?? trace.suggestedQuestions ?? []
+
+  return {
+    citations: Array.isArray(citations) ? citations.map(normalizeCitation) : [],
+    reasoningSteps: Array.isArray(reasoningSteps) ? reasoningSteps.map(normalizeReasoningStep) : [],
+    suggestedQuestions: normalizeSuggestedQuestions(suggestedQuestions),
+  }
+}
+
+function normalizeChatSessionSummary(session = {}, index = 0) {
+  const sessionId = session.session_id ?? session.sessionId ?? session.id ?? ''
+  const equipmentId = session.equipment_id ?? session.equipmentId ?? ''
+  const title = String(session.title ?? '').trim()
+  const messageCount = Number(session.message_count ?? session.messageCount ?? 0)
+
+  return {
+    createdAt: session.created_at ?? session.createdAt ?? '',
+    equipmentId,
+    id: sessionId || `chat-session-${index + 1}`,
+    messageCount: Number.isFinite(messageCount) ? messageCount : 0,
+    preview: equipmentId ? `${equipmentId} · ${messageCount || 0}개 메시지` : `${messageCount || 0}개 메시지`,
+    sessionId,
+    title: title || `대화 ${index + 1}`,
+    updatedAt: session.last_message_at ?? session.lastMessageAt ?? session.created_at ?? session.createdAt ?? '',
+  }
+}
+
+function normalizeChatMessage(message = {}, index = 0) {
+  const role = String(message.role ?? '').toLowerCase() === 'user' ? 'user' : 'assistant'
+  const trace = normalizeChatTrace(message.trace)
+  const messageId = message.message_id ?? message.messageId ?? message.id ?? `${role}-${index + 1}`
+
+  return {
+    citations: trace.citations,
+    createdAt: message.created_at ?? message.createdAt ?? '',
+    id: `history-${messageId}`,
+    reasoningSteps: trace.reasoningSteps,
+    role,
+    suggestedQuestions: trace.suggestedQuestions,
+    text: message.content ?? message.message ?? message.answer ?? '',
+  }
+}
+
+function normalizeChatSessionDetail(detail = {}) {
+  const messages = Array.isArray(detail.messages) ? detail.messages : []
+
+  return {
+    createdAt: detail.created_at ?? detail.createdAt ?? '',
+    equipmentId: detail.equipment_id ?? detail.equipmentId ?? '',
+    messages: messages.map(normalizeChatMessage),
+    sessionId: detail.session_id ?? detail.sessionId ?? '',
+    title: detail.title ?? '',
+  }
+}
+
 function parseSuggestedQuestionsFromAnswer(answer = '') {
   const trimmedAnswer = String(answer ?? '').trim()
 
@@ -397,9 +463,25 @@ export async function sendChatQuery({
     reasoningSteps: (response.reasoning_steps ?? []).map(normalizeReasoningStep),
     suggestedQuestions:
       suggestedQuestions.length || !includeAnswerSuggestions
-        ? suggestedQuestions
-        : parseSuggestedQuestionsFromAnswer(answer),
+      ? suggestedQuestions
+      : parseSuggestedQuestionsFromAnswer(answer),
   }
+}
+
+export async function fetchChatSessions() {
+  const sessions = await http.get('/api/v1/chat/sessions')
+
+  return Array.isArray(sessions) ? sessions.map(normalizeChatSessionSummary) : []
+}
+
+export async function fetchChatSessionDetail(sessionId) {
+  const detail = await http.get(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`)
+
+  return normalizeChatSessionDetail(detail)
+}
+
+export function deleteChatSession(sessionId) {
+  return http.delete(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`)
 }
 
 export async function streamChatQuery({ equipmentId = '', message, onEvent, sessionId }) {
