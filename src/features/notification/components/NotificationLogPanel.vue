@@ -26,6 +26,7 @@ const notificationColumns = [
     key: 'readStatus',
     label: '상태',
     cellClass: 'dashboard-table-panel__cell--center notification-log-panel__status-cell',
+    headerClass: 'dashboard-table-panel__header-cell--center',
   },
 ]
 
@@ -202,7 +203,7 @@ function scrollToDate(date) {
 }
 
 .notification-log-panel__code--normal {
-  color: var(--agentory-color-bg-primary);
+  color: var(--agentory-color-text-muted);
 }
 
 .notification-log-panel__code--warning {
@@ -248,7 +249,7 @@ function scrollToDate(date) {
 }
 
 .notification-log-panel__status:focus-visible {
-  outline: 2px solid var(--agentory-color-border-primary);
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-text-primary), transparent 34%);
   outline-offset: 2px;
 }
 
@@ -272,7 +273,7 @@ function scrollToDate(date) {
   gap: var(--agentory-spacing-4);
   overflow: hidden;
   background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 58%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   border-radius: var(--agentory-radius-8);
   box-shadow: var(--agentory-shadow-panel-soft);
 }
@@ -316,13 +317,13 @@ function scrollToDate(date) {
 
 .notification-log-panel__status-option--active,
 .notification-log-panel__status-option:hover {
-  color: var(--agentory-color-bg-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 78%);
 }
 
 .notification-log-panel__status-check {
   width: 14px;
-  color: var(--agentory-color-bg-primary);
+  color: var(--agentory-color-text-primary);
   font-weight: var(--agentory-font-weight-bold);
 }
 
@@ -334,7 +335,7 @@ function scrollToDate(date) {
   align-items: center;
   justify-content: center;
   padding: var(--agentory-spacing-24);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 78%);
+  background: color-mix(in srgb, var(--agentory-color-text-primary), transparent 78%);
   border-radius: var(--agentory-radius-8);
 }
 
@@ -345,7 +346,7 @@ function scrollToDate(date) {
   flex-direction: column;
   gap: var(--agentory-spacing-12);
   background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 58%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   border-radius: var(--agentory-radius-16);
   box-shadow: var(--agentory-shadow-panel-soft);
 }
@@ -374,7 +375,7 @@ function scrollToDate(date) {
   min-height: 32px;
   padding: var(--agentory-spacing-6) var(--agentory-spacing-16);
   color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-text-primary);
   border: 0;
   border-radius: var(--agentory-radius-pill);
   font-size: var(--agentory-font-size-body);

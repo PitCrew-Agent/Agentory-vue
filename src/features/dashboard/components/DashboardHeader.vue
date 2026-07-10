@@ -32,6 +32,7 @@ const shouldSkipHeaderApi = import.meta.env.MODE === 'test'
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
 const currentUser = computed(() => authStore.currentUser)
 const currentUserName = computed(() => authStore.currentUserName)
+const currentUserInitial = computed(() => currentUserName.value.trim().charAt(0).toUpperCase() || 'A')
 
 function toggleNotificationPanel() {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -161,6 +162,16 @@ onMounted(() => {
           data-test="dashboard-header-profile-card"
           aria-label="사용자 프로필"
         >
+          <div class="dashboard-header__profile-summary">
+            <span class="dashboard-header__profile-avatar" aria-hidden="true">
+              {{ currentUserInitial }}
+            </span>
+            <div class="dashboard-header__profile-copy">
+              <strong>{{ currentUserName }}</strong>
+              <span>{{ currentUser.email || currentUser.userId || '-' }}</span>
+            </div>
+          </div>
+
           <dl class="dashboard-header__profile-list">
             <div>
               <dt>이름</dt>
@@ -460,28 +471,86 @@ onMounted(() => {
   top: calc(100% + var(--agentory-spacing-10));
   right: 0;
   display: flex;
-  width: 240px;
-  padding: var(--agentory-spacing-16);
+  width: 310px;
+  padding: var(--agentory-spacing-20);
   flex-direction: column;
-  gap: var(--agentory-spacing-14);
+  gap: var(--agentory-spacing-16);
   color: var(--agentory-color-text-primary);
-  background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 62%);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 2%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-border-inverse), transparent 34%);
   border-radius: var(--agentory-radius-16);
-  box-shadow: var(--agentory-shadow-panel-soft);
+  box-shadow:
+    var(--agentory-shadow-panel-soft),
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 12%);
+  backdrop-filter: var(--agentory-blur-glass);
+}
+
+.dashboard-header__profile-summary {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--agentory-spacing-12);
+  padding: var(--agentory-spacing-12);
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  border-radius: var(--agentory-radius-12);
+}
+
+.dashboard-header__profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
+  border-radius: var(--agentory-radius-pill);
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-bold);
+  line-height: var(--agentory-line-height-body-lg);
+}
+
+.dashboard-header__profile-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--agentory-spacing-2);
+}
+
+.dashboard-header__profile-copy strong {
+  overflow: hidden;
+  color: var(--agentory-color-text-primary);
+  font-size: var(--agentory-font-size-body);
+  font-weight: var(--agentory-font-weight-bold);
+  line-height: var(--agentory-line-height-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-header__profile-copy span {
+  overflow: hidden;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-header__profile-list {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-10);
+  gap: var(--agentory-spacing-6);
 }
 
 .dashboard-header__profile-list div {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   align-items: center;
   gap: var(--agentory-spacing-10);
+  min-height: 34px;
+  padding: 0 var(--agentory-spacing-8);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 88%);
+  border-radius: var(--agentory-radius-8);
 }
 
 .dashboard-header__profile-list dt {
@@ -503,11 +572,11 @@ onMounted(() => {
 }
 
 .dashboard-header__logout-button {
-  min-height: 32px;
+  min-height: 36px;
   color: var(--agentory-color-text-inverse);
   background: var(--agentory-color-bg-primary);
   border: 0;
-  border-radius: var(--agentory-radius-pill);
+  border-radius: var(--agentory-radius-8);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-medium);
   cursor: pointer;
@@ -534,7 +603,7 @@ onMounted(() => {
   }
 
   .dashboard-header__profile-card {
-    width: min(240px, calc(100vw - var(--agentory-spacing-40)));
+    width: min(310px, calc(100vw - var(--agentory-spacing-40)));
   }
 }
 </style>

@@ -200,19 +200,27 @@ watch(
   width: 38px;
   height: 38px;
   padding: 0;
-  color: var(--agentory-color-bg-primary);
-  background: transparent;
+  color: var(--agentory-color-text-muted);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 84%);
   border: 0;
-  border-radius: var(--agentory-radius-pill);
+  border-radius: var(--agentory-radius-8);
   cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft);
 }
 
 .dashboard-calendar-picker__toggle img {
   width: 28px;
   height: 28px;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(43%) sepia(85%) saturate(2682%) hue-rotate(197deg)
-    brightness(93%) contrast(91%);
+  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg) brightness(96%)
+    contrast(88%);
+}
+
+.dashboard-calendar-picker__toggle:hover {
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 70%);
+  transform: translateY(-1px);
 }
 
 .dashboard-calendar-picker__modal {
@@ -223,7 +231,7 @@ watch(
   width: 286px;
   padding: var(--agentory-spacing-14);
   background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 58%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   border-radius: var(--agentory-radius-16);
   box-shadow: var(--agentory-shadow-panel-soft);
 }
@@ -251,8 +259,8 @@ watch(
   width: 30px;
   height: 30px;
   padding: 0;
-  color: var(--agentory-color-bg-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  color: var(--agentory-color-text-muted);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 78%);
   border: 0;
   border-radius: var(--agentory-radius-pill);
   font-size: var(--agentory-font-size-h3);
@@ -305,7 +313,7 @@ watch(
 
 .dashboard-calendar-picker__day--available {
   color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-text-primary);
   cursor: pointer;
 }
 
