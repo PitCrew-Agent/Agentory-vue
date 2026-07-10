@@ -157,3 +157,41 @@
   --shadow-md: var(--agentory-shadow-panel);
   --layout-max-width: 1440px;
 }
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --agentory-color-bg-app: #171a1e;
+  --agentory-color-bg-primary: #2d7fd7;
+  --agentory-color-bg-auth-gradient-soft: #273a50;
+  --agentory-color-bg-auth-gradient-mid: #223854;
+  --agentory-color-bg-auth-secondary: #1e3049;
+  --agentory-color-bg-auth-panel: rgba(23, 26, 30, 0.86);
+  --agentory-color-bg-primary-glass: rgba(45, 127, 215, 0.5);
+  --agentory-color-bg-glass-light: rgba(255, 255, 255, 0.1);
+  --agentory-color-bg-glass-white: rgba(255, 255, 255, 0.12);
+  --agentory-color-bg-surface: #24292f;
+  --agentory-color-bg-muted: #363d45;
+  --agentory-color-bg-dark: #0f1114;
+  --agentory-color-text-primary: #edf1f5;
+  --agentory-color-text-inverse: #f8f9f6;
+  --agentory-color-text-muted: #a7afb8;
+  --agentory-color-text-subtle: #6d7680;
+  --agentory-color-text-auth: #edf1f5;
+  --agentory-color-border-primary: #5a9fee;
+  --agentory-color-border-inverse: #edf1f5;
+  --agentory-color-status-normal: #45d56d;
+  --agentory-color-status-normal-text: #76e991;
+  --agentory-color-status-warning: #e7bb37;
+  --agentory-color-status-danger: #db5a55;
+  --agentory-color-status-danger-text: #f1716c;
+  --agentory-color-status-progress: #78b8ef;
+  --agentory-color-status-waiting: #9299a2;
+  --agentory-color-alert-warning: #ef9d4d;
+
+  --agentory-shadow-panel: 0 12px 30px rgba(0, 0, 0, 0.28);
+  --agentory-shadow-panel-soft: 0 8px 22px rgba(0, 0, 0, 0.2);
+  --agentory-shadow-panel-strong: 0 14px 34px rgba(0, 0, 0, 0.4);
+  --agentory-shadow-control: 0 4px 12px rgba(0, 0, 0, 0.22);
+  --agentory-shadow-control-strong: 0 6px 16px rgba(0, 0, 0, 0.34);
+}

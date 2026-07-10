@@ -6,6 +6,9 @@ body {
   font-weight: var(--agentory-font-weight-body);
   line-height: var(--line-height-body);
   text-rendering: optimizeLegibility;
+  transition:
+    background-color 180ms var(--agentory-ease-soft),
+    color 180ms var(--agentory-ease-soft);
 }
 
 #app {

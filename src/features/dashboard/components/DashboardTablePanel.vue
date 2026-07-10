@@ -76,16 +76,19 @@ defineExpose({
         <slot name="title-actions"></slot>
       </div>
 
-      <button
-        v-if="actionLabel"
-        class="dashboard-table-panel__action"
-        type="button"
-        :data-test="`${dataTest}-action`"
-        @click="emit('action')"
-      >
-        <img v-if="actionIcon" class="dashboard-table-panel__action-icon" :src="actionIcon" alt="" />
-        <span>{{ actionLabel }}</span>
-      </button>
+      <div v-if="$slots['header-actions'] || actionLabel" class="dashboard-table-panel__actions">
+        <slot name="header-actions"></slot>
+        <button
+          v-if="actionLabel"
+          class="dashboard-table-panel__action"
+          type="button"
+          :data-test="`${dataTest}-action`"
+          @click="emit('action')"
+        >
+          <img v-if="actionIcon" class="dashboard-table-panel__action-icon" :src="actionIcon" alt="" />
+          <span>{{ actionLabel }}</span>
+        </button>
+      </div>
     </header>
 
     <div ref="contentRef" class="dashboard-table-panel__content">
@@ -143,6 +146,8 @@ defineExpose({
         </div>
       </section>
     </div>
+
+    <slot name="footer"></slot>
   </article>
 </template>
 
@@ -190,6 +195,14 @@ defineExpose({
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-h2);
   white-space: nowrap;
+}
+
+.dashboard-table-panel__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--agentory-spacing-8);
+  margin-left: auto;
 }
 
 .dashboard-table-panel__action {

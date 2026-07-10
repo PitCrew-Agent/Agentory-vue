@@ -5,9 +5,11 @@ import { fetchCurrentAuthUser, logoutAuthSession } from '@/features/auth/service
 
 function createEmptyUser() {
   return {
+    assignedLineLabel: '',
     department: '',
     email: '',
     id: null,
+    lines: [],
     name: '',
     role: '',
     status: '',
@@ -15,15 +17,35 @@ function createEmptyUser() {
   }
 }
 
+function normalizeLine(line, index) {
+  if (typeof line === 'string') {
+    return {
+      code: line,
+      id: index,
+      name: line,
+    }
+  }
+
+  return {
+    code: line?.code?.trim?.() ?? '',
+    id: line?.id ?? index,
+    name: line?.name?.trim?.() ?? line?.code?.trim?.() ?? '',
+  }
+}
+
 function normalizeAuthUser(nextUser = {}) {
   const email = nextUser.email?.trim?.() ?? ''
   const name = nextUser.name?.trim?.() ?? ''
   const role = nextUser.role?.trim?.() ?? ''
+  const lines = Array.isArray(nextUser.lines) ? nextUser.lines.map(normalizeLine) : []
+  const assignedLineLabel = lines.map((line) => line.name || line.code).filter(Boolean).join(', ')
 
   return {
-    department: nextUser.department?.trim?.() || role,
+    assignedLineLabel,
+    department: nextUser.department?.trim?.() || assignedLineLabel || role,
     email,
     id: nextUser.id ?? null,
+    lines,
     name: name || email,
     role,
     status: nextUser.status?.trim?.() ?? '',
