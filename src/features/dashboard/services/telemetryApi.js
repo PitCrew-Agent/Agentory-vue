@@ -196,13 +196,17 @@ function getMetricThresholdStatus(metricId, value) {
 function createMetrics(detail = {}) {
   return metricIds.map((metricId) => {
     const config = metricConfigs[metricId]
+    const rawValue = getMetricRawValue(detail, metricId)
+    const status = getMetricThresholdStatus(metricId, rawValue) ?? equipmentStatusMap.normal
 
     return {
       icon: config.icon,
       id: metricId,
       label: config.label,
+      statusLabel: status.label,
+      statusTone: status.tone,
       unit: config.unit,
-      value: formatMetricValue(getMetricRawValue(detail, metricId), config.precision),
+      value: formatMetricValue(rawValue, config.precision),
     }
   })
 }

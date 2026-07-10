@@ -2,9 +2,6 @@
 import gasFlowIcon from '@/assets/icons/dashboard/metric-gas-flow.svg'
 import pressureIcon from '@/assets/icons/dashboard/metric-pressure.png'
 import rfPowerIcon from '@/assets/icons/dashboard/metric-rf-power.svg'
-import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
-import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
-import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import temperatureIcon from '@/assets/icons/dashboard/metric-temperature.png'
 
 defineProps({
@@ -27,14 +24,12 @@ const metricIconMap = {
   temperature: temperatureIcon,
 }
 
-const statusIconMap = {
-  danger: dangerStatusIcon,
-  normal: normalStatusIcon,
-  warning: warningStatusIcon,
-}
-
 function selectMetric(metricId) {
   emit('update:selectedMetricId', metricId)
+}
+
+function isAlertMetric(metric) {
+  return ['warning', 'danger'].includes(metric.statusTone)
 }
 </script>
 
@@ -48,19 +43,6 @@ function selectMetric(metricId) {
       <h3>{{ equipment.name }}</h3>
       <Transition name="detail-status-flow" mode="out-in">
         <div :key="`${equipment.status.tone}-${equipment.alarmCode}`" class="detail-panel__status-row">
-          <span
-            class="detail-panel__status"
-            :class="`detail-panel__status--${equipment.status.tone}`"
-          >
-            <img
-              class="detail-panel__status-icon"
-              :src="statusIconMap[equipment.status.tone]"
-              alt=""
-              width="17"
-              height="17"
-            />
-            {{ equipment.status.label }}
-          </span>
           <span
             v-if="
               ['warning', 'danger'].includes(equipment.status.tone) &&
@@ -102,14 +84,22 @@ function selectMetric(metricId) {
           :key="metric.id"
           type="button"
           class="detail-panel__metric"
-          :class="{ 'detail-panel__metric--active': selectedMetricId === metric.id }"
+          :class="[
+            {
+              'detail-panel__metric--selected': selectedMetricId === metric.id,
+              'detail-panel__metric--alert': isAlertMetric(metric),
+            },
+            isAlertMetric(metric) ? `detail-panel__metric--${metric.statusTone}` : '',
+          ]"
           :data-test="`metric-${metric.id}`"
           :aria-pressed="selectedMetricId === metric.id"
           @click="selectMetric(metric.id)"
         >
-          <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
-          <div>
-            <span>{{ metric.label }}</span>
+          <span class="detail-panel__metric-icon">
+            <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
+          </span>
+          <div class="detail-panel__metric-copy">
+            <span class="detail-panel__metric-label">{{ metric.label }}</span>
             <Transition name="detail-value-flow" mode="out-in">
               <strong :key="`${metric.id}-${metric.value}-${metric.unit}`">
                 {{ metric.value }}
@@ -117,6 +107,14 @@ function selectMetric(metricId) {
               </strong>
             </Transition>
           </div>
+          <span
+            v-if="isAlertMetric(metric)"
+            class="detail-panel__metric-alert"
+            :class="`detail-panel__metric-alert--${metric.statusTone}`"
+            :aria-label="metric.statusLabel ?? equipment.status.label"
+            :title="metric.statusLabel ?? equipment.status.label"
+          >
+          </span>
         </button>
       </div>
     </div>
@@ -131,10 +129,12 @@ function selectMetric(metricId) {
   min-width: 0;
   height: 100%;
   padding: var(--agentory-spacing-20) var(--agentory-spacing-16);
-  overflow: hidden;
+  overflow: visible;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-16);
-  box-shadow: var(--agentory-shadow-panel);
+  box-shadow:
+    var(--agentory-shadow-panel),
+    0 0 0 1px color-mix(in srgb, var(--agentory-color-border-primary), transparent 82%);
   container-type: inline-size;
 }
 
@@ -176,43 +176,7 @@ function selectMetric(metricId) {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--agentory-spacing-6);
   min-width: 0;
-  flex: 0 0 auto;
-}
-
-.detail-panel__status {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--agentory-spacing-10);
-  padding: var(--agentory-spacing-4) var(--agentory-spacing-14);
-  color: var(--agentory-color-text-primary);
-  background: rgba(50, 50, 50, 0.1);
-  border-radius: var(--agentory-radius-22);
-  font-size: var(--agentory-font-size-body);
-  font-weight: var(--agentory-font-weight-medium);
-  line-height: var(--agentory-line-height-body);
-  white-space: nowrap;
-  transition:
-    background-color 260ms var(--agentory-ease-soft),
-    color 260ms var(--agentory-ease-soft),
-    transform 320ms var(--agentory-ease-elastic);
-}
-
-.detail-panel__status--warning {
-  color: color-mix(in srgb, var(--agentory-color-status-warning), var(--agentory-color-text-primary) 28%);
-  background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 82%);
-}
-
-.detail-panel__status--danger {
-  color: var(--agentory-color-status-danger-text);
-  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 88%);
-}
-
-.detail-panel__status-icon {
-  width: 14px;
-  height: 14px;
-  object-fit: contain;
   flex: 0 0 auto;
 }
 
@@ -249,7 +213,7 @@ function selectMetric(metricId) {
   flex-direction: column;
   gap: var(--agentory-spacing-14);
   min-height: 0;
-  padding-right: 4px;
+  padding: var(--agentory-spacing-2) 4px var(--agentory-spacing-4) 0;
   overflow: auto;
   scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 52%) transparent;
   scrollbar-width: thin;
@@ -304,32 +268,57 @@ function selectMetric(metricId) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--agentory-spacing-10);
   min-height: 164px;
-  overflow: hidden;
+  overflow: visible;
   border-radius: var(--agentory-radius-8);
 }
 
 .detail-panel__metric {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
   align-items: center;
-  justify-content: center;
-  gap: var(--agentory-spacing-8);
+  gap: var(--agentory-spacing-10);
   min-height: 78px;
-  padding: var(--agentory-spacing-10);
+  padding: var(--agentory-spacing-10) var(--agentory-spacing-12);
   color: var(--agentory-color-text-primary);
   background: var(--agentory-color-bg-surface);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--agentory-radius-8);
   text-align: left;
   transition:
     color 180ms ease,
     background 180ms ease,
+    border-color 180ms ease,
     box-shadow 180ms ease;
 }
 
-.detail-panel__metric--active {
-  color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary-glass);
-  box-shadow: var(--agentory-shadow-panel-strong);
+.detail-panel__metric--alert {
+  padding-right: var(--agentory-spacing-24);
+}
+
+.detail-panel__metric--selected {
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-bg-surface) 94%);
+  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 52%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 76%),
+    0 8px 18px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
+}
+
+.detail-panel__metric--selected.detail-panel__metric--warning,
+.detail-panel__metric--selected.detail-panel__metric--danger {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 78%),
+    0 8px 18px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
+}
+
+.detail-panel__metric--selected.detail-panel__metric--warning {
+  color: var(--agentory-color-text-primary);
+}
+
+.detail-panel__metric--selected.detail-panel__metric--danger {
+  color: var(--agentory-color-text-primary);
 }
 
 .detail-panel__metric:focus-visible {
@@ -337,33 +326,68 @@ function selectMetric(metricId) {
   outline-offset: 2px;
 }
 
-.detail-panel__metric img {
+.detail-panel__metric-icon {
+  display: inline-flex;
+  grid-row: 1;
+  align-items: center;
+  align-self: start;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 10%);
+  border-radius: var(--agentory-radius-8);
+}
+
+.detail-panel__metric-icon img {
   width: 19px;
   height: 19px;
   object-fit: contain;
-  flex: 0 0 auto;
 }
 
-.detail-panel__metric div {
+.detail-panel__metric-copy {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.detail-panel__metric span {
+.detail-panel__metric-label {
+  overflow: hidden;
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-regular);
   line-height: var(--agentory-line-height-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-panel__metric strong {
   display: inline-flex;
   align-items: flex-start;
-  gap: var(--agentory-spacing-10);
-  font-size: 26px;
+  gap: var(--agentory-spacing-6);
+  min-width: 0;
+  overflow: hidden;
+  font-size: 24px;
   font-weight: var(--agentory-font-weight-semi-bold);
-  line-height: 1.5;
+  line-height: 1.25;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.detail-panel__metric-alert {
+  position: absolute;
+  top: var(--agentory-spacing-10);
+  right: var(--agentory-spacing-10);
+  width: 9px;
+  height: 9px;
+  border-radius: var(--agentory-radius-pill);
+  box-shadow: 0 0 0 3px var(--agentory-color-bg-surface);
+}
+
+.detail-panel__metric-alert--warning {
+  background: var(--agentory-color-status-warning);
+}
+
+.detail-panel__metric-alert--danger {
+  background: var(--agentory-color-status-danger-text);
 }
 
 .detail-status-flow-enter-active,
@@ -388,7 +412,7 @@ function selectMetric(metricId) {
 }
 
 .detail-panel__metric small {
-  padding-top: var(--agentory-spacing-8);
+  padding-top: var(--agentory-spacing-4);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-extra-light);
   line-height: var(--agentory-line-height-body);
