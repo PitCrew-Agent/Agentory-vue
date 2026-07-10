@@ -3,7 +3,12 @@ import { onMounted, ref } from 'vue'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import WorkLogPanel from '@/features/workLog/components/WorkLogPanel.vue'
-import { createWorkLogRequest, fetchWorkLogGroups } from '@/features/workLog/services/workLogApi'
+import {
+  createWorkLogRequest,
+  deleteWorkLogRequest,
+  fetchWorkLogGroups,
+  updateWorkLogRequest,
+} from '@/features/workLog/services/workLogApi'
 
 const workLogGroupState = ref([])
 const isWorkLogLoading = ref(false)
@@ -67,6 +72,56 @@ async function createWorkLog(log, controls = {}) {
   }
 }
 
+async function updateWorkLog(log, controls = {}) {
+  if (isWorkLogSubmitting.value) {
+    return
+  }
+
+  isWorkLogSubmitting.value = true
+  workLogErrorMessage.value = ''
+
+  try {
+    await updateWorkLogRequest(log)
+    controls.onSuccess?.()
+
+    try {
+      workLogGroupState.value = await fetchWorkLogGroups()
+    } catch {
+      workLogErrorMessage.value = '작업 로그는 수정됐지만 목록을 다시 불러오지 못했습니다.'
+    }
+  } catch {
+    workLogErrorMessage.value = '작업 로그를 수정하지 못했습니다.'
+    controls.onError?.()
+  } finally {
+    isWorkLogSubmitting.value = false
+  }
+}
+
+async function deleteWorkLog(logId, controls = {}) {
+  if (isWorkLogSubmitting.value) {
+    return
+  }
+
+  isWorkLogSubmitting.value = true
+  workLogErrorMessage.value = ''
+
+  try {
+    await deleteWorkLogRequest(logId)
+    controls.onSuccess?.()
+
+    try {
+      workLogGroupState.value = await fetchWorkLogGroups()
+    } catch {
+      workLogErrorMessage.value = '작업 로그는 삭제됐지만 목록을 다시 불러오지 못했습니다.'
+    }
+  } catch {
+    workLogErrorMessage.value = '작업 로그를 삭제하지 못했습니다.'
+    controls.onError?.()
+  } finally {
+    isWorkLogSubmitting.value = false
+  }
+}
+
 onMounted(() => {
   if (shouldSkipWorkLogApi) {
     return
@@ -88,6 +143,8 @@ onMounted(() => {
       :is-loading="isWorkLogLoading"
       :is-submitting="isWorkLogSubmitting"
       @create-log="createWorkLog"
+      @delete-log="deleteWorkLog"
+      @update-log="updateWorkLog"
     />
   </DashboardFramePage>
 </template>

@@ -27,6 +27,15 @@ function toLocalDateTime(date, time) {
   return `${date}T${time || '00:00'}:00`
 }
 
+function createWorkLogPayload(log) {
+  return {
+    content: log.task.trim(),
+    ended_at: null,
+    started_at: toLocalDateTime(log.date, log.time),
+    status: toWorkLogStatusLabel(log.status),
+  }
+}
+
 function normalizeWorkLogItems(items) {
   return Array.isArray(items) ? items : []
 }
@@ -74,12 +83,17 @@ export async function fetchWorkLogGroups() {
 }
 
 export async function createWorkLogRequest(log) {
-  const createdLog = await http.post('/api/v1/work-logs', {
-    content: log.task.trim(),
-    ended_at: null,
-    started_at: toLocalDateTime(log.date, log.time),
-    status: toWorkLogStatusLabel(log.status),
-  })
+  const createdLog = await http.post('/api/v1/work-logs', createWorkLogPayload(log))
 
   return normalizeWorkLog(createdLog)
+}
+
+export async function updateWorkLogRequest(log) {
+  const updatedLog = await http.patch(`/api/v1/work-logs/${encodeURIComponent(log.id)}`, createWorkLogPayload(log))
+
+  return normalizeWorkLog(updatedLog)
+}
+
+export function deleteWorkLogRequest(logId) {
+  return http.remove(`/api/v1/work-logs/${encodeURIComponent(logId)}`)
 }
