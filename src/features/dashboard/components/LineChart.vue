@@ -42,6 +42,7 @@ const visiblePointCount = computed(() => {
 })
 
 const maxWindowOffset = computed(() => Math.max(props.chart.points.length - visiblePointCount.value, 0))
+const shouldShowRangeControls = computed(() => props.chart.points.length > 1)
 
 const visibleStartIndex = computed(() =>
   Math.max(props.chart.points.length - visiblePointCount.value - windowOffset.value, 0),
@@ -53,18 +54,24 @@ const visiblePoints = computed(() =>
   props.chart.points.slice(visibleStartIndex.value, visibleEndIndex.value),
 )
 
-const valueRange = computed(() => Math.max(props.chart.max - props.chart.min, 1))
+const valueRange = computed(() => {
+  const range = props.chart.max - props.chart.min
+
+  return Number.isFinite(range) && range > 0 ? range : 1
+})
 
 const chartPoints = computed(() =>
   visiblePoints.value.map((point, index) => {
     const sourceIndex = visibleStartIndex.value + index
-    const x =
+    const x = snapCoordinate(
       padding.left +
-      (visiblePoints.value.length === 1 ? 0 : (plotWidth / (visiblePoints.value.length - 1)) * index)
-    const y =
+        (visiblePoints.value.length === 1 ? 0 : (plotWidth / (visiblePoints.value.length - 1)) * index),
+    )
+    const y = snapCoordinate(
       padding.top +
-      plotHeight -
-      ((point.value - props.chart.min) / valueRange.value) * plotHeight
+        plotHeight -
+        ((point.value - props.chart.min) / valueRange.value) * plotHeight,
+    )
 
     return {
       ...point,
@@ -79,15 +86,29 @@ const chartPoints = computed(() =>
 const linePoints = computed(() =>
   renderedChartPoints.value.map((point) => `${point.x},${point.y}`).join(' '),
 )
+
 const yAxisLabels = computed(() => {
   const steps = [props.chart.max, props.chart.max - valueRange.value / 2, props.chart.min]
   const precision = props.chart.precision ?? 1
 
   return steps.map((value) => ({
     label: value.toFixed(precision),
-    y: padding.top + ((props.chart.max - value) / valueRange.value) * plotHeight,
+    y: snapCoordinate(padding.top + ((props.chart.max - value) / valueRange.value) * plotHeight),
   }))
 })
+
+const horizontalGridLines = computed(() =>
+  Array.from({ length: 5 }, (_, index) => ({
+    y: snapCoordinate(padding.top + (plotHeight / 4) * index),
+  })),
+)
+
+const verticalGridLines = computed(() =>
+  renderedChartPoints.value.map((point) => ({
+    key: point.key,
+    x: point.x,
+  })),
+)
 
 const thresholdLines = computed(() => {
   const thresholds = props.chart.thresholds ?? {}
@@ -101,12 +122,12 @@ const thresholdLines = computed(() => {
   return lineItems
     .filter((line) => Number.isFinite(line.value))
     .map((line) => {
-      const y = padding.top + ((props.chart.max - line.value) / valueRange.value) * plotHeight
+      const y = snapCoordinate(padding.top + ((props.chart.max - line.value) / valueRange.value) * plotHeight)
 
       return {
         ...line,
         labelText: `${line.label} ${formatPointValue(line.value)}`,
-        labelY: clamp(y - 5, padding.top + 10, padding.top + plotHeight - 4),
+        labelY: clamp(y - 5, padding.top + 9, padding.top + plotHeight - 5),
         y,
       }
     })
@@ -169,6 +190,10 @@ function measureChartWidth() {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
+}
+
+function snapCoordinate(value) {
+  return Math.round(value * 2) / 2
 }
 
 function prefersReducedMotion() {
@@ -319,22 +344,12 @@ function formatPointValue(value) {
   return precision === 0 ? `${Math.round(numberValue)}` : numberValue.toFixed(precision)
 }
 
-function getPointShapePath(point, index) {
-  const radius = index === renderedChartPoints.value.length - 1 ? 5.2 : 4.1
-
-  if (point.statusTone === 'danger') {
-    return `M ${point.x} ${point.y - radius} L ${point.x + radius} ${point.y} L ${point.x} ${
-      point.y + radius
-    } L ${point.x - radius} ${point.y} Z`
-  }
-
-  if (point.statusTone === 'warning') {
-    return `M ${point.x} ${point.y - radius} L ${point.x + radius} ${point.y + radius} L ${
-      point.x - radius
-    } ${point.y + radius} Z`
-  }
-
-  return ''
+function shouldRenderRegularPoint(point, index) {
+  return (
+    renderedChartPoints.value.length <= 12 ||
+    point.key === activePointKey.value ||
+    index === renderedChartPoints.value.length - 1
+  )
 }
 
 function selectChartPoint(point) {
@@ -384,8 +399,6 @@ watch(
 
 <template>
   <div ref="chartRef" class="line-chart">
-    <h3 data-test="metric-chart-title">{{ chart.title }}</h3>
-
     <svg
       class="line-chart__svg"
       :class="{
@@ -402,12 +415,20 @@ watch(
     >
       <g class="line-chart__grid">
         <line
-          v-for="label in yAxisLabels"
-          :key="label.label"
+          v-for="(gridLine, index) in horizontalGridLines"
+          :key="`horizontal-${index}`"
           :x1="padding.left"
           :x2="svgWidth - padding.right"
-          :y1="label.y"
-          :y2="label.y"
+          :y1="gridLine.y"
+          :y2="gridLine.y"
+        />
+        <line
+          v-for="point in verticalGridLines"
+          :key="`vertical-${point.key}`"
+          :x1="point.x"
+          :x2="point.x"
+          :y1="padding.top"
+          :y2="padding.top + plotHeight"
         />
       </g>
 
@@ -424,6 +445,13 @@ watch(
       </g>
 
       <g class="line-chart__thresholds">
+        <line
+          class="line-chart__threshold-gutter"
+          :x1="svgWidth - padding.right + 8"
+          :x2="svgWidth - padding.right + 8"
+          :y1="padding.top"
+          :y2="padding.top + plotHeight"
+        />
         <g
           v-for="line in thresholdLines"
           :key="line.id"
@@ -431,7 +459,7 @@ watch(
           :class="`line-chart__threshold--${line.tone}`"
         >
           <line :x1="padding.left" :x2="svgWidth - padding.right" :y1="line.y" :y2="line.y" />
-          <text :x="svgWidth - 8" :y="line.labelY" text-anchor="end">
+          <text :x="svgWidth - padding.right + 14" :y="line.labelY">
             {{ line.labelText }}
           </text>
         </g>
@@ -455,28 +483,23 @@ watch(
           @pointerdown.stop
         >
           <circle
-            v-if="!['warning', 'danger'].includes(point.statusTone)"
+            v-if="
+              !['warning', 'danger'].includes(point.statusTone) && shouldRenderRegularPoint(point, index)
+            "
             class="line-chart__point"
             :cx="point.x"
             :cy="point.y"
             :r="index === renderedChartPoints.length - 1 ? 4.3 : 2.8"
           />
-          <path
-            v-else
+          <circle
+            v-else-if="['warning', 'danger'].includes(point.statusTone)"
             class="line-chart__point-alert"
             :class="`line-chart__point-alert--${point.statusTone}`"
-            :d="getPointShapePath(point, index)"
+            :cx="point.x"
+            :cy="point.y"
+            :r="index === renderedChartPoints.length - 1 ? 5.6 : 4.8"
           />
-          <text
-            v-if="point.statusTone === 'danger'"
-            class="line-chart__point-alert-mark"
-            :x="point.x"
-            :y="point.y + 3.8"
-            text-anchor="middle"
-          >
-            !
-          </text>
-          <circle class="line-chart__point-hit" :cx="point.x" :cy="point.y" r="12" />
+          <circle class="line-chart__point-hit" :cx="point.x" :cy="point.y" r="17" />
         </g>
       </g>
 
@@ -538,36 +561,38 @@ watch(
       </g>
     </svg>
 
-    <div v-if="maxWindowOffset > 0" class="line-chart__controls">
-      <div
-        class="line-chart__range"
-        :class="{ 'line-chart__range--dragging': isDraggingRange }"
-        aria-label="그래프 조회 위치"
-        role="slider"
-        :aria-valuemin="0"
-        :aria-valuemax="maxWindowOffset"
-        :aria-valuenow="maxWindowOffset - windowOffset"
-        tabindex="0"
-        @keydown.end.prevent="returnToLive"
-        @keydown.home.prevent="windowOffset = maxWindowOffset"
-        @keydown.left.prevent="windowOffset = clamp(windowOffset + 1, 0, maxWindowOffset)"
-        @keydown.right.prevent="windowOffset = clamp(windowOffset - 1, 0, maxWindowOffset)"
-        @lostpointercapture="finishRangeDrag"
-        @pointerdown="handleRangePointerDown"
-        @pointermove="handleRangePointerMove"
-        @pointerup="finishRangeDrag"
-      >
-        <span class="line-chart__range-thumb" :style="rangeWindowStyle"></span>
+    <div v-if="shouldShowRangeControls" class="line-chart__footer">
+      <div class="line-chart__controls">
+        <div
+          class="line-chart__range"
+          :class="{ 'line-chart__range--dragging': isDraggingRange }"
+          aria-label="그래프 조회 위치"
+          role="slider"
+          :aria-valuemin="0"
+          :aria-valuemax="maxWindowOffset"
+          :aria-valuenow="maxWindowOffset - windowOffset"
+          tabindex="0"
+          @keydown.end.prevent="returnToLive"
+          @keydown.home.prevent="windowOffset = maxWindowOffset"
+          @keydown.left.prevent="windowOffset = clamp(windowOffset + 1, 0, maxWindowOffset)"
+          @keydown.right.prevent="windowOffset = clamp(windowOffset - 1, 0, maxWindowOffset)"
+          @lostpointercapture="finishRangeDrag"
+          @pointerdown="handleRangePointerDown"
+          @pointermove="handleRangePointerMove"
+          @pointerup="finishRangeDrag"
+        >
+          <span class="line-chart__range-thumb" :style="rangeWindowStyle"></span>
+        </div>
+        <button
+          type="button"
+          class="line-chart__live-button"
+          :class="{ 'line-chart__live-button--active': isLiveWindow }"
+          :disabled="isLiveWindow"
+          @click="returnToLive"
+        >
+          LIVE
+        </button>
       </div>
-      <button
-        type="button"
-        class="line-chart__live-button"
-        :class="{ 'line-chart__live-button--active': isLiveWindow }"
-        :disabled="isLiveWindow"
-        @click="returnToLive"
-      >
-        LIVE
-      </button>
     </div>
   </div>
 </template>
@@ -576,22 +601,9 @@ watch(
 .line-chart {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-2);
   width: 100%;
   height: 100%;
   min-height: 0;
-}
-
-.line-chart h3 {
-  display: flex;
-  align-items: center;
-  min-height: 24px;
-  margin: 0;
-  padding: 0 var(--agentory-spacing-4);
-  color: var(--agentory-color-text-primary);
-  font-size: var(--agentory-font-size-body-lg);
-  font-weight: var(--agentory-font-weight-semi-bold);
-  line-height: var(--agentory-line-height-body-lg);
 }
 
 .line-chart__svg {
@@ -613,7 +625,7 @@ watch(
 }
 
 .line-chart__grid line {
-  stroke: color-mix(in srgb, var(--agentory-color-text-subtle), transparent 75%);
+  stroke: color-mix(in srgb, var(--agentory-color-text-subtle), transparent 86%);
   stroke-width: 1;
 }
 
@@ -630,34 +642,37 @@ watch(
 }
 
 .line-chart__threshold line {
-  stroke-dasharray: 7 6;
+  stroke-dasharray: 5 6;
   stroke-linecap: round;
-  stroke-width: 1.6;
-}
-
-.line-chart__threshold text {
-  paint-order: stroke;
-  font-family: var(--agentory-font-family-chart);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-bold);
-  stroke: color-mix(in srgb, var(--agentory-color-bg-app), transparent 4%);
-  stroke-width: 3.6;
+  stroke-width: 1.2;
 }
 
 .line-chart__threshold--warning line {
-  stroke: color-mix(in srgb, var(--agentory-color-status-warning), transparent 8%);
-}
-
-.line-chart__threshold--warning text {
-  fill: color-mix(in srgb, var(--agentory-color-status-warning), var(--agentory-color-text-primary) 20%);
+  stroke: color-mix(in srgb, var(--agentory-color-status-warning), transparent 54%);
 }
 
 .line-chart__threshold--danger line {
-  stroke: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 6%);
+  stroke: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 56%);
+}
+
+.line-chart__threshold-gutter {
+  stroke: color-mix(in srgb, var(--agentory-color-text-subtle), transparent 76%);
+  stroke-width: 1;
+}
+
+.line-chart__threshold text {
+  fill: var(--agentory-color-text-muted);
+  font-family: var(--agentory-font-family-chart);
+  font-size: var(--agentory-font-size-chart-label);
+  font-weight: var(--agentory-font-weight-medium);
+}
+
+.line-chart__threshold--warning text {
+  fill: color-mix(in srgb, var(--agentory-color-text-muted), var(--agentory-color-status-warning) 26%);
 }
 
 .line-chart__threshold--danger text {
-  fill: var(--agentory-color-status-danger-text);
+  fill: color-mix(in srgb, var(--agentory-color-text-muted), var(--agentory-color-status-danger-text) 24%);
 }
 
 .line-chart__line {
@@ -665,7 +680,7 @@ watch(
   stroke: var(--agentory-color-bg-primary);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.6;
+  stroke-width: 3.6;
   pointer-events: none;
 }
 
@@ -677,7 +692,7 @@ watch(
 .line-chart__point {
   fill: var(--agentory-color-bg-app);
   stroke: var(--agentory-color-bg-primary);
-  stroke-width: 2;
+  stroke-width: 2.2;
   transition:
     fill 180ms ease,
     stroke-width 180ms ease,
@@ -697,8 +712,7 @@ watch(
 
 .line-chart__point-alert {
   stroke: var(--agentory-color-bg-app);
-  stroke-linejoin: round;
-  stroke-width: 2.2;
+  stroke-width: 1.6;
   pointer-events: none;
 }
 
@@ -707,19 +721,11 @@ watch(
 }
 
 .line-chart__point-alert--danger {
-  fill: var(--agentory-color-status-danger);
-}
-
-.line-chart__point-alert-mark {
-  fill: var(--agentory-color-text-inverse);
-  font-size: 9px;
-  font-weight: var(--agentory-font-weight-black);
-  line-height: 1;
-  pointer-events: none;
+  fill: var(--agentory-color-status-danger-text);
 }
 
 .line-chart__point-group--active .line-chart__point-alert {
-  stroke-width: 3;
+  stroke-width: 2.6;
 }
 
 .line-chart__point-hit {
@@ -762,13 +768,19 @@ watch(
   fill: var(--agentory-color-status-danger);
 }
 
+.line-chart__footer {
+  display: flex;
+  flex: 0 0 auto;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-4) 0;
+}
+
 .line-chart__controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--agentory-spacing-8);
   min-height: 26px;
-  padding: 0 var(--agentory-spacing-4);
+  padding: 0;
 }
 
 .line-chart__range {

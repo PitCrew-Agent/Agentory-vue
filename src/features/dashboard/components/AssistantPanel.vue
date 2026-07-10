@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
+import historyDeleteIcon from '@/assets/icons/dashboard/action-trash.svg'
 import chatBackIcon from '@/assets/icons/dashboard/chat-back.svg'
 import sendIcon from '@/assets/icons/dashboard/send-up.png'
 
@@ -10,6 +11,10 @@ const props = defineProps({
     default: () => [],
   },
   isLoading: {
+    type: Boolean,
+    default: false,
+  },
+  isHistoryLoading: {
     type: Boolean,
     default: false,
   },
@@ -27,7 +32,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-history', 'send-message'])
+const emit = defineEmits(['delete-history', 'select-history', 'send-message'])
 const activePanelView = ref('history')
 const inputMessage = ref('')
 const messageListRef = ref(null)
@@ -359,13 +364,15 @@ function parseAssistantAnswer(text = '') {
       (line, index) => index > 0 && isMarkdownTableSeparator(line),
     )
 
-    if (separatorIndex < 1) {
+    if (!tableLines.length) {
       return null
     }
 
-    const headers = splitMarkdownTableRow(tableLines[separatorIndex - 1])
+    const headerIndex = separatorIndex > 0 ? separatorIndex - 1 : 0
+    const bodyStartIndex = separatorIndex > 0 ? separatorIndex + 1 : 1
+    const headers = splitMarkdownTableRow(tableLines[headerIndex]).filter(Boolean)
     const rows = tableLines
-      .slice(separatorIndex + 1)
+      .slice(bodyStartIndex)
       .map(splitMarkdownTableRow)
       .filter((row) => row.some(Boolean))
       .map((row) => headers.map((_, index) => row[index] ?? ''))
@@ -506,18 +513,25 @@ function selectHistoryItem(item) {
   closeHistoryView()
 }
 
+function deleteHistoryItem(item) {
+  emit('delete-history', item.value)
+}
+
 function submitMessage(message = inputMessage.value) {
   const nextMessage = message.trim()
+  const shouldStartNewSession = isHistoryView.value
 
   if (!nextMessage || props.isLoading) {
     return
   }
 
-  if (isHistoryView.value) {
+  if (shouldStartNewSession) {
     closeHistoryView()
   }
 
-  emit('send-message', nextMessage)
+  emit('send-message', nextMessage, {
+    startNewSession: shouldStartNewSession,
+  })
   inputMessage.value = ''
 }
 
@@ -582,19 +596,40 @@ onBeforeUnmount(() => {
       class="assistant-panel__history"
       data-test="assistant-history"
     >
-      <button
-        v-for="item in historyListItems"
-        :key="item.id"
-        type="button"
-        class="assistant-panel__history-item"
-        @click="selectHistoryItem(item)"
-      >
-        <span class="assistant-panel__history-title">{{ item.title }}</span>
-        <span v-if="item.preview" class="assistant-panel__history-preview">{{ item.preview }}</span>
-        <small v-if="item.meta">{{ item.meta }}</small>
-      </button>
+      <div v-if="isHistoryLoading" class="assistant-panel__history-loading" aria-label="대화 히스토리 불러오는 중">
+        <span v-for="item in 4" :key="`history-loading-${item}`"></span>
+      </div>
 
-      <div v-if="historyListItems.length === 0" class="assistant-panel__history-empty">
+      <template v-else>
+        <div
+          v-for="item in historyListItems"
+          :key="item.id"
+          class="assistant-panel__history-item"
+        >
+          <button
+            type="button"
+            class="assistant-panel__history-select"
+            @click="selectHistoryItem(item)"
+          >
+            <span class="assistant-panel__history-copy">
+              <span class="assistant-panel__history-title">{{ item.title }}</span>
+              <span v-if="item.preview" class="assistant-panel__history-preview">{{ item.preview }}</span>
+            </span>
+            <small v-if="item.meta">{{ item.meta }}</small>
+          </button>
+          <button
+            type="button"
+            class="assistant-panel__history-delete"
+            :aria-label="`${item.title} 대화 삭제`"
+            title="삭제"
+            @click="deleteHistoryItem(item)"
+          >
+            <img :src="historyDeleteIcon" alt="" width="18" height="18" />
+          </button>
+        </div>
+      </template>
+
+      <div v-if="!isHistoryLoading && historyListItems.length === 0" class="assistant-panel__history-empty">
         <strong>저장된 대화가 없습니다.</strong>
       </div>
     </div>
@@ -890,30 +925,112 @@ onBeforeUnmount(() => {
   border-radius: var(--agentory-radius-pill);
 }
 
-.assistant-panel__history-item {
+.assistant-panel__history-loading {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-5);
-  width: 100%;
-  padding: var(--agentory-spacing-12);
-  color: var(--agentory-color-text-primary);
-  background: var(--agentory-color-bg-surface);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 72%);
-  border-radius: var(--agentory-radius-12);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color 180ms var(--agentory-ease-soft),
-    border-color 180ms var(--agentory-ease-soft),
-    transform 220ms var(--agentory-ease-elastic);
+  gap: var(--agentory-spacing-8);
 }
 
-.assistant-panel__history-item:hover,
-.assistant-panel__history-item:focus-visible {
-  background: var(--agentory-color-bg-app);
-  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 66%);
+.assistant-panel__history-loading span {
+  min-height: 64px;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 0%,
+      color-mix(in srgb, var(--agentory-color-border-inverse), transparent 35%) 42%,
+      color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 84%
+    );
+  background-size: 240% 100%;
+  border-radius: var(--agentory-radius-12);
+  animation: assistant-history-loading 1.2s ease-in-out infinite;
+}
+
+.assistant-panel__history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: var(--agentory-spacing-6);
+  width: 100%;
+  padding: 0 var(--agentory-spacing-4) 0 0;
+  color: var(--agentory-color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-5);
+  text-align: left;
+  transition:
+    background-color 180ms var(--agentory-ease-soft),
+    color 180ms var(--agentory-ease-soft);
+}
+
+.assistant-panel__history-item:hover {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 93%);
   outline: none;
-  transform: translateY(-1px);
+}
+
+.assistant-panel__history-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--agentory-spacing-12);
+  min-width: 0;
+  padding: var(--agentory-spacing-12) var(--agentory-spacing-6) var(--agentory-spacing-12)
+    var(--agentory-spacing-10);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.assistant-panel__history-select:focus-visible,
+.assistant-panel__history-delete:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 46%);
+  outline-offset: -2px;
+}
+
+.assistant-panel__history-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-6);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    background-color 180ms var(--agentory-ease-soft),
+    opacity 180ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft);
+}
+
+.assistant-panel__history-item:hover .assistant-panel__history-delete,
+.assistant-panel__history-delete:focus-visible {
+  opacity: 1;
+}
+
+.assistant-panel__history-delete:hover {
+  background: transparent;
+}
+
+.assistant-panel__history-delete:active {
+  transform: scale(0.94);
+}
+
+.assistant-panel__history-delete img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.68;
+}
+
+.assistant-panel__history-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--agentory-spacing-4);
 }
 
 .assistant-panel__history-title,
@@ -938,10 +1055,12 @@ onBeforeUnmount(() => {
 }
 
 .assistant-panel__history-item small {
+  padding-top: var(--agentory-spacing-2);
   color: var(--agentory-color-text-subtle);
   font-size: var(--agentory-font-size-caption);
   font-weight: var(--agentory-font-weight-medium);
   line-height: var(--agentory-line-height-caption);
+  white-space: nowrap;
 }
 
 .assistant-panel__history-empty {
@@ -1665,6 +1784,16 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes assistant-history-loading {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 @keyframes assistant-quick-dot-dance {
   0%,
   100% {
@@ -1691,6 +1820,7 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .assistant-panel__history-loading span,
   .assistant-panel__message,
   .assistant-panel__quick-dots span,
   .assistant-panel__quick-loading-row span,

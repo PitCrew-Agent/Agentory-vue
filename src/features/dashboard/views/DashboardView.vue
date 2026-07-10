@@ -13,7 +13,12 @@ import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue
 import { dashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { createEmptyMetricChart } from '@/features/dashboard/constants/equipmentMetrics'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
-import { streamChatQuery } from '@/features/dashboard/services/chatApi'
+import {
+  deleteChatSession,
+  fetchChatSessionDetail,
+  fetchChatSessions,
+  streamChatQuery,
+} from '@/features/dashboard/services/chatApi'
 import {
   createEmptyEquipment,
   createEmptyFactoryScene,
@@ -27,9 +32,11 @@ const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
+const assistantHistoryItems = ref([])
 const assistantMessages = ref([])
-const assistantSessionId = createAssistantSessionId()
+const assistantSessionId = ref(createAssistantSessionId())
 const isAssistantLoading = ref(false)
+const isAssistantHistoryLoading = ref(false)
 const isQuickCommandsLoading = ref(false)
 const quickCommands = ref([])
 const shouldSkipDashboardApi = import.meta.env.MODE === 'test'
@@ -42,6 +49,7 @@ const factoryScene = reactive({
 })
 const selectedEquipmentId = ref(factoryScene.defaultEquipmentId)
 const selectedMetricId = ref('temperature')
+const isMetricSelectionLockedByUser = ref(false)
 const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
@@ -51,11 +59,13 @@ let factorySceneInterval = 0
 let factorySceneRequestId = 0
 let selectedTelemetryInterval = 0
 let selectedTelemetryRequestId = 0
+let assistantHistoryRequestId = 0
 let assistantSuggestionRequestId = 0
 let assistantSuggestionSignature = ''
 let assistantTypingMessageId = ''
 let assistantTypingQueue = ''
 let assistantTypingTimer = 0
+let lastMetricSyncEquipmentId = ''
 const isContentLoading = ref(true)
 
 const selectedEquipment = computed(
@@ -97,11 +107,29 @@ function getEquipmentFocusMetricId(equipment) {
 }
 
 function syncSelectedMetricWithEquipment(equipment) {
+  const equipmentId = equipment?.id ?? ''
+  const charts = equipment?.charts ?? {}
+  const hasEquipmentChanged = Boolean(equipmentId) && equipmentId !== lastMetricSyncEquipmentId
+
+  if (hasEquipmentChanged) {
+    isMetricSelectionLockedByUser.value = false
+    lastMetricSyncEquipmentId = equipmentId
+  }
+
+  if (isMetricSelectionLockedByUser.value && charts[selectedMetricId.value]) {
+    return
+  }
+
   const nextMetricId = getEquipmentFocusMetricId(equipment)
 
   if (selectedMetricId.value !== nextMetricId) {
     selectedMetricId.value = nextMetricId
   }
+}
+
+function selectMetric(metricId) {
+  isMetricSelectionLockedByUser.value = true
+  selectedMetricId.value = metricId
 }
 
 const widgetOrder = ['factory', 'detail', 'metricChart', 'assistant']
@@ -154,6 +182,106 @@ function createAssistantMessage(role, text, extra = {}) {
     role,
     text,
     ...extra,
+  }
+}
+
+function createAssistantHistoryMessage(message, index) {
+  return {
+    citations: message.citations ?? [],
+    createdAt: message.createdAt || new Date().toISOString(),
+    id: message.id ?? `history-message-${index + 1}`,
+    reasoningSteps: message.reasoningSteps ?? [],
+    role: message.role === 'user' ? 'user' : 'assistant',
+    text: message.text ?? '',
+  }
+}
+
+async function loadAssistantHistoryItems() {
+  if (shouldSkipDashboardApi) {
+    return
+  }
+
+  const requestId = ++assistantHistoryRequestId
+  isAssistantHistoryLoading.value = true
+
+  try {
+    const sessions = await fetchChatSessions()
+
+    if (requestId === assistantHistoryRequestId) {
+      assistantHistoryItems.value = sessions
+    }
+  } catch {
+    if (requestId === assistantHistoryRequestId) {
+      assistantHistoryItems.value = []
+    }
+  } finally {
+    if (requestId === assistantHistoryRequestId) {
+      isAssistantHistoryLoading.value = false
+    }
+  }
+}
+
+async function selectAssistantHistory(history) {
+  const sessionId = history?.sessionId ?? history?.id
+
+  if (!sessionId || isAssistantHistoryLoading.value) {
+    return
+  }
+
+  const requestId = ++assistantHistoryRequestId
+  isAssistantHistoryLoading.value = true
+
+  try {
+    const detail = await fetchChatSessionDetail(sessionId)
+
+    if (requestId !== assistantHistoryRequestId) {
+      return
+    }
+
+    assistantSessionId.value = detail.sessionId || sessionId
+    assistantMessages.value = detail.messages.map(createAssistantHistoryMessage)
+
+    if (detail.equipmentId && factoryScene.equipmentList.some((equipment) => equipment.id === detail.equipmentId)) {
+      selectFactoryEquipment(detail.equipmentId)
+    }
+  } catch {
+    if (requestId === assistantHistoryRequestId) {
+      assistantMessages.value = [
+        createAssistantMessage('assistant', '대화 내용을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.', {
+          tone: 'error',
+        }),
+      ]
+    }
+  } finally {
+    if (requestId === assistantHistoryRequestId) {
+      isAssistantHistoryLoading.value = false
+    }
+  }
+}
+
+async function deleteAssistantHistory(history) {
+  const sessionId = history?.sessionId ?? history?.id
+
+  if (!sessionId || isAssistantHistoryLoading.value) {
+    return
+  }
+
+  isAssistantHistoryLoading.value = true
+
+  try {
+    await deleteChatSession(sessionId)
+    assistantHistoryItems.value = assistantHistoryItems.value.filter(
+      (item) => (item.sessionId ?? item.id) !== sessionId,
+    )
+
+    if (assistantSessionId.value === sessionId) {
+      assistantSessionId.value = createAssistantSessionId()
+      assistantMessages.value = []
+    }
+  } catch {
+    return
+  } finally {
+    isAssistantHistoryLoading.value = false
   }
 }
 
@@ -245,20 +373,11 @@ function createEquipmentSuggestionSignature(equipment) {
     return ''
   }
 
-  return [equipment.id, equipment.status?.tone ?? '', equipment.alarmCode ?? ''].join(':')
+  return equipment.id
 }
 
 function createAssistantRequestMessage(message) {
-  return [
-    message,
-    '',
-    '---',
-    '응답 형식 지시:',
-    '답변은 처음부터 Markdown 섹션으로 작성해줘.',
-    '각 섹션은 `## 핵심 요약`, `## 원인`, `## 권장 조치`, `## 근거`처럼 짧은 제목으로 나눠줘.',
-    '본문은 짧은 문단 또는 `-` 목록을 사용하고, 불필요한 섹션은 생략해줘.',
-    '수치 비교가 필요하면 Markdown 표를 유지해서 작성해줘.',
-  ].join('\n')
+  return message
 }
 
 function applySuggestedQuestions(suggestedQuestions = []) {
@@ -296,11 +415,16 @@ async function loadAssistantSuggestions(equipment) {
   }
 }
 
-async function sendAssistantMessage(message) {
+async function sendAssistantMessage(message, options = {}) {
   const nextMessage = message.trim()
 
   if (!nextMessage || isAssistantLoading.value) {
     return
+  }
+
+  if (options.startNewSession) {
+    assistantSessionId.value = createAssistantSessionId()
+    assistantMessages.value = []
   }
 
   const requestEquipmentId = selectedEquipment.value.id || selectedEquipmentId.value
@@ -366,7 +490,7 @@ async function sendAssistantMessage(message) {
           }))
         }
       },
-      sessionId: assistantSessionId,
+      sessionId: assistantSessionId.value,
     })
 
     if (response.answer && !hasReceivedDelta) {
@@ -395,6 +519,7 @@ async function sendAssistantMessage(message) {
     quickCommands.value = []
   } finally {
     isAssistantLoading.value = false
+    loadAssistantHistoryItems()
     loadAssistantSuggestions(selectedEquipment.value)
   }
 }
@@ -1147,7 +1272,7 @@ async function loadInitialDashboardContent() {
   isContentLoading.value = true
 
   if (!shouldSkipDashboardApi) {
-    await Promise.allSettled([loadFactoryScene(), startAlertToastStream()])
+    await Promise.allSettled([loadFactoryScene(), startAlertToastStream(), loadAssistantHistoryItems()])
     startRealtimePolling()
   }
 
@@ -1258,7 +1383,11 @@ watch(
           @stash="stashWidget('detail')"
           @update:layout="updateWidgetLayout('detail', $event)"
         >
-          <EquipmentDetailPanel v-model:selected-metric-id="selectedMetricId" :equipment="selectedEquipment" />
+          <EquipmentDetailPanel
+            :equipment="selectedEquipment"
+            :selected-metric-id="selectedMetricId"
+            @update:selected-metric-id="selectMetric"
+          />
         </DashboardEditableWidget>
 
         <DashboardEditableWidget
@@ -1287,10 +1416,14 @@ watch(
           @update:layout="updateWidgetLayout('assistant', $event)"
         >
           <AssistantPanel
+            :history-items="assistantHistoryItems"
+            :is-history-loading="isAssistantHistoryLoading"
             :is-loading="isAssistantLoading"
             :is-quick-command-loading="isQuickCommandsLoading"
             :messages="assistantMessages"
             :quick-commands="quickCommands"
+            @delete-history="deleteAssistantHistory"
+            @select-history="selectAssistantHistory"
             @send-message="sendAssistantMessage"
           />
         </DashboardEditableWidget>
