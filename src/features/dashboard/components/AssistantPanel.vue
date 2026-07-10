@@ -1,10 +1,19 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
+import chatBackIcon from '@/assets/icons/dashboard/chat-back.svg'
 import sendIcon from '@/assets/icons/dashboard/send-up.png'
 
 const props = defineProps({
+  historyItems: {
+    type: Array,
+    default: () => [],
+  },
   isLoading: {
+    type: Boolean,
+    default: false,
+  },
+  isQuickCommandLoading: {
     type: Boolean,
     default: false,
   },
@@ -18,11 +27,28 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['send-message'])
+const emit = defineEmits(['select-history', 'send-message'])
+const activePanelView = ref('history')
 const inputMessage = ref('')
 const messageListRef = ref(null)
 const thinkingTextMap = ref({})
 const thinkingTypingTimers = new Map()
+
+const isHistoryView = computed(() => activePanelView.value === 'history')
+
+const historyListItems = computed(() =>
+  props.historyItems.map((item, index) => {
+    const date = createMessageDate(item.updatedAt ?? item.createdAt)
+
+    return {
+      id: item.id ?? `history-${index + 1}`,
+      meta: item.updatedAt || item.createdAt ? `${formatMessageDate(date)} ${formatMessageTime(date)}` : '',
+      preview: item.preview ?? item.lastMessage ?? '',
+      title: item.title ?? item.name ?? `대화 ${index + 1}`,
+      value: item,
+    }
+  }),
+)
 
 const quickCommandItems = computed(() =>
   props.quickCommands.map((command, index) => ({
@@ -30,6 +56,10 @@ const quickCommandItems = computed(() =>
     label: command.label ?? command.message ?? command,
     message: command.message ?? command.label ?? command,
   })),
+)
+
+const shouldShowQuickCommands = computed(
+  () => props.isQuickCommandLoading || quickCommandItems.value.length > 0,
 )
 
 const messageItems = computed(() => {
@@ -462,11 +492,29 @@ function scrollToBottom() {
   })
 }
 
+function openHistoryView() {
+  activePanelView.value = 'history'
+}
+
+function closeHistoryView() {
+  activePanelView.value = 'chat'
+  scrollToBottom()
+}
+
+function selectHistoryItem(item) {
+  emit('select-history', item.value)
+  closeHistoryView()
+}
+
 function submitMessage(message = inputMessage.value) {
   const nextMessage = message.trim()
 
   if (!nextMessage || props.isLoading) {
     return
+  }
+
+  if (isHistoryView.value) {
+    closeHistoryView()
   }
 
   emit('send-message', nextMessage)
@@ -510,13 +558,53 @@ onBeforeUnmount(() => {
 <template>
   <aside class="assistant-panel" aria-labelledby="assistant-panel-title">
     <div class="assistant-panel__header">
-      <h2 id="assistant-panel-title">Tory</h2>
-      <span class="assistant-panel__role">AI 어시스턴트</span>
+      <button
+        v-if="!isHistoryView"
+        type="button"
+        class="assistant-panel__nav-button"
+        aria-label="대화 히스토리 보기"
+        @click="openHistoryView"
+      >
+        <img :src="chatBackIcon" alt="" width="20" height="20" />
+      </button>
+      <div class="assistant-panel__title">
+        <h2 id="assistant-panel-title">Tory</h2>
+        <span class="assistant-panel__role">
+          {{ isHistoryView ? '대화 히스토리' : 'AI 어시스턴트' }}
+        </span>
+      </div>
     </div>
 
     <div class="assistant-panel__divider"></div>
 
-    <div ref="messageListRef" class="assistant-panel__messages" data-test="assistant-messages">
+    <div
+      v-if="isHistoryView"
+      class="assistant-panel__history"
+      data-test="assistant-history"
+    >
+      <button
+        v-for="item in historyListItems"
+        :key="item.id"
+        type="button"
+        class="assistant-panel__history-item"
+        @click="selectHistoryItem(item)"
+      >
+        <span class="assistant-panel__history-title">{{ item.title }}</span>
+        <span v-if="item.preview" class="assistant-panel__history-preview">{{ item.preview }}</span>
+        <small v-if="item.meta">{{ item.meta }}</small>
+      </button>
+
+      <div v-if="historyListItems.length === 0" class="assistant-panel__history-empty">
+        <strong>저장된 대화가 없습니다.</strong>
+      </div>
+    </div>
+
+    <div
+      v-else
+      ref="messageListRef"
+      class="assistant-panel__messages"
+      data-test="assistant-messages"
+    >
       <template v-for="message in messageItems" :key="message.id">
         <time v-if="message.dateLabel" class="assistant-panel__date">{{ message.dateLabel }}</time>
         <article
@@ -629,16 +717,50 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="assistant-panel__composer">
-      <div v-if="quickCommandItems.length > 0" class="assistant-panel__quick" data-test="quick-commands">
-        <span class="assistant-panel__quick-title">추천 대화</span>
-        <button
-          v-for="command in quickCommandItems"
-          :key="command.id"
-          type="button"
-          @click="submitQuickCommand(command)"
+      <div
+        v-if="shouldShowQuickCommands"
+        class="assistant-panel__quick"
+        :class="{ 'assistant-panel__quick--loading': isQuickCommandLoading }"
+        data-test="quick-commands"
+      >
+        <div class="assistant-panel__quick-header">
+          <span class="assistant-panel__quick-title">추천 대화</span>
+          <small
+            v-if="isQuickCommandLoading"
+            class="assistant-panel__quick-dots"
+            aria-label="추천 대화 불러오는 중"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </small>
+        </div>
+        <div
+          v-if="quickCommandItems.length > 0"
+          class="assistant-panel__quick-list"
+          :class="{ 'assistant-panel__quick-list--loading': isQuickCommandLoading }"
         >
-          {{ command.label }}
-        </button>
+          <button
+            v-for="command in quickCommandItems"
+            :key="command.id"
+            type="button"
+            :disabled="isQuickCommandLoading"
+            @click="submitQuickCommand(command)"
+          >
+            <span>{{ command.label }}</span>
+          </button>
+        </div>
+        <div v-else class="assistant-panel__quick-list" aria-hidden="true">
+          <div
+            v-for="item in 3"
+            :key="`quick-loading-${item}`"
+            class="assistant-panel__quick-loading-row"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
       </div>
 
       <div class="assistant-panel__input-row">
@@ -679,11 +801,48 @@ onBeforeUnmount(() => {
   padding: var(--agentory-spacing-20) var(--agentory-spacing-20) var(--agentory-spacing-10);
 }
 
+.assistant-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-8);
+  min-width: 0;
+}
+
 .assistant-panel__header h2 {
   color: var(--agentory-color-bg-primary);
   font-size: var(--agentory-font-size-body-lg);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-body-lg);
+}
+
+.assistant-panel__nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-6);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    opacity 180ms var(--agentory-ease-soft),
+    transform 220ms var(--agentory-ease-elastic);
+}
+
+.assistant-panel__nav-button:hover,
+.assistant-panel__nav-button:focus-visible {
+  opacity: 0.74;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.assistant-panel__nav-button img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .assistant-panel__role {
@@ -698,6 +857,117 @@ onBeforeUnmount(() => {
   height: 2px;
   margin-inline: var(--agentory-spacing-5);
   background: var(--agentory-color-bg-primary);
+}
+
+.assistant-panel__history {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--agentory-spacing-8);
+  min-height: 0;
+  padding: var(--agentory-spacing-16) var(--agentory-spacing-5);
+  overflow-y: auto;
+  scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%) transparent;
+  scrollbar-width: thin;
+}
+
+.assistant-panel__history::-webkit-scrollbar {
+  width: 6px;
+}
+
+.assistant-panel__history::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.assistant-panel__history::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assistant-panel__history::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 60%);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.assistant-panel__history-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--agentory-spacing-5);
+  width: 100%;
+  padding: var(--agentory-spacing-12);
+  color: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 72%);
+  border-radius: var(--agentory-radius-12);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 180ms var(--agentory-ease-soft),
+    border-color 180ms var(--agentory-ease-soft),
+    transform 220ms var(--agentory-ease-elastic);
+}
+
+.assistant-panel__history-item:hover,
+.assistant-panel__history-item:focus-visible {
+  background: var(--agentory-color-bg-app);
+  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 66%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.assistant-panel__history-title,
+.assistant-panel__history-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-panel__history-title {
+  color: var(--agentory-color-text-primary);
+  font-size: var(--agentory-font-size-body);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body);
+}
+
+.assistant-panel__history-preview {
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
+}
+
+.assistant-panel__history-item small {
+  color: var(--agentory-color-text-subtle);
+  font-size: var(--agentory-font-size-caption);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-caption);
+}
+
+.assistant-panel__history-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--agentory-spacing-6);
+  min-height: 150px;
+  color: var(--agentory-color-text-muted);
+  text-align: center;
+}
+
+.assistant-panel__history-empty strong {
+  color: var(--agentory-color-text-primary);
+  font-size: var(--agentory-font-size-body);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body);
+}
+
+.assistant-panel__history-empty span {
+  max-width: 220px;
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
 }
 
 .assistant-panel__messages {
@@ -1175,8 +1445,27 @@ onBeforeUnmount(() => {
 .assistant-panel__quick {
   display: flex;
   flex-direction: column;
-  gap: var(--agentory-spacing-6);
-  padding: var(--agentory-spacing-10) var(--agentory-spacing-10) var(--agentory-spacing-8);
+  gap: var(--agentory-spacing-8);
+  margin: var(--agentory-spacing-10);
+  padding: var(--agentory-spacing-10);
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 94%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
+  border-radius: var(--agentory-radius-12);
+}
+
+.assistant-panel__quick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--agentory-spacing-8);
+}
+
+.assistant-panel__quick-header small {
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-caption);
+  white-space: nowrap;
 }
 
 .assistant-panel__quick-title {
@@ -1186,13 +1475,70 @@ onBeforeUnmount(() => {
   line-height: var(--agentory-line-height-body-sm);
 }
 
+.assistant-panel__quick-dots,
+.assistant-panel__quick-loading-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--agentory-spacing-4);
+}
+
+.assistant-panel__quick-dots {
+  min-width: 28px;
+  height: var(--agentory-line-height-caption);
+}
+
+.assistant-panel__quick-dots span,
+.assistant-panel__quick-loading-row span {
+  width: 5px;
+  height: 5px;
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 28%);
+  border-radius: var(--agentory-radius-pill);
+  animation: assistant-quick-dot-dance 820ms ease-in-out infinite;
+}
+
+.assistant-panel__quick-dots span:nth-child(2),
+.assistant-panel__quick-loading-row span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.assistant-panel__quick-dots span:nth-child(3),
+.assistant-panel__quick-loading-row span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.assistant-panel__quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--agentory-spacing-6);
+}
+
+.assistant-panel__quick-list--loading {
+  filter: blur(1.2px);
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.assistant-panel__quick button:disabled {
+  cursor: progress;
+}
+
+.assistant-panel__quick-loading-row {
+  min-height: 34px;
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 4%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
+  border-radius: var(--agentory-radius-10);
+}
+
 .assistant-panel__quick button {
+  position: relative;
   min-width: 0;
-  padding: var(--agentory-spacing-6) var(--agentory-spacing-8);
+  padding: var(--agentory-spacing-8) var(--agentory-spacing-10) var(--agentory-spacing-8)
+    var(--agentory-spacing-20);
   overflow: hidden;
-  color: var(--agentory-color-bg-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 94%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%);
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 2%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
   border-radius: var(--agentory-radius-10);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-medium);
@@ -1206,9 +1552,29 @@ onBeforeUnmount(() => {
     transform 220ms var(--agentory-ease-elastic);
 }
 
+.assistant-panel__quick button::before {
+  position: absolute;
+  top: 50%;
+  left: var(--agentory-spacing-8);
+  width: 5px;
+  height: 5px;
+  background: var(--agentory-color-bg-primary);
+  border-radius: var(--agentory-radius-pill);
+  content: '';
+  transform: translateY(-50%);
+}
+
+.assistant-panel__quick button span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .assistant-panel__quick button:hover {
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
-  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 70%);
+  color: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-bg-app);
+  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 62%);
   transform: translateY(-1px);
 }
 
@@ -1299,6 +1665,19 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes assistant-quick-dot-dance {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0) scale(0.88);
+  }
+
+  45% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
 @keyframes assistant-stream-caret {
   0%,
   48% {
@@ -1313,6 +1692,8 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .assistant-panel__message,
+  .assistant-panel__quick-dots span,
+  .assistant-panel__quick-loading-row span,
   .assistant-panel__thinking-copy strong,
   .assistant-panel__thinking-status::after,
   .assistant-panel__streaming-text::after,

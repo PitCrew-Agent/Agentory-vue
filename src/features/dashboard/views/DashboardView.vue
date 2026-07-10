@@ -30,6 +30,7 @@ const hasCustomLayout = ref(false)
 const assistantMessages = ref([])
 const assistantSessionId = createAssistantSessionId()
 const isAssistantLoading = ref(false)
+const isQuickCommandsLoading = ref(false)
 const quickCommands = ref([])
 const shouldSkipDashboardApi = import.meta.env.MODE === 'test'
 const initialFactoryScene = createEmptyFactoryScene()
@@ -271,11 +272,12 @@ function applySuggestedQuestions(suggestedQuestions = []) {
 async function loadAssistantSuggestions(equipment) {
   const requestId = ++assistantSuggestionRequestId
 
-  quickCommands.value = []
-
   if (!equipment?.id || shouldSkipDashboardApi || isAssistantLoading.value) {
+    isQuickCommandsLoading.value = false
     return
   }
+
+  isQuickCommandsLoading.value = true
 
   try {
     const suggestions = await fetchEquipmentSuggestions(equipment.id)
@@ -286,6 +288,10 @@ async function loadAssistantSuggestions(equipment) {
   } catch {
     if (requestId === assistantSuggestionRequestId) {
       quickCommands.value = []
+    }
+  } finally {
+    if (requestId === assistantSuggestionRequestId) {
+      isQuickCommandsLoading.value = false
     }
   }
 }
@@ -324,7 +330,7 @@ async function sendAssistantMessage(message) {
   assistantMessages.value = [...assistantMessages.value, createAssistantMessage('user', nextMessage)]
   assistantMessages.value = [...assistantMessages.value, assistantMessage]
   assistantSuggestionRequestId += 1
-  quickCommands.value = []
+  isQuickCommandsLoading.value = false
   isAssistantLoading.value = true
   let hasReceivedDelta = false
 
@@ -1282,6 +1288,7 @@ watch(
         >
           <AssistantPanel
             :is-loading="isAssistantLoading"
+            :is-quick-command-loading="isQuickCommandsLoading"
             :messages="assistantMessages"
             :quick-commands="quickCommands"
             @send-message="sendAssistantMessage"
