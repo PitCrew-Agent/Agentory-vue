@@ -109,7 +109,12 @@ defineExpose({
 
         <div class="dashboard-table-panel__table" role="table" :aria-label="`${group.date} ${title}`">
           <div class="dashboard-table-panel__table-header" role="row">
-            <span v-for="column in columns" :key="column.key" role="columnheader">
+            <span
+              v-for="column in columns"
+              :key="column.key"
+              :class="column.headerClass"
+              role="columnheader"
+            >
               {{ column.label }}
             </span>
           </div>
@@ -143,8 +148,8 @@ defineExpose({
 
 <style scoped>
 .dashboard-table-panel {
-  --dashboard-table-body-inset: var(--agentory-spacing-10);
-  --dashboard-table-content-left: var(--agentory-spacing-60);
+  --dashboard-table-body-inset: 0px;
+  --dashboard-table-content-left: var(--agentory-spacing-20);
   --dashboard-table-content-right: var(--agentory-spacing-20);
 
   display: flex;
@@ -152,12 +157,13 @@ defineExpose({
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: var(--agentory-spacing-20) var(--agentory-spacing-24);
+  padding: var(--agentory-spacing-20);
   flex-direction: column;
-  gap: var(--agentory-spacing-30);
+  gap: var(--agentory-spacing-20);
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-8);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 52%);
   box-shadow: var(--agentory-shadow-panel-soft);
 }
 
@@ -179,10 +185,10 @@ defineExpose({
 }
 
 .dashboard-table-panel__title {
-  color: var(--agentory-color-bg-primary);
-  font-size: var(--agentory-font-size-title);
-  font-weight: var(--agentory-font-weight-bold);
-  line-height: var(--agentory-line-height-title);
+  color: var(--agentory-color-text-primary);
+  font-size: var(--agentory-font-size-h2);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-h2);
   white-space: nowrap;
 }
 
@@ -192,22 +198,39 @@ defineExpose({
   justify-content: center;
   gap: var(--agentory-spacing-10);
   min-height: 30px;
-  padding: var(--agentory-spacing-4) var(--agentory-spacing-14);
+  padding: var(--agentory-spacing-5) var(--agentory-spacing-14);
   color: var(--agentory-color-text-inverse);
   background: var(--agentory-color-bg-primary);
   border: 0;
-  border-radius: var(--agentory-radius-22);
+  border-radius: var(--agentory-radius-8);
   box-shadow: var(--agentory-shadow-control-strong);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-medium);
   line-height: var(--agentory-line-height-body);
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft),
+    box-shadow 180ms var(--agentory-ease-soft);
+}
+
+.dashboard-table-panel__action:hover {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 14%);
+  transform: translateY(-1px);
+}
+
+.dashboard-table-panel__action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 34%);
+  outline-offset: 2px;
 }
 
 .dashboard-table-panel__action-icon {
   width: 19px;
   height: 19px;
   object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.88;
 }
 
 .dashboard-table-panel__content {
@@ -215,10 +238,10 @@ defineExpose({
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: var(--agentory-spacing-40);
+  gap: var(--agentory-spacing-24);
   overflow: auto;
-  padding-right: var(--agentory-spacing-5);
-  scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%) transparent;
+  padding-right: var(--agentory-spacing-4);
+  scrollbar-color: color-mix(in srgb, var(--agentory-color-text-muted), transparent 62%) transparent;
   scrollbar-width: thin;
 }
 
@@ -232,7 +255,7 @@ defineExpose({
 }
 
 .dashboard-table-panel__content::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%);
+  background: color-mix(in srgb, var(--agentory-color-text-muted), transparent 62%);
   border-radius: var(--agentory-radius-pill);
 }
 
@@ -246,29 +269,28 @@ defineExpose({
 .dashboard-table-panel__date-row {
   display: flex;
   align-items: center;
-  gap: var(--agentory-spacing-10);
+  gap: var(--agentory-spacing-8);
   width: 100%;
-  padding: var(--agentory-spacing-20) 0;
+  padding: var(--agentory-spacing-4) 0 var(--agentory-spacing-10);
 }
 
 .dashboard-table-panel__date-line {
-  height: 2px;
+  height: 1px;
   min-width: 0;
-  background: var(--agentory-color-bg-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 24%);
   border-radius: var(--agentory-radius-pill);
   flex: 1;
 }
 
 .dashboard-table-panel__date-line--short {
-  width: 56px;
-  flex: 0 0 56px;
+  display: none;
 }
 
 .dashboard-table-panel__date {
-  color: var(--agentory-color-text-primary);
-  font-size: 22px;
-  font-weight: var(--agentory-font-weight-thin);
-  line-height: 1.2;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body);
   white-space: nowrap;
 }
 
@@ -276,9 +298,9 @@ defineExpose({
   width: 100%;
   min-width: var(--dashboard-table-min-width);
   overflow: hidden;
-  background: var(--agentory-color-bg-primary);
-  border-radius: var(--agentory-radius-16) var(--agentory-radius-16) var(--agentory-radius-5)
-    var(--agentory-radius-5);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), var(--agentory-color-border-inverse) 72%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 36%);
+  border-radius: var(--agentory-radius-8);
 }
 
 .dashboard-table-panel__table-header,
@@ -290,35 +312,49 @@ defineExpose({
 }
 
 .dashboard-table-panel__table-header {
-  min-height: 54px;
-  padding: var(--agentory-spacing-15)
+  min-height: 42px;
+  padding: var(--agentory-spacing-10)
     calc(var(--dashboard-table-content-right) + var(--dashboard-table-body-inset))
-    var(--agentory-spacing-15)
+    var(--agentory-spacing-10)
     calc(var(--dashboard-table-content-left) + var(--dashboard-table-body-inset));
-  color: var(--agentory-color-text-inverse);
-  font-size: var(--agentory-font-size-body);
-  font-weight: var(--agentory-font-weight-bold);
-  line-height: var(--agentory-line-height-body);
+  color: var(--agentory-color-text-muted);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 78%);
+  border-bottom: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 36%);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-sm);
+}
+
+.dashboard-table-panel__header-cell--center {
+  width: 100%;
+  justify-self: center;
+  text-align: center;
 }
 
 .dashboard-table-panel__table-body {
   display: flex;
   flex-direction: column;
-  padding: 0 var(--dashboard-table-body-inset) var(--dashboard-table-body-inset);
+  padding: 0;
 }
 
 .dashboard-table-panel__row {
-  min-height: 84px;
-  padding: var(--agentory-spacing-24) var(--dashboard-table-content-right)
-    var(--agentory-spacing-24) var(--dashboard-table-content-left);
+  min-height: 58px;
+  padding: var(--agentory-spacing-14) var(--dashboard-table-content-right)
+    var(--agentory-spacing-14) var(--dashboard-table-content-left);
   color: var(--agentory-color-text-primary);
-  background: var(--agentory-color-bg-app);
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   font-size: var(--agentory-font-size-body);
   line-height: var(--agentory-line-height-body);
+  transition: background-color 160ms var(--agentory-ease-soft);
 }
 
-.dashboard-table-panel__row:nth-child(even) {
-  background: var(--agentory-color-bg-surface);
+.dashboard-table-panel__row:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-table-panel__row:hover {
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 86%);
 }
 
 .dashboard-table-panel__cell {

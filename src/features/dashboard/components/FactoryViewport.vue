@@ -100,6 +100,7 @@ let selectableObjects = []
 let targetFocus = null
 let labelLayoutSignature = ''
 let lineSceneLoadingTimer = 0
+let overviewAlertFocusTimer = 0
 let hasCompletedInitialOverview = false
 let hasFocusedEquipmentByInteraction = false
 let isLineOverviewFocused = true
@@ -601,6 +602,8 @@ function setFocusForEquipment(equipment, immediate = false) {
     return
   }
 
+  clearOverviewAlertFocusTimer()
+
   const target = new THREE.Vector3(equipment.position.x, 0.78, equipment.position.z)
   const currentOffset = camera.position.clone().sub(controls.target)
   const frontDirection = getEquipmentFrontDirection(equipment)
@@ -618,6 +621,40 @@ function setFocusForEquipment(equipment, immediate = false) {
     controls.update()
     targetFocus = null
   }
+}
+
+function clearOverviewAlertFocusTimer() {
+  window.clearTimeout(overviewAlertFocusTimer)
+  overviewAlertFocusTimer = 0
+}
+
+function scheduleOverviewAlertFocus() {
+  clearOverviewAlertFocusTimer()
+
+  if (!isLineOverviewFocused) {
+    return
+  }
+
+  const targetLineId = selectedLine.value?.id ?? ''
+  const alertEquipment = getPriorityAlertEquipment()
+
+  if (!targetLineId || !alertEquipment) {
+    return
+  }
+
+  overviewAlertFocusTimer = window.setTimeout(() => {
+    overviewAlertFocusTimer = 0
+
+    if (!isLineOverviewFocused || selectedLine.value?.id !== targetLineId) {
+      return
+    }
+
+    const nextAlertEquipment = getPriorityAlertEquipment()
+
+    if (nextAlertEquipment) {
+      selectEquipment(nextAlertEquipment.id)
+    }
+  }, 5000)
 }
 
 function getActiveLineBounds() {
@@ -672,6 +709,7 @@ function setLineOverviewFocus(immediate = false) {
   isLineOverviewFocused = true
   isAlertChecklistOpen.value = false
   targetFocus = overviewState
+  scheduleOverviewAlertFocus()
 
   if (immediate) {
     camera.position.copy(overviewState.camera)
@@ -700,6 +738,7 @@ function selectEquipment(equipmentId, options = {}) {
     return
   }
 
+  clearOverviewAlertFocusTimer()
   currentSelectedEquipmentId.value = equipmentId
   selectedLineId.value = equipment.lineId
   updateSelectionVisuals()
@@ -791,6 +830,11 @@ function focusChangedAlertEquipment() {
 
   if (hasSelectedRecovered) {
     if (priorityAlertEquipment) {
+      if (isLineOverviewFocused) {
+        scheduleOverviewAlertFocus()
+        return
+      }
+
       selectEquipment(priorityAlertEquipment.id)
       return
     }
@@ -800,6 +844,11 @@ function focusChangedAlertEquipment() {
   }
 
   if (!alertEquipment || alertEquipment.id === currentSelectedEquipmentId.value) {
+    return
+  }
+
+  if (isLineOverviewFocused) {
+    scheduleOverviewAlertFocus()
     return
   }
 
@@ -1049,6 +1098,7 @@ function disposeScene() {
   controls?.removeEventListener('start', handleCameraInteractionStart)
   resizeObserver?.disconnect()
   window.clearTimeout(lineSceneLoadingTimer)
+  clearOverviewAlertFocusTimer()
   controls?.dispose()
   clearGroup(equipmentGroup)
   clearGroup(floorGroup)

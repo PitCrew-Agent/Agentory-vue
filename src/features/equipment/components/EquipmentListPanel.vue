@@ -27,7 +27,12 @@ const equipmentColumns = [
   { key: 'equipmentId', label: '장비 ID', cellClass: 'dashboard-table-panel__cell--light' },
   { key: 'name', label: '장비명', cellClass: 'dashboard-table-panel__cell--strong' },
   { key: 'type', label: '유형', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'status', label: '상태' },
+  {
+    key: 'status',
+    label: '상태',
+    cellClass: 'dashboard-table-panel__cell--center',
+    headerClass: 'dashboard-table-panel__header-cell--center',
+  },
   { key: 'temperature', label: '온도', cellClass: 'dashboard-table-panel__cell--strong' },
   { key: 'pressure', label: '압력', cellClass: 'dashboard-table-panel__cell--strong' },
   { key: 'rfPower', label: 'RF 파워', cellClass: 'dashboard-table-panel__cell--strong' },
@@ -149,21 +154,29 @@ function scrollToLine(lineId) {
   gap: var(--agentory-spacing-6);
   min-height: 30px;
   padding: var(--agentory-spacing-4) var(--agentory-spacing-12);
-  color: var(--agentory-color-bg-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  color: var(--agentory-color-text-muted);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 84%);
   border: 0;
-  border-radius: var(--agentory-radius-pill);
+  border-radius: var(--agentory-radius-8);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-medium);
   cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft);
 }
 
 .equipment-list-panel__line-button img {
   width: 18px;
   height: 18px;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(43%) sepia(85%) saturate(2682%) hue-rotate(197deg)
-    brightness(93%) contrast(91%);
+  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg) brightness(96%)
+    contrast(88%);
+}
+
+.equipment-list-panel__line-button:hover {
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 70%);
+  transform: translateY(-1px);
 }
 
 .equipment-list-panel__line-menu {
@@ -179,10 +192,10 @@ function scrollToLine(lineId) {
   gap: var(--agentory-spacing-6);
   overflow: auto;
   background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 58%);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   border-radius: var(--agentory-radius-8);
   box-shadow: var(--agentory-shadow-panel-soft);
-  scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%) transparent;
+  scrollbar-color: color-mix(in srgb, var(--agentory-color-text-muted), transparent 62%) transparent;
   scrollbar-width: thin;
 }
 
@@ -201,11 +214,11 @@ function scrollToLine(lineId) {
 }
 
 .equipment-list-panel__line-item:hover {
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 82%);
 }
 
 .equipment-list-panel__line-item strong {
-  color: var(--agentory-color-bg-primary);
+  color: var(--agentory-color-text-primary);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-bold);
   line-height: var(--agentory-line-height-body);
@@ -240,8 +253,9 @@ function scrollToLine(lineId) {
   z-index: 20;
   inset: 0;
   padding: var(--agentory-spacing-24);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 76%);
+  background: color-mix(in srgb, var(--agentory-color-text-primary), transparent 78%);
   border-radius: var(--agentory-radius-8);
+  backdrop-filter: var(--agentory-blur-glass);
 }
 
 .equipment-structure-modal-enter-from,
