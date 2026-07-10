@@ -13,7 +13,7 @@ function getNotificationToastTone(notification) {
 }
 
 export function useNotificationToast() {
-  const { loadNotifications, startNotificationStream } = useNotificationCenter()
+  const { loadNotifications, primeNotificationStreamCursor, startNotificationStream } = useNotificationCenter()
   const alertToast = ref(null)
   let alertToastTimer = 0
   let stopNotificationStream
@@ -44,7 +44,8 @@ export function useNotificationToast() {
 
   async function startAlertToastStream({ loadInitial = true } = {}) {
     if (loadInitial) {
-      await loadNotifications()
+      await loadNotifications({ unreadOnly: true })
+      await primeNotificationStreamCursor()
     }
 
     stopNotificationStream?.()
