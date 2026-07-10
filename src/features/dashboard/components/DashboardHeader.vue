@@ -5,9 +5,12 @@ import { useRouter } from 'vue-router'
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
 import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
 import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
+import themeMoonIcon from '@/assets/icons/dashboard/theme-moon.svg'
+import themeSunIcon from '@/assets/icons/dashboard/theme-sun.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
 import { useAuthStore } from '@/stores/authStore'
+import { useUiStore } from '@/stores/uiStore'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
 defineProps({
@@ -25,6 +28,7 @@ const statusIconMap = {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const uiStore = useUiStore()
 const { loadNotifications, markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
@@ -44,17 +48,21 @@ function toggleProfilePanel() {
   isNotificationOpen.value = false
 }
 
+function toggleTheme() {
+  uiStore.toggleTheme()
+}
+
 async function handleLogout() {
   await authStore.logout()
   isProfileOpen.value = false
   router.push('/login')
 }
 
-onMounted(() => {
-  authStore.loadCurrentUser()
+onMounted(async () => {
+  await authStore.loadCurrentUser()
 
   if (!shouldSkipHeaderApi) {
-    loadNotifications()
+    loadNotifications({ unreadOnly: true })
   }
 })
 </script>
@@ -145,6 +153,28 @@ onMounted(() => {
         </section>
       </div>
 
+      <button
+        class="dashboard-header__theme-button"
+        type="button"
+        :aria-label="uiStore.isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환'"
+        :aria-pressed="uiStore.isDarkMode"
+        :title="uiStore.isDarkMode ? '라이트 모드' : '다크 모드'"
+        data-test="dashboard-header-theme-toggle"
+        @click="toggleTheme"
+      >
+        <img
+          class="dashboard-header__theme-icon"
+          :src="uiStore.isDarkMode ? themeSunIcon : themeMoonIcon"
+          alt=""
+          width="20"
+          height="20"
+        />
+      </button>
+
+      <span class="dashboard-header__language-indicator" aria-label="한국어와 영어 지원 준비 중">
+        한 / EN
+      </span>
+
       <div class="dashboard-header__profile">
         <button
           class="dashboard-header__user-button"
@@ -174,16 +204,12 @@ onMounted(() => {
 
           <dl class="dashboard-header__profile-list">
             <div>
-              <dt>이름</dt>
-              <dd data-test="dashboard-header-profile-name">{{ currentUser.name || '-' }}</dd>
-            </div>
-            <div>
-              <dt>이메일</dt>
-              <dd data-test="dashboard-header-profile-user-id">{{ currentUser.email || '-' }}</dd>
-            </div>
-            <div>
               <dt>권한</dt>
               <dd data-test="dashboard-header-profile-department">{{ currentUser.role || '-' }}</dd>
+            </div>
+            <div>
+              <dt>담당 라인</dt>
+              <dd>{{ currentUser.assignedLineLabel || '-' }}</dd>
             </div>
             <div>
               <dt>상태</dt>
@@ -311,6 +337,53 @@ onMounted(() => {
 .dashboard-header__notification-button:focus-visible {
   outline: 2px solid var(--agentory-color-border-inverse);
   outline-offset: 2px;
+}
+
+.dashboard-header__theme-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft);
+}
+
+.dashboard-header__theme-button:hover {
+  background: var(--agentory-color-bg-glass-white);
+}
+
+.dashboard-header__theme-button:focus-visible {
+  outline: 2px solid var(--agentory-color-border-inverse);
+  outline-offset: 2px;
+}
+
+.dashboard-header__theme-button:active {
+  transform: scale(0.94);
+}
+
+.dashboard-header__theme-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.dashboard-header__language-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--agentory-spacing-8);
+  color: color-mix(in srgb, var(--agentory-color-text-inverse), transparent 18%);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-sm);
+  white-space: nowrap;
 }
 
 .dashboard-header__notification-icon {
