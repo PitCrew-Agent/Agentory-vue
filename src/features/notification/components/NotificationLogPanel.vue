@@ -1,9 +1,9 @@
 <script setup>
 import { ref } from 'vue'
 
+import refreshIcon from '@/assets/icons/dashboard/refresh.svg'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
-import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 import { notificationReadStatusMap } from '@/constants/notificationStatus'
 
 defineProps({
@@ -11,9 +11,23 @@ defineProps({
     type: Array,
     required: true,
   },
+  isLoading: {
+    type: Boolean,
+    default: false,
+  },
+  pagination: {
+    type: Object,
+    default: () => ({
+      canGoPrevious: false,
+      hasMore: false,
+      pageIndex: 1,
+      totalItems: 0,
+      totalPages: 0,
+    }),
+  },
 })
 
-const { markAllNotificationsRead, setNotificationReadStatus } = useNotificationCenter()
+const emit = defineEmits(['mark-all-read', 'next-page', 'previous-page', 'refresh', 'set-read-status'])
 const tablePanelRef = ref(null)
 const isBulkConfirmOpen = ref(false)
 const activeReadStatusMenuId = ref('')
@@ -31,8 +45,7 @@ const notificationColumns = [
 ]
 
 const readStatusOptions = [
-  { value: 'read', label: '읽음' },
-  { value: 'unread', label: '읽지 않음' },
+  { value: 'read', label: '읽음으로 표시' },
 ]
 
 function getCodeTone(code) {
@@ -59,7 +72,7 @@ function closeBulkConfirm() {
 }
 
 function confirmBulkRead() {
-  markAllNotificationsRead()
+  emit('mark-all-read')
   closeBulkConfirm()
 }
 
@@ -68,7 +81,7 @@ function toggleReadStatusMenu(id) {
 }
 
 function selectReadStatus(id, readStatus) {
-  setNotificationReadStatus(id, readStatus)
+  emit('set-read-status', id, readStatus)
   activeReadStatusMenuId.value = ''
 }
 
@@ -99,6 +112,21 @@ function scrollToDate(date) {
         />
       </template>
 
+      <template #header-actions>
+        <button
+          class="notification-log-panel__refresh"
+          :class="{ 'notification-log-panel__refresh--loading': isLoading }"
+          type="button"
+          :disabled="isLoading"
+          aria-label="알림 이력 최신화"
+          title="최신화"
+          data-test="notification-log-refresh"
+          @click="emit('refresh')"
+        >
+          <img :src="refreshIcon" alt="" width="18" height="18" />
+        </button>
+      </template>
+
       <template #cell-code="{ row }">
         <span class="notification-log-panel__code" :class="`notification-log-panel__code--${getCodeTone(row.code)}`">
           {{ row.code }}
@@ -115,8 +143,9 @@ function scrollToDate(date) {
             class="notification-log-panel__status"
             :class="`notification-log-panel__status--${notificationReadStatusMap[row.readStatus].tone}`"
             type="button"
-            :aria-expanded="activeReadStatusMenuId === row.id"
+            :aria-expanded="row.readStatus === 'unread' && activeReadStatusMenuId === row.id"
             :aria-label="`${notificationReadStatusMap[row.readStatus].label} 상태 선택`"
+            :disabled="row.readStatus === 'read'"
             :data-read-status="row.readStatus"
             :data-test="`notification-read-status-${row.id}`"
             @click="toggleReadStatusMenu(row.id)"
@@ -126,7 +155,7 @@ function scrollToDate(date) {
 
           <Transition name="notification-status-menu">
             <div
-              v-if="activeReadStatusMenuId === row.id"
+              v-if="row.readStatus === 'unread' && activeReadStatusMenuId === row.id"
               class="notification-log-panel__status-menu"
               :data-test="`notification-read-menu-${row.id}`"
             >
@@ -146,6 +175,31 @@ function scrollToDate(date) {
               </button>
             </div>
           </Transition>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="notification-log-panel__pagination" data-test="notification-pagination">
+          <button
+            type="button"
+            :disabled="isLoading || !pagination.canGoPrevious"
+            data-test="notification-pagination-prev"
+            @click="emit('previous-page')"
+          >
+            이전
+          </button>
+          <span>
+            {{ pagination.totalPages ? pagination.pageIndex : 0 }} / {{ pagination.totalPages }}페이지
+            · 총 {{ pagination.totalItems }}건
+          </span>
+          <button
+            type="button"
+            :disabled="isLoading || !pagination.hasMore"
+            data-test="notification-pagination-next"
+            @click="emit('next-page')"
+          >
+            다음
+          </button>
         </div>
       </template>
     </DashboardTablePanel>
@@ -214,6 +268,51 @@ function scrollToDate(date) {
   font-weight: var(--agentory-font-weight-regular);
 }
 
+.notification-log-panel__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-5);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 180ms var(--agentory-ease-soft),
+    opacity 160ms var(--agentory-ease-soft);
+}
+
+.notification-log-panel__refresh:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+}
+
+.notification-log-panel__refresh:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 34%);
+  outline-offset: 2px;
+}
+
+.notification-log-panel__refresh:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.notification-log-panel__refresh img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.notification-log-panel__refresh--loading img {
+  animation: notification-refresh-spin 800ms linear infinite;
+}
+
+.notification-log-panel__refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 :global(.notification-log-panel__status-cell) {
   position: relative;
   overflow: visible;
@@ -251,6 +350,10 @@ function scrollToDate(date) {
 .notification-log-panel__status:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--agentory-color-text-primary), transparent 34%);
   outline-offset: 2px;
+}
+
+.notification-log-panel__status:disabled {
+  cursor: default;
 }
 
 .notification-log-panel__status--read {
@@ -327,6 +430,50 @@ function scrollToDate(date) {
   font-weight: var(--agentory-font-weight-bold);
 }
 
+.notification-log-panel__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--agentory-spacing-8);
+  padding-top: var(--agentory-spacing-4);
+}
+
+.notification-log-panel__pagination span {
+  min-width: 118px;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
+  text-align: center;
+}
+
+.notification-log-panel__pagination button {
+  min-height: 30px;
+  padding: var(--agentory-spacing-5) var(--agentory-spacing-12);
+  color: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 62%);
+  border-radius: var(--agentory-radius-pill);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    border-color 160ms var(--agentory-ease-soft),
+    color 160ms var(--agentory-ease-soft);
+}
+
+.notification-log-panel__pagination button:hover:not(:disabled) {
+  color: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-bg-app);
+  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 62%);
+}
+
+.notification-log-panel__pagination button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
 .notification-log-panel__overlay {
   position: absolute;
   z-index: 10;
@@ -386,5 +533,11 @@ function scrollToDate(date) {
 .notification-log-panel__confirm-button--ghost {
   color: var(--agentory-color-text-primary);
   background: var(--agentory-color-bg-surface);
+}
+
+@keyframes notification-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

@@ -30,26 +30,38 @@ export function getNotificationGroupDate(item) {
 }
 
 export function normalizeNotification(item) {
+  const occurredAt = item.occurred_at ?? item.occurredAt
+
   return {
     code: item.alarm_code ?? item.code,
     equipmentCode: item.equipment_id ?? item.equipmentId,
     equipmentId: item.equipment_id ?? item.equipmentId,
     id: item.id,
-    lineId: '',
+    lineId:
+      item.line_id ??
+      item.lineId ??
+      item.line_code ??
+      item.lineCode ??
+      item.line_name ??
+      item.lineName ??
+      item.line ??
+      '',
     message: item.message,
-    occurredAt: formatDateTime(item.occurred_at ?? item.occurredAt),
+    occurredAt: formatDateTime(occurredAt),
+    occurredDate: formatDate(occurredAt),
     readStatus: normalizeNotificationReadStatus(item.is_read ?? item.isRead),
   }
 }
 
-function groupNotifications(items) {
+export function groupNotificationRows(items) {
   const groupMap = new Map()
 
   items.forEach((item) => {
-    const date = formatDate(item.occurred_at)
+    const row = item.occurredAt ? item : normalizeNotification(item)
+    const date = row.occurredDate || formatDate(row.occurredAt)
     const rows = groupMap.get(date) ?? []
 
-    rows.push(normalizeNotification(item))
+    rows.push(row)
     groupMap.set(date, rows)
   })
 
@@ -62,14 +74,77 @@ function groupNotifications(items) {
     }))
 }
 
-export async function fetchNotificationGroups({ unreadOnly = false } = {}) {
-  const notifications = await http.get('/api/v1/notifications', {
+export async function fetchNotificationPage({ before = '', limit = 10, unreadOnly = false } = {}) {
+  const params = {
+    limit,
+    unread_only: unreadOnly,
+  }
+
+  if (before) {
+    params.before = before
+  }
+
+  const response = await http.get('/api/v1/notifications', {
+    params,
+  })
+  const rawItems = Array.isArray(response) ? response : (response.items ?? [])
+  const items = rawItems.map(normalizeNotification)
+
+  return {
+    groups: groupNotificationRows(items),
+    hasMore: Boolean(response?.has_more),
+    items,
+    nextCursor: response?.next_cursor ?? '',
+  }
+}
+
+export async function fetchAllNotificationItems({ batchSize = 50, unreadOnly = false } = {}) {
+  const items = []
+  const itemIds = new Set()
+  const visitedCursors = new Set()
+  let before = ''
+
+  while (true) {
+    const page = await fetchNotificationPage({
+      before,
+      limit: batchSize,
+      unreadOnly,
+    })
+
+    page.items.forEach((item) => {
+      if (!itemIds.has(item.id)) {
+        itemIds.add(item.id)
+        items.push(item)
+      }
+    })
+
+    if (!page.hasMore || !page.nextCursor || visitedCursors.has(page.nextCursor)) {
+      break
+    }
+
+    visitedCursors.add(page.nextCursor)
+    before = page.nextCursor
+  }
+
+  return items
+}
+
+export async function fetchNotificationGroups(options = {}) {
+  const page = await fetchNotificationPage(options)
+
+  return page.groups
+}
+
+export async function fetchUnreadNotifications({ limit = 10 } = {}) {
+  const response = await http.get('/api/v1/notifications', {
     params: {
-      unread_only: unreadOnly,
+      limit,
+      unread_only: true,
     },
   })
+  const items = Array.isArray(response) ? response : (response.items ?? [])
 
-  return groupNotifications(notifications)
+  return items.map(normalizeNotification)
 }
 
 export function markNotificationReadRequest(notificationId) {

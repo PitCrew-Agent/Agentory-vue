@@ -1,16 +1,33 @@
 import { computed, reactive, ref } from 'vue'
 
 import {
-  fetchNotificationGroups,
+  fetchNotificationPage,
   getNotificationGroupDate,
   markAllNotificationsReadRequest,
   markNotificationReadRequest,
   normalizeNotification,
   subscribeNotificationStream,
 } from '@/features/notification/services/notificationApi'
+import {
+  ensureNotificationLineContext,
+  filterNotificationGroupsByAssignedLines,
+  shouldIncludeAssignedLineNotification,
+} from '@/features/notification/utils/notificationLineFilter'
 
 const notificationGroups = reactive([])
+const notificationPagination = reactive({
+  canGoPrevious: false,
+  cursorStack: [],
+  currentCursor: '',
+  hasMore: false,
+  limit: 10,
+  nextCursor: '',
+  pageIndex: 1,
+  unreadOnly: false,
+})
 const isNotificationLoading = ref(false)
+let latestNotificationId = 0
+const knownNotificationIds = new Set()
 
 const notifications = computed(() =>
   notificationGroups.flatMap((group) =>
@@ -25,29 +42,55 @@ const unreadNotifications = computed(() =>
   notifications.value.filter((notification) => notification.readStatus === 'unread'),
 )
 
+function captureLatestNotificationId(row) {
+  const numericId = Number(row?.id)
+
+  if (Number.isFinite(numericId)) {
+    latestNotificationId = Math.max(latestNotificationId, numericId)
+  }
+}
+
 function replaceNotificationGroups(groups) {
+  const filteredGroups = filterNotificationGroupsByAssignedLines(groups)
+
   notificationGroups.splice(
     0,
     notificationGroups.length,
-    ...groups.map((group) => ({
+    ...filteredGroups.map((group) => ({
       ...group,
       rows: group.rows.map((row) => ({ ...row })),
     })),
   )
+  notificationGroups
+    .flatMap((group) => group.rows)
+    .forEach((row) => {
+      knownNotificationIds.add(row.id)
+      captureLatestNotificationId(row)
+    })
 }
 
 function findNotification(id) {
   return notificationGroups.flatMap((group) => group.rows).find((row) => row.id === id)
 }
 
+function applyNotificationReadStatus(id, readStatus = 'read') {
+  const target = findNotification(id)
+
+  if (target) {
+    target.readStatus = readStatus
+  }
+}
+
+function applyAllNotificationsRead() {
+  notificationGroups.forEach((group) => {
+    group.rows.forEach((row) => {
+      row.readStatus = 'read'
+    })
+  })
+}
+
 function getLatestNotificationId() {
-  return Math.max(
-    0,
-    ...notificationGroups
-      .flatMap((group) => group.rows)
-      .map((row) => Number(row.id))
-      .filter(Number.isFinite),
-  )
+  return latestNotificationId
 }
 
 function sortNotificationGroups() {
@@ -60,9 +103,16 @@ function sortNotificationGroups() {
 function addNotification(rawNotification) {
   const row = normalizeNotification(rawNotification)
 
-  if (!row.id || findNotification(row.id)) {
+  if (!shouldIncludeAssignedLineNotification(row)) {
     return null
   }
+
+  if (!row.id || knownNotificationIds.has(row.id) || findNotification(row.id)) {
+    return null
+  }
+
+  knownNotificationIds.add(row.id)
+  captureLatestNotificationId(row)
 
   const date = getNotificationGroupDate(rawNotification)
   let group = notificationGroups.find((item) => item.date === date)
@@ -86,19 +136,97 @@ function addNotification(rawNotification) {
 }
 
 async function loadNotifications(options) {
+  const shouldResetPagination = options?.reset ?? !options?.before
+  const nextBefore = shouldResetPagination ? '' : (options?.before ?? notificationPagination.currentCursor)
+  const nextLimit = options?.limit ?? notificationPagination.limit
+  const nextUnreadOnly = options?.unreadOnly ?? (shouldResetPagination ? true : notificationPagination.unreadOnly)
+
   isNotificationLoading.value = true
 
   try {
-    const groups = await fetchNotificationGroups(options)
+    await ensureNotificationLineContext()
 
-    replaceNotificationGroups(groups)
-    return groups
+    const page = await fetchNotificationPage({
+      before: nextBefore,
+      limit: nextLimit,
+      unreadOnly: nextUnreadOnly,
+    })
+
+    replaceNotificationGroups(page.groups)
+    notificationPagination.currentCursor = nextBefore
+    notificationPagination.hasMore = page.hasMore
+    notificationPagination.limit = nextLimit
+    notificationPagination.nextCursor = page.nextCursor
+    notificationPagination.unreadOnly = nextUnreadOnly
+
+    if (shouldResetPagination) {
+      notificationPagination.cursorStack = []
+      notificationPagination.pageIndex = 1
+    }
+
+    notificationPagination.canGoPrevious = notificationPagination.cursorStack.length > 0
+
+    return page.groups
   } catch {
     replaceNotificationGroups([])
+    notificationPagination.hasMore = false
+    notificationPagination.nextCursor = ''
+    notificationPagination.canGoPrevious = notificationPagination.cursorStack.length > 0
     return []
   } finally {
     isNotificationLoading.value = false
   }
+}
+
+async function primeNotificationStreamCursor() {
+  try {
+    await ensureNotificationLineContext()
+
+    const page = await fetchNotificationPage({
+      limit: 1,
+      unreadOnly: false,
+    })
+
+    page.items.forEach((row) => {
+      knownNotificationIds.add(row.id)
+      captureLatestNotificationId(row)
+    })
+  } catch {
+    // 스트림 기준점 보정 실패 시 기존 cursor를 유지한다.
+  }
+}
+
+async function loadNextNotificationsPage() {
+  if (!notificationPagination.hasMore || !notificationPagination.nextCursor || isNotificationLoading.value) {
+    return
+  }
+
+  const previousCursor = notificationPagination.currentCursor
+
+  notificationPagination.cursorStack.push(previousCursor)
+  notificationPagination.pageIndex += 1
+  await loadNotifications({
+    before: notificationPagination.nextCursor,
+    limit: notificationPagination.limit,
+    reset: false,
+    unreadOnly: notificationPagination.unreadOnly,
+  })
+}
+
+async function loadPreviousNotificationsPage() {
+  if (!notificationPagination.cursorStack.length || isNotificationLoading.value) {
+    return
+  }
+
+  const previousCursor = notificationPagination.cursorStack.pop()
+
+  notificationPagination.pageIndex = Math.max(1, notificationPagination.pageIndex - 1)
+  await loadNotifications({
+    before: previousCursor,
+    limit: notificationPagination.limit,
+    reset: false,
+    unreadOnly: notificationPagination.unreadOnly,
+  })
 }
 
 async function setNotificationReadStatus(id, readStatus) {
@@ -113,7 +241,7 @@ async function setNotificationReadStatus(id, readStatus) {
       }
     }
 
-    target.readStatus = readStatus
+    applyNotificationReadStatus(id, readStatus)
   }
 }
 
@@ -136,11 +264,7 @@ async function markAllNotificationsRead() {
     return
   }
 
-  notificationGroups.forEach((group) => {
-    group.rows.forEach((row) => {
-      row.readStatus = 'read'
-    })
-  })
+  applyAllNotificationsRead()
 }
 
 function startNotificationStream({ onNotification } = {}) {
@@ -159,12 +283,18 @@ function startNotificationStream({ onNotification } = {}) {
 export function useNotificationCenter() {
   return {
     addNotification,
+    applyAllNotificationsRead,
+    applyNotificationReadStatus,
     isNotificationLoading,
     loadNotifications,
+    loadNextNotificationsPage,
+    loadPreviousNotificationsPage,
     markAllNotificationsRead,
     markNotificationRead,
     notificationGroups,
+    notificationPagination,
     notifications,
+    primeNotificationStreamCursor,
     setNotificationReadStatus,
     startNotificationStream,
     toggleNotificationReadStatus,
