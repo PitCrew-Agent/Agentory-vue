@@ -401,8 +401,9 @@ onBeforeUnmount(() => {
 
 .dashboard-widget__content :deep(.assistant-panel__header),
 .dashboard-widget__content :deep(.chart-panel__section-header),
+.dashboard-widget__content :deep(.detail-panel__section-header),
 .dashboard-widget__content :deep(.checklist-panel__header),
-.dashboard-widget__content :deep(.detail-panel__section-header) {
+.dashboard-widget__content :deep(.dashboard-data-panel__header) {
   padding-left: 29px;
   box-sizing: border-box;
 }

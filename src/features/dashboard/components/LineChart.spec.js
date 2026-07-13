@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 
 import LineChart from '@/features/dashboard/components/LineChart.vue'
 
@@ -30,39 +31,46 @@ const rfPowerChart = {
   unit: 'kW',
 }
 
+function mountLineChart(chartData) {
+  return mount(LineChart, {
+    props: { chart: chartData },
+    global: {
+      plugins: [createPinia()],
+      stubs: {
+        ChartCanvas: {
+          name: 'ChartCanvas',
+          props: ['data', 'options', 'type'],
+          template: '<div data-test="chart-canvas-stub"></div>',
+        },
+      },
+    },
+  })
+}
+
 describe('LineChart', () => {
-  it('renders warning and danger points at chart coordinates', () => {
-    const wrapper = mount(LineChart, {
-      props: { chart },
-    })
-    const alertPoints = wrapper.findAll('.line-chart__point-alert')
+  it('passes status point styles to Chart.js', () => {
+    const wrapper = mountLineChart(chart)
+    const chartCanvas = wrapper.findComponent({ name: 'ChartCanvas' })
+    const metricDataset = chartCanvas.props('data').datasets[0]
 
-    expect(alertPoints).toHaveLength(2)
-    expect(alertPoints[0].attributes('cx')).not.toBeUndefined()
-    expect(alertPoints[0].attributes('cy')).not.toBeUndefined()
-    expect(alertPoints[0].classes()).toContain('line-chart__point-alert--warning')
-    expect(alertPoints[1].classes()).toContain('line-chart__point-alert--danger')
+    expect(chartCanvas.props('type')).toBe('line')
+    expect(metricDataset.pointStyle).toEqual(['circle', 'triangle', 'rectRot'])
   })
 
-  it('renders rail controls and aligns vertical grid lines to chart points', () => {
-    const wrapper = mount(LineChart, {
-      props: { chart },
-    })
-    const verticalGridLines = wrapper
-      .findAll('.line-chart__grid line')
-      .filter((line) => line.attributes('x1') === line.attributes('x2'))
+  it('provides Chart.js threshold datasets and streaming controls', () => {
+    const wrapper = mountLineChart(chart)
+    const datasets = wrapper.findComponent({ name: 'ChartCanvas' }).props('data').datasets
 
-    expect(wrapper.find('.line-chart__footer').exists()).toBe(true)
-    expect(verticalGridLines).toHaveLength(chart.points.length)
+    expect(datasets.filter((dataset) => dataset.kind === 'threshold')).toHaveLength(4)
+    expect(wrapper.find('input[type="range"]').exists()).toBe(true)
+    expect(wrapper.find('.line-chart__live').text()).toBe('LIVE')
   })
 
-  it('uses the actual decimal value range for RF power charts', () => {
-    const wrapper = mount(LineChart, {
-      props: { chart: rfPowerChart },
-    })
-    const pointY = Number(wrapper.find('.line-chart__point').attributes('cy'))
+  it('uses the actual RF power range for the Chart.js y axis', () => {
+    const wrapper = mountLineChart(rfPowerChart)
+    const options = wrapper.findComponent({ name: 'ChartCanvas' }).props('options')
 
-    expect(pointY).toBeGreaterThan(120)
-    expect(pointY).toBeLessThan(150)
+    expect(options.scales.y.min).toBe(2.45)
+    expect(options.scales.y.max).toBe(3.05)
   })
 })

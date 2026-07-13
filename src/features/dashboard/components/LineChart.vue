@@ -1,6 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import ChartCanvas from '@/features/dashboard/components/ChartCanvas.vue'
+import { readChartToken } from '@/features/dashboard/utils/chartTheme'
+import { useUiStore } from '@/stores/uiStore'
+
 const props = defineProps({
   chart: {
     type: Object,
@@ -8,357 +12,304 @@ const props = defineProps({
   },
 })
 
-const activePointKey = ref('')
+const uiStore = useUiStore()
 const chartRef = ref(null)
 const chartWidth = ref(0)
-const dragStartOffset = ref(0)
-const dragStartX = ref(0)
-const isDraggingChart = ref(false)
-const isDraggingRange = ref(false)
-const renderedChartPoints = ref([])
-const windowOffset = ref(0)
-let activePointerId = null
-let chartAnimationFrame = 0
-let measureAnimationFrame = 0
+const rangeStart = ref(0)
+const isFollowingLive = ref(true)
+const renderedPoints = ref([])
 let chartResizeObserver
-
-const svgWidth = 520
-const svgHeight = 260
-const padding = {
-  top: 4,
-  right: 94,
-  bottom: 18,
-  left: 50,
-}
-
-const plotWidth = svgWidth - padding.left - padding.right
-const plotHeight = svgHeight - padding.top - padding.bottom
+let renderedChartIdentity = ''
 
 const visiblePointCount = computed(() => {
-  const maxPointCount = props.chart.points.length
-  const responsiveExtraCount = Math.floor(Math.max(chartWidth.value - 280, 0) / 42)
+  const pointCount = props.chart.points.length
+  const responsiveCount = Math.max(12, Math.floor((chartWidth.value || 520) / 34))
 
-  return Math.min(maxPointCount, Math.max(10, 12 + responsiveExtraCount))
+  return Math.min(pointCount, responsiveCount)
 })
 
-const maxWindowOffset = computed(() => Math.max(props.chart.points.length - visiblePointCount.value, 0))
-const shouldShowRangeControls = computed(() => props.chart.points.length > 1)
-
-const visibleStartIndex = computed(() =>
-  Math.max(props.chart.points.length - visiblePointCount.value - windowOffset.value, 0),
+const maxRangeStart = computed(() =>
+  Math.max(props.chart.points.length - visiblePointCount.value, 0),
 )
 
-const visibleEndIndex = computed(() => visibleStartIndex.value + visiblePointCount.value)
+function getPointCoordinate(point, index) {
+  const timestamp = Date.parse(point.timestamp)
 
-const visiblePoints = computed(() =>
-  props.chart.points.slice(visibleStartIndex.value, visibleEndIndex.value),
-)
-
-const valueRange = computed(() => {
-  const range = props.chart.max - props.chart.min
-
-  return Number.isFinite(range) && range > 0 ? range : 1
-})
-
-const chartPoints = computed(() =>
-  visiblePoints.value.map((point, index) => {
-    const sourceIndex = visibleStartIndex.value + index
-    const x = snapCoordinate(
-      padding.left +
-        (visiblePoints.value.length === 1 ? 0 : (plotWidth / (visiblePoints.value.length - 1)) * index),
-    )
-    const y = snapCoordinate(
-      padding.top +
-        plotHeight -
-        ((point.value - props.chart.min) / valueRange.value) * plotHeight,
-    )
-
-    return {
-      ...point,
-      key: point.timestamp ? `${point.timestamp}` : `${point.time}-${sourceIndex}`,
-      sourceIndex,
-      x,
-      y,
-    }
-  }),
-)
-
-const linePoints = computed(() =>
-  renderedChartPoints.value.map((point) => `${point.x},${point.y}`).join(' '),
-)
-
-const yAxisLabels = computed(() => {
-  const steps = [props.chart.max, props.chart.max - valueRange.value / 2, props.chart.min]
-  const precision = props.chart.precision ?? 1
-
-  return steps.map((value) => ({
-    label: value.toFixed(precision),
-    y: snapCoordinate(padding.top + ((props.chart.max - value) / valueRange.value) * plotHeight),
-  }))
-})
-
-const horizontalGridLines = computed(() =>
-  Array.from({ length: 5 }, (_, index) => ({
-    y: snapCoordinate(padding.top + (plotHeight / 4) * index),
-  })),
-)
-
-const verticalGridLines = computed(() =>
-  renderedChartPoints.value.map((point) => ({
-    key: point.key,
-    x: point.x,
-  })),
-)
-
-const thresholdLines = computed(() => {
-  const thresholds = props.chart.thresholds ?? {}
-  const lineItems = [
-    { id: 'usl', label: '위험 상한', tone: 'danger', value: thresholds.usl },
-    { id: 'ucl', label: '주의 상한', tone: 'warning', value: thresholds.ucl },
-    { id: 'lcl', label: '주의 하한', tone: 'warning', value: thresholds.lcl },
-    { id: 'lsl', label: '위험 하한', tone: 'danger', value: thresholds.lsl },
-  ]
-
-  return lineItems
-    .filter((line) => Number.isFinite(line.value))
-    .map((line) => {
-      const y = snapCoordinate(padding.top + ((props.chart.max - line.value) / valueRange.value) * plotHeight)
-
-      return {
-        ...line,
-        labelText: `${line.label} ${formatPointValue(line.value)}`,
-        labelY: clamp(y - 5, padding.top + 9, padding.top + plotHeight - 5),
-        y,
-      }
-    })
-})
-
-const selectedPoint = computed(() =>
-  renderedChartPoints.value.find((point) => point.key === activePointKey.value),
-)
-
-const selectedPointTooltip = computed(() => {
-  if (!selectedPoint.value) {
-    return null
-  }
-
-  const tooltipWidth = 150
-  const tooltipHeight = selectedPoint.value.statusTone === 'normal' ? 52 : 70
-
-  return {
-    ...selectedPoint.value,
-    height: tooltipHeight,
-    valueLabel: `${formatPointValue(selectedPoint.value.value)}${props.chart.unit ?? ''}`,
-    x: clamp(selectedPoint.value.x - tooltipWidth / 2, padding.left, svgWidth - padding.right - tooltipWidth),
-    y: Math.max(selectedPoint.value.y - tooltipHeight - 16, padding.top),
-    width: tooltipWidth,
-  }
-})
-
-const renderedXAxisLabels = computed(() => {
-  const points = renderedChartPoints.value
-  const lastIndex = points.length - 1
-  const step = Math.max(1, Math.ceil(points.length / 6))
-
-  return points.filter((_, index) => index === 0 || index === lastIndex || index % step === 0)
-})
-
-const rangeWindowStyle = computed(() => {
-  const totalPointCount = props.chart.points.length
-
-  if (!totalPointCount || maxWindowOffset.value <= 0) {
-    return {
-      left: '0%',
-      width: '100%',
-    }
-  }
-
-  const left = (visibleStartIndex.value / totalPointCount) * 100
-  const width = (visiblePointCount.value / totalPointCount) * 100
-
-  return {
-    left: `${clamp(left, 0, 100)}%`,
-    width: `${clamp(width, 10, 100)}%`,
-  }
-})
-
-const isLiveWindow = computed(() => windowOffset.value === 0)
-
-function measureChartWidth() {
-  chartWidth.value = chartRef.value?.getBoundingClientRect().width ?? 0
+  return Number.isFinite(timestamp) ? timestamp : index
 }
+
+const targetVisiblePoints = computed(() =>
+  props.chart.points
+    .slice(rangeStart.value, rangeStart.value + visiblePointCount.value)
+    .map((point, index) => ({
+      ...point,
+      sourceIndex: getPointCoordinate(point, rangeStart.value + index),
+    })),
+)
+
+const visiblePoints = computed(() => renderedPoints.value)
+
+const isLive = computed(
+  () => isFollowingLive.value && rangeStart.value === maxRangeStart.value,
+)
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
-function snapCoordinate(value) {
-  return Math.round(value * 2) / 2
-}
-
-function prefersReducedMotion() {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-}
-
-function easeOutCubic(progress) {
-  return 1 - Math.pow(1 - progress, 3)
-}
-
-function setRenderedChartPoints(points) {
-  renderedChartPoints.value = points.map((point) => ({ ...point }))
-}
-
-function animateRenderedChartPoints(nextPoints) {
-  window.cancelAnimationFrame(chartAnimationFrame)
-
-  if (
-    !nextPoints.length ||
-    !renderedChartPoints.value.length ||
-    isDraggingChart.value ||
-    prefersReducedMotion()
-  ) {
-    setRenderedChartPoints(nextPoints)
-    return
-  }
-
-  const fromPoints = renderedChartPoints.value.map((point) => ({ ...point }))
-  const fromPointMap = new Map(fromPoints.map((point) => [point.key, point]))
-  const startedAt = performance.now()
-  const duration = 560
-
-  function tick(now) {
-    const progress = clamp((now - startedAt) / duration, 0, 1)
-    const easedProgress = easeOutCubic(progress)
-
-    renderedChartPoints.value = nextPoints.map((point, index) => {
-      const matchedPoint = fromPointMap.get(point.key)
-      const fromPoint =
-        matchedPoint ??
-        fromPoints[Math.min(index, fromPoints.length - 1)] ??
-        fromPoints.at(-1) ??
-        point
-
-      return {
-        ...point,
-        x: fromPoint.x + (point.x - fromPoint.x) * easedProgress,
-        y: fromPoint.y + (point.y - fromPoint.y) * easedProgress,
-      }
-    })
-
-    if (progress < 1) {
-      chartAnimationFrame = window.requestAnimationFrame(tick)
-    }
-  }
-
-  chartAnimationFrame = window.requestAnimationFrame(tick)
-}
-
-function getDragStep() {
-  const pointCount = Math.max(visiblePointCount.value - 1, 1)
-
-  return Math.max((chartWidth.value || svgWidth) / pointCount, 18)
-}
-
-function handleChartPointerDown(event) {
-  if (event.button !== 0 || maxWindowOffset.value <= 0) {
-    return
-  }
-
-  activePointerId = event.pointerId
-  dragStartX.value = event.clientX
-  dragStartOffset.value = windowOffset.value
-  isDraggingChart.value = true
-  event.currentTarget.setPointerCapture?.(event.pointerId)
-  event.preventDefault()
-}
-
-function handleChartPointerMove(event) {
-  if (!isDraggingChart.value) {
-    return
-  }
-
-  const deltaX = event.clientX - dragStartX.value
-  const nextOffset = Math.round(dragStartOffset.value + deltaX / getDragStep())
-
-  windowOffset.value = clamp(nextOffset, 0, maxWindowOffset.value)
-}
-
-function updateWindowOffsetFromRangeEvent(event) {
-  if (maxWindowOffset.value <= 0) {
-    return
-  }
-
-  const rect = event.currentTarget.getBoundingClientRect()
-  const ratio = rect.width ? clamp((event.clientX - rect.left) / rect.width, 0, 1) : 1
-  const targetStartIndex = Math.round(maxWindowOffset.value * ratio)
-
-  windowOffset.value = clamp(maxWindowOffset.value - targetStartIndex, 0, maxWindowOffset.value)
-}
-
-function handleRangePointerDown(event) {
-  isDraggingRange.value = true
-  updateWindowOffsetFromRangeEvent(event)
-  event.currentTarget.setPointerCapture?.(event.pointerId)
-  event.preventDefault()
-}
-
-function handleRangePointerMove(event) {
-  if (!isDraggingRange.value) {
-    return
-  }
-
-  updateWindowOffsetFromRangeEvent(event)
-}
-
-function finishRangeDrag(event) {
-  if (!isDraggingRange.value) {
-    return
-  }
-
-  isDraggingRange.value = false
-  event.currentTarget.releasePointerCapture?.(event.pointerId)
-}
-
-function returnToLive() {
-  windowOffset.value = 0
-}
-
-function finishChartDrag(event) {
-  if (!isDraggingChart.value) {
-    return
-  }
-
-  isDraggingChart.value = false
-  event.currentTarget.releasePointerCapture?.(activePointerId)
-  activePointerId = null
-}
-
-function formatPointValue(value) {
+function formatValue(value) {
+  const numericValue = Number(value)
   const precision = props.chart.precision ?? 1
-  const numberValue = Number(value)
 
-  if (!Number.isFinite(numberValue)) {
+  if (!Number.isFinite(numericValue)) {
     return '-'
   }
 
-  return precision === 0 ? `${Math.round(numberValue)}` : numberValue.toFixed(precision)
+  return precision === 0 ? `${Math.round(numericValue)}` : numericValue.toFixed(precision)
 }
 
-function shouldRenderRegularPoint(point, index) {
-  return (
-    renderedChartPoints.value.length <= 12 ||
-    point.key === activePointKey.value ||
-    index === renderedChartPoints.value.length - 1
-  )
+function getPointStyle(point) {
+  if (point.statusTone === 'warning') {
+    return 'triangle'
+  }
+
+  if (point.statusTone === 'danger') {
+    return 'rectRot'
+  }
+
+  return 'circle'
 }
 
-function selectChartPoint(point) {
-  activePointKey.value = activePointKey.value === point.key ? '' : point.key
+function getPointRadius(point, index, pointCount) {
+  if (['warning', 'danger'].includes(point.statusTone)) {
+    return 5
+  }
+
+  return index === pointCount - 1 ? 4 : 2.5
+}
+
+function createThresholdDataset({ color, label, showInLegend, value }) {
+  if (!Number.isFinite(value)) {
+    return null
+  }
+
+  return {
+    borderColor: color,
+    borderDash: [6, 5],
+    borderWidth: 1.2,
+    data: visiblePoints.value.map((point) => ({ x: point.sourceIndex, y: value })),
+    fill: false,
+    kind: 'threshold',
+    label,
+    order: 2,
+    pointRadius: 0,
+    showInLegend,
+  }
+}
+
+const chartData = computed(() => {
+  uiStore.currentTheme
+
+  const primaryColor = readChartToken('--agentory-color-bg-primary', '#237ce2')
+  const surfaceColor = readChartToken('--agentory-color-bg-app', '#f8f9f6')
+  const warningColor = readChartToken('--agentory-color-status-warning', '#f4c300')
+  const dangerColor = readChartToken('--agentory-color-status-danger-text', '#ef4444')
+  const points = visiblePoints.value
+  const thresholds = props.chart.thresholds ?? {}
+  const mainDataset = {
+    borderColor: primaryColor,
+    borderWidth: 2,
+    data: points.map((point) => ({ x: point.sourceIndex, y: point.value })),
+    fill: false,
+    kind: 'metric',
+    label: '실시간 측정값',
+    order: 1,
+    pointBackgroundColor: points.map((point) => {
+      if (point.statusTone === 'warning') {
+        return warningColor
+      }
+
+      if (point.statusTone === 'danger') {
+        return dangerColor
+      }
+
+      return primaryColor
+    }),
+    pointBorderColor: points.map(() => surfaceColor),
+    pointBorderWidth: points.map((point) =>
+      ['warning', 'danger'].includes(point.statusTone) ? 2 : 1,
+    ),
+    pointHoverRadius: points.map((point, index) => getPointRadius(point, index, points.length) + 2),
+    pointRadius: points.map((point, index) => getPointRadius(point, index, points.length)),
+    pointStyle: points.map(getPointStyle),
+    tension: 0.28,
+  }
+  const thresholdDatasets = [
+    createThresholdDataset({
+      color: dangerColor,
+      label: '위험 기준',
+      showInLegend: true,
+      value: thresholds.usl,
+    }),
+    createThresholdDataset({
+      color: dangerColor,
+      label: '위험 하한',
+      showInLegend: false,
+      value: thresholds.lsl,
+    }),
+    createThresholdDataset({
+      color: warningColor,
+      label: '주의 기준',
+      showInLegend: true,
+      value: thresholds.ucl,
+    }),
+    createThresholdDataset({
+      color: warningColor,
+      label: '주의 하한',
+      showInLegend: false,
+      value: thresholds.lcl,
+    }),
+  ].filter(Boolean)
+
+  return {
+    datasets: [mainDataset, ...thresholdDatasets],
+  }
+})
+
+const chartOptions = computed(() => {
+  uiStore.currentTheme
+
+  const fontFamily = readChartToken('--agentory-font-family-base', 'sans-serif')
+  const gridColor = readChartToken('--agentory-color-chart-grid', 'rgba(125, 125, 125, 0.18)')
+  const mutedColor = readChartToken('--agentory-color-text-muted', '#7d7d7d')
+  const textColor = readChartToken('--agentory-color-text-primary', '#323232')
+
+  return {
+    animations: {
+      colors: {
+        duration: 0,
+      },
+      radius: {
+        duration: 0,
+      },
+      x: {
+        duration: isFollowingLive.value ? 1400 : 220,
+        easing: 'easeInOutCubic',
+      },
+      y: {
+        duration: isFollowingLive.value ? 900 : 180,
+        easing: 'easeOutCubic',
+      },
+    },
+    interaction: {
+      intersect: false,
+      mode: 'index',
+    },
+    layout: {
+      padding: { bottom: 0, left: 2, right: 6, top: 2 },
+    },
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        align: 'end',
+        labels: {
+          boxHeight: 8,
+          boxWidth: 8,
+          color: mutedColor,
+          filter(item, data) {
+            return data.datasets[item.datasetIndex]?.showInLegend !== false
+          },
+          font: { family: fontFamily, size: 11 },
+          padding: 12,
+          usePointStyle: true,
+        },
+        position: 'top',
+      },
+      tooltip: {
+        callbacks: {
+          afterLabel(context) {
+            const point = visiblePoints.value[context.dataIndex]
+
+            if (!point || point.statusTone === 'normal') {
+              return ''
+            }
+
+            return [point.statusLabel, point.alarmCode].filter(Boolean).join(' · ')
+          },
+          label(context) {
+            return `${formatValue(context.parsed.y)} ${props.chart.unit ?? ''}`.trim()
+          },
+          title([context]) {
+            return visiblePoints.value[context?.dataIndex]?.time ?? ''
+          },
+        },
+        filter(context) {
+          return context.dataset.kind === 'metric'
+        },
+      },
+    },
+    responsive: true,
+    scales: {
+      x: {
+        border: { display: false },
+        grid: { color: gridColor },
+        max: targetVisiblePoints.value.at(-1)?.sourceIndex ?? 1,
+        min: targetVisiblePoints.value[0]?.sourceIndex ?? 0,
+        type: 'linear',
+        ticks: {
+          callback(value) {
+            return targetVisiblePoints.value.reduce((nearestPoint, point) => {
+              if (!nearestPoint) {
+                return point
+              }
+
+              return Math.abs(point.sourceIndex - value) < Math.abs(nearestPoint.sourceIndex - value)
+                ? point
+                : nearestPoint
+            }, null)?.time ?? ''
+          },
+          color: mutedColor,
+          font: { family: fontFamily, size: 11 },
+          maxRotation: 0,
+          maxTicksLimit: 7,
+          padding: 6,
+        },
+      },
+      y: {
+        border: { display: false },
+        grid: { color: gridColor },
+        max: props.chart.max,
+        min: props.chart.min,
+        ticks: {
+          callback: (value) => formatValue(value),
+          color: textColor,
+          font: { family: fontFamily, size: 11 },
+          maxTicksLimit: 6,
+          padding: 6,
+        },
+      },
+    },
+  }
+})
+
+function measureChartWidth() {
+  chartWidth.value = chartRef.value?.getBoundingClientRect().width ?? 0
+}
+
+function handleRangeInput(event) {
+  rangeStart.value = clamp(Number(event.target.value), 0, maxRangeStart.value)
+  isFollowingLive.value = rangeStart.value === maxRangeStart.value
+}
+
+function returnToLive() {
+  isFollowingLive.value = true
+  rangeStart.value = maxRangeStart.value
 }
 
 onMounted(() => {
+  measureChartWidth()
+
   if (typeof ResizeObserver === 'undefined' || !chartRef.value) {
-    measureChartWidth()
     return
   }
 
@@ -366,233 +317,116 @@ onMounted(() => {
     chartWidth.value = entry.contentRect.width
   })
   chartResizeObserver.observe(chartRef.value)
-  measureChartWidth()
-  measureAnimationFrame = window.requestAnimationFrame(measureChartWidth)
 })
 
 onBeforeUnmount(() => {
   chartResizeObserver?.disconnect()
-  window.cancelAnimationFrame(chartAnimationFrame)
-  window.cancelAnimationFrame(measureAnimationFrame)
 })
 
 watch(
-  maxWindowOffset,
-  (nextMaxOffset) => {
-    windowOffset.value = clamp(windowOffset.value, 0, nextMaxOffset)
+  maxRangeStart,
+  (nextMaxRangeStart) => {
+    if (isFollowingLive.value) {
+      rangeStart.value = nextMaxRangeStart
+      return
+    }
+
+    rangeStart.value = clamp(rangeStart.value, 0, nextMaxRangeStart)
   },
   { immediate: true },
 )
 
 watch(
-  chartPoints,
+  targetVisiblePoints,
   (nextPoints) => {
-    if (activePointKey.value && !nextPoints.some((point) => point.key === activePointKey.value)) {
-      activePointKey.value = ''
+    const chartIdentity = `${props.chart.title}:${props.chart.unit ?? ''}`
+    const previousPoints = renderedPoints.value
+    const previousLastPoint = previousPoints.at(-1)
+    const nextLastPoint = nextPoints.at(-1)
+    const isSameChart = renderedChartIdentity === chartIdentity
+    const hasLiveTransitionBuffer =
+      isFollowingLive.value &&
+      isSameChart &&
+      previousPoints.length > nextPoints.length &&
+      previousLastPoint?.timestamp === nextLastPoint?.timestamp
+    const isNewLivePoint =
+      isFollowingLive.value &&
+      isSameChart &&
+      previousPoints.length > 0 &&
+      nextPoints.length > 0 &&
+      previousLastPoint?.timestamp !== nextLastPoint?.timestamp &&
+      nextPoints[0].sourceIndex > (previousPoints[0]?.sourceIndex ?? -1)
+
+    renderedChartIdentity = chartIdentity
+
+    if (hasLiveTransitionBuffer) {
+      const bufferedPointMap = new Map(
+        [...previousPoints, ...nextPoints].map((point) => [
+          point.timestamp || `${point.sourceIndex}`,
+          point,
+        ]),
+      )
+
+      renderedPoints.value = [...bufferedPointMap.values()].toSorted(
+        (first, second) => first.sourceIndex - second.sourceIndex,
+      )
+      return
     }
 
-    animateRenderedChartPoints(nextPoints)
+    if (!isNewLivePoint) {
+      renderedPoints.value = nextPoints
+      return
+    }
+
+    const firstVisibleCoordinate = nextPoints[0]?.sourceIndex ?? 0
+    const previousLeadingPoint = previousPoints
+      .filter((point) => point.sourceIndex < firstVisibleCoordinate)
+      .at(-1)
+    const transitionPointMap = new Map(
+      [
+        previousLeadingPoint,
+        ...previousPoints.filter((point) => point.sourceIndex >= firstVisibleCoordinate),
+        ...nextPoints,
+      ]
+        .filter(Boolean)
+        .map((point) => [point.timestamp || `${point.sourceIndex}`, point]),
+    )
+
+    renderedPoints.value = [...transitionPointMap.values()].toSorted(
+      (first, second) => first.sourceIndex - second.sourceIndex,
+    )
   },
-  { immediate: true },
+  { deep: true, immediate: true },
 )
 </script>
 
 <template>
   <div ref="chartRef" class="line-chart">
-    <svg
-      class="line-chart__svg"
-      :class="{
-        'line-chart__svg--draggable': maxWindowOffset > 0,
-        'line-chart__svg--dragging': isDraggingChart,
-      }"
-      :viewBox="`0 0 ${svgWidth} ${svgHeight}`"
-      role="img"
-      :aria-label="`${chart.title} 추이 차트`"
-      @lostpointercapture="finishChartDrag"
-      @pointerdown="handleChartPointerDown"
-      @pointermove="handleChartPointerMove"
-      @pointerup="finishChartDrag"
-    >
-      <g class="line-chart__grid">
-        <line
-          v-for="(gridLine, index) in horizontalGridLines"
-          :key="`horizontal-${index}`"
-          :x1="padding.left"
-          :x2="svgWidth - padding.right"
-          :y1="gridLine.y"
-          :y2="gridLine.y"
+    <div class="line-chart__canvas">
+      <ChartCanvas type="line" :data="chartData" :options="chartOptions" />
+    </div>
+
+    <div v-if="chart.points.length > 1" class="line-chart__footer">
+      <label class="line-chart__stream-range">
+        <span class="sr-only">그래프 조회 시점</span>
+        <input
+          type="range"
+          min="0"
+          :max="maxRangeStart"
+          :value="rangeStart"
+          :disabled="maxRangeStart === 0"
+          :aria-valuetext="isLive ? '실시간' : `${targetVisiblePoints[0]?.time ?? ''}부터 조회`"
+          @input="handleRangeInput"
         />
-        <line
-          v-for="point in verticalGridLines"
-          :key="`vertical-${point.key}`"
-          :x1="point.x"
-          :x2="point.x"
-          :y1="padding.top"
-          :y2="padding.top + plotHeight"
-        />
-      </g>
-
-      <g class="line-chart__axis-labels">
-        <text
-          v-for="label in yAxisLabels"
-          :key="label.label"
-          :x="padding.left - 8"
-          :y="label.y + 3"
-          text-anchor="end"
-        >
-          {{ label.label }}
-        </text>
-      </g>
-
-      <g class="line-chart__thresholds">
-        <line
-          class="line-chart__threshold-gutter"
-          :x1="svgWidth - padding.right + 8"
-          :x2="svgWidth - padding.right + 8"
-          :y1="padding.top"
-          :y2="padding.top + plotHeight"
-        />
-        <g
-          v-for="line in thresholdLines"
-          :key="line.id"
-          class="line-chart__threshold"
-          :class="`line-chart__threshold--${line.tone}`"
-        >
-          <line :x1="padding.left" :x2="svgWidth - padding.right" :y1="line.y" :y2="line.y" />
-          <text :x="svgWidth - padding.right + 14" :y="line.labelY">
-            {{ line.labelText }}
-          </text>
-        </g>
-      </g>
-
-      <polyline class="line-chart__line" :points="linePoints" />
-      <g class="line-chart__points">
-        <g
-          v-for="(point, index) in renderedChartPoints"
-          :key="point.key"
-          class="line-chart__point-group"
-          :class="{
-            'line-chart__point-group--active': point.key === activePointKey,
-            'line-chart__point-group--end': index === renderedChartPoints.length - 1,
-          }"
-          role="button"
-          tabindex="0"
-          @click.stop="selectChartPoint(point)"
-          @keydown.enter.prevent="selectChartPoint(point)"
-          @keydown.space.prevent="selectChartPoint(point)"
-          @pointerdown.stop
-        >
-          <circle
-            v-if="
-              !['warning', 'danger'].includes(point.statusTone) && shouldRenderRegularPoint(point, index)
-            "
-            class="line-chart__point"
-            :cx="point.x"
-            :cy="point.y"
-            :r="index === renderedChartPoints.length - 1 ? 4.3 : 2.8"
-          />
-          <circle
-            v-else-if="['warning', 'danger'].includes(point.statusTone)"
-            class="line-chart__point-alert"
-            :class="`line-chart__point-alert--${point.statusTone}`"
-            :cx="point.x"
-            :cy="point.y"
-            :r="index === renderedChartPoints.length - 1 ? 5.6 : 4.8"
-          />
-          <circle class="line-chart__point-hit" :cx="point.x" :cy="point.y" r="17" />
-        </g>
-      </g>
-
-      <g v-if="selectedPointTooltip" class="line-chart__tooltip">
-        <path
-          class="line-chart__tooltip-tail"
-          :d="`M ${selectedPointTooltip.x + selectedPointTooltip.width / 2 - 7} ${
-            selectedPointTooltip.y + selectedPointTooltip.height
-          } L ${selectedPointTooltip.x + selectedPointTooltip.width / 2} ${
-            selectedPointTooltip.y + selectedPointTooltip.height + 8
-          } L ${selectedPointTooltip.x + selectedPointTooltip.width / 2 + 7} ${
-            selectedPointTooltip.y + selectedPointTooltip.height
-          } Z`"
-        />
-        <rect
-          class="line-chart__tooltip-box"
-          :x="selectedPointTooltip.x"
-          :y="selectedPointTooltip.y"
-          :width="selectedPointTooltip.width"
-          :height="selectedPointTooltip.height"
-          rx="10"
-        />
-        <text
-          class="line-chart__tooltip-time"
-          :x="selectedPointTooltip.x + 12"
-          :y="selectedPointTooltip.y + 21"
-        >
-          {{ selectedPointTooltip.time }}
-        </text>
-        <text
-          class="line-chart__tooltip-value"
-          :x="selectedPointTooltip.x + 12"
-          :y="selectedPointTooltip.y + 42"
-        >
-          {{ selectedPointTooltip.valueLabel }}
-        </text>
-        <text
-          v-if="selectedPointTooltip.statusTone !== 'normal'"
-          class="line-chart__tooltip-status"
-          :class="`line-chart__tooltip-status--${selectedPointTooltip.statusTone}`"
-          :x="selectedPointTooltip.x + 12"
-          :y="selectedPointTooltip.y + 62"
-        >
-          {{ selectedPointTooltip.statusLabel || '상태 변동' }}
-        </text>
-      </g>
-
-      <g class="line-chart__x-labels">
-        <text
-          v-for="point in renderedXAxisLabels"
-          :key="`${point.key}-label`"
-          data-test="metric-chart-x-label"
-          :x="point.x"
-          :y="svgHeight - 4"
-          text-anchor="middle"
-        >
-          {{ point.time }}
-        </text>
-      </g>
-    </svg>
-
-    <div v-if="shouldShowRangeControls" class="line-chart__footer">
-      <div class="line-chart__controls">
-        <div
-          class="line-chart__range"
-          :class="{ 'line-chart__range--dragging': isDraggingRange }"
-          aria-label="그래프 조회 위치"
-          role="slider"
-          :aria-valuemin="0"
-          :aria-valuemax="maxWindowOffset"
-          :aria-valuenow="maxWindowOffset - windowOffset"
-          tabindex="0"
-          @keydown.end.prevent="returnToLive"
-          @keydown.home.prevent="windowOffset = maxWindowOffset"
-          @keydown.left.prevent="windowOffset = clamp(windowOffset + 1, 0, maxWindowOffset)"
-          @keydown.right.prevent="windowOffset = clamp(windowOffset - 1, 0, maxWindowOffset)"
-          @lostpointercapture="finishRangeDrag"
-          @pointerdown="handleRangePointerDown"
-          @pointermove="handleRangePointerMove"
-          @pointerup="finishRangeDrag"
-        >
-          <span class="line-chart__range-thumb" :style="rangeWindowStyle"></span>
-        </div>
-        <button
-          type="button"
-          class="line-chart__live-button"
-          :class="{ 'line-chart__live-button--active': isLiveWindow }"
-          :disabled="isLiveWindow"
-          @click="returnToLive"
-        >
-          LIVE
-        </button>
-      </div>
+      </label>
+      <button
+        type="button"
+        class="line-chart__live"
+        :class="{ 'line-chart__live--active': isLive }"
+        @click="returnToLive"
+      >
+        LIVE
+      </button>
     </div>
   </div>
 </template>
@@ -600,249 +434,111 @@ watch(
 <style scoped>
 .line-chart {
   display: flex;
-  flex-direction: column;
   width: 100%;
-  height: 100%;
+  min-width: 0;
   min-height: 0;
+  flex-direction: column;
+  gap: var(--agentory-spacing-6);
 }
 
-.line-chart__svg {
-  width: 100%;
-  height: 100%;
-  min-height: 210px;
+.line-chart__canvas {
+  min-width: 0;
+  min-height: 0;
   flex: 1 1 auto;
-  overflow: visible;
-  touch-action: none;
-  user-select: none;
-}
-
-.line-chart__svg--draggable {
-  cursor: grab;
-}
-
-.line-chart__svg--dragging {
-  cursor: grabbing;
-}
-
-.line-chart__grid line {
-  stroke: color-mix(in srgb, var(--agentory-color-text-subtle), transparent 86%);
-  stroke-width: 1;
-}
-
-.line-chart__axis-labels,
-.line-chart__x-labels {
-  fill: var(--agentory-color-text-muted);
-  font-family: var(--agentory-font-family-chart);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-medium);
-}
-
-.line-chart__threshold {
-  pointer-events: none;
-}
-
-.line-chart__threshold line {
-  stroke-dasharray: 5 6;
-  stroke-linecap: round;
-  stroke-width: 1.2;
-}
-
-.line-chart__threshold--warning line {
-  stroke: color-mix(in srgb, var(--agentory-color-status-warning), transparent 54%);
-}
-
-.line-chart__threshold--danger line {
-  stroke: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 56%);
-}
-
-.line-chart__threshold-gutter {
-  stroke: color-mix(in srgb, var(--agentory-color-text-subtle), transparent 76%);
-  stroke-width: 1;
-}
-
-.line-chart__threshold text {
-  fill: var(--agentory-color-text-muted);
-  font-family: var(--agentory-font-family-chart);
-  font-size: var(--agentory-font-size-chart-label);
-  font-weight: var(--agentory-font-weight-medium);
-}
-
-.line-chart__threshold--warning text {
-  fill: color-mix(in srgb, var(--agentory-color-text-muted), var(--agentory-color-status-warning) 26%);
-}
-
-.line-chart__threshold--danger text {
-  fill: color-mix(in srgb, var(--agentory-color-text-muted), var(--agentory-color-status-danger-text) 24%);
-}
-
-.line-chart__line {
-  fill: none;
-  stroke: var(--agentory-color-bg-primary);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 3.6;
-  pointer-events: none;
-}
-
-.line-chart__point-group {
-  cursor: pointer;
-  outline: none;
-}
-
-.line-chart__point {
-  fill: var(--agentory-color-bg-app);
-  stroke: var(--agentory-color-bg-primary);
-  stroke-width: 2.2;
-  transition:
-    fill 180ms ease,
-    stroke-width 180ms ease,
-    transform 180ms ease;
-  pointer-events: none;
-}
-
-.line-chart__point-group--end .line-chart__point {
-  fill: var(--agentory-color-bg-primary);
-  stroke: var(--agentory-color-bg-app);
-  stroke-width: 2.4;
-}
-
-.line-chart__point-group--active .line-chart__point {
-  stroke-width: 3;
-}
-
-.line-chart__point-alert {
-  stroke: var(--agentory-color-bg-app);
-  stroke-width: 1.6;
-  pointer-events: none;
-}
-
-.line-chart__point-alert--warning {
-  fill: var(--agentory-color-status-warning);
-}
-
-.line-chart__point-alert--danger {
-  fill: var(--agentory-color-status-danger-text);
-}
-
-.line-chart__point-group--active .line-chart__point-alert {
-  stroke-width: 2.6;
-}
-
-.line-chart__point-hit {
-  fill: transparent;
-  stroke: transparent;
-}
-
-.line-chart__tooltip {
-  pointer-events: none;
-}
-
-.line-chart__tooltip-box,
-.line-chart__tooltip-tail {
-  fill: color-mix(in srgb, var(--agentory-color-text-primary), transparent 8%);
-  filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--agentory-color-text-primary), transparent 82%));
-}
-
-.line-chart__tooltip-time {
-  fill: color-mix(in srgb, var(--agentory-color-text-inverse), transparent 22%);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-medium);
-}
-
-.line-chart__tooltip-value {
-  fill: var(--agentory-color-text-inverse);
-  font-size: var(--agentory-font-size-body);
-  font-weight: var(--agentory-font-weight-bold);
-}
-
-.line-chart__tooltip-status {
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-bold);
-}
-
-.line-chart__tooltip-status--warning {
-  fill: var(--agentory-color-status-warning);
-}
-
-.line-chart__tooltip-status--danger {
-  fill: var(--agentory-color-status-danger);
 }
 
 .line-chart__footer {
-  display: flex;
-  flex: 0 0 auto;
-  padding: var(--agentory-spacing-4) var(--agentory-spacing-4) 0;
-}
-
-.line-chart__controls {
   display: grid;
+  min-height: 26px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--agentory-spacing-8);
-  min-height: 26px;
-  padding: 0;
+  gap: var(--agentory-spacing-10);
 }
 
-.line-chart__range {
-  position: relative;
-  height: 5px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
-  border-radius: var(--agentory-radius-pill);
+.line-chart__stream-range {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.line-chart__stream-range input {
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
   cursor: pointer;
-  outline: none;
 }
 
-.line-chart__range:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 74%);
+.line-chart__stream-range input::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--agentory-color-bg-surface);
+  border-radius: var(--agentory-radius-pill);
 }
 
-.line-chart__range--dragging {
-  cursor: grabbing;
+.line-chart__stream-range input::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  appearance: none;
+  background: var(--agentory-color-bg-primary);
+  border: 3px solid var(--agentory-color-bg-app);
+  border-radius: var(--agentory-radius-pill);
+  box-shadow: var(--agentory-shadow-control);
 }
 
-.line-chart__range-thumb {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  display: block;
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 28%);
-  border-radius: inherit;
-  transition:
-    left 220ms var(--agentory-ease-soft),
-    width 220ms var(--agentory-ease-soft);
+.line-chart__stream-range input::-moz-range-track {
+  height: 4px;
+  background: var(--agentory-color-bg-surface);
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
 }
 
-.line-chart__live-button {
-  min-width: 48px;
-  min-height: 24px;
-  padding: 0 var(--agentory-spacing-8);
+.line-chart__stream-range input::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: var(--agentory-color-bg-primary);
+  border: 3px solid var(--agentory-color-bg-app);
+  border-radius: var(--agentory-radius-pill);
+  box-shadow: var(--agentory-shadow-control);
+}
+
+.line-chart__stream-range input:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.line-chart__stream-range input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 46%);
+  outline-offset: 2px;
+}
+
+.line-chart__live {
+  height: 26px;
+  padding: 0 var(--agentory-spacing-12);
   color: var(--agentory-color-bg-primary);
-  background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 56%);
   border-radius: var(--agentory-radius-pill);
   font-size: var(--agentory-font-size-caption);
   font-weight: var(--agentory-font-weight-bold);
-  line-height: var(--agentory-line-height-caption);
-  transition:
-    background-color 180ms var(--agentory-ease-soft),
-    border-color 180ms var(--agentory-ease-soft),
-    color 180ms var(--agentory-ease-soft),
-    opacity 180ms var(--agentory-ease-soft);
+  cursor: pointer;
 }
 
-.line-chart__live-button:not(:disabled):hover {
+.line-chart__live--active {
   color: var(--agentory-color-text-inverse);
   background: var(--agentory-color-bg-primary);
   border-color: var(--agentory-color-bg-primary);
 }
 
-.line-chart__live-button--active,
-.line-chart__live-button:disabled {
-  color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
-  border-color: var(--agentory-color-bg-primary);
-  cursor: default;
-  opacity: 0.72;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

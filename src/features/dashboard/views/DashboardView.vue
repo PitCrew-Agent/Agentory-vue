@@ -7,8 +7,10 @@ import DashboardContentLoader from '@/features/dashboard/components/DashboardCon
 import DashboardEditableWidget from '@/features/dashboard/components/DashboardEditableWidget.vue'
 import DashboardHeader from '@/features/dashboard/components/DashboardHeader.vue'
 import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.vue'
+import EquipmentAnalysisPanel from '@/features/dashboard/components/EquipmentAnalysisPanel.vue'
 import EquipmentChartPanel from '@/features/dashboard/components/EquipmentChartPanel.vue'
 import EquipmentDetailPanel from '@/features/dashboard/components/EquipmentDetailPanel.vue'
+import ErrorDonutPanel from '@/features/dashboard/components/ErrorDonutPanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
 import { dashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { createEmptyMetricChart } from '@/features/dashboard/constants/equipmentMetrics'
@@ -26,6 +28,10 @@ import {
   fetchEquipmentSuggestions,
   fetchFactoryScene,
 } from '@/features/dashboard/services/telemetryApi'
+import {
+  loadDashboardLayoutState,
+  saveDashboardLayoutState,
+} from '@/features/dashboard/utils/dashboardLayoutStorage'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
@@ -132,22 +138,40 @@ function selectMetric(metricId) {
   selectedMetricId.value = metricId
 }
 
-const widgetOrder = ['factory', 'detail', 'metricChart', 'assistant']
+const widgetOrder = [
+  'factory',
+  'detail',
+  'metricChart',
+  'assistant',
+  'equipmentAnalysis',
+  'errorDonut',
+]
 const widgetMeta = {
   assistant: { id: 'assistant', label: 'Tory', minHeight: 260, minWidth: 190 },
-  detail: { id: 'detail', label: '상세 정보', minHeight: 150, minWidth: 220 },
+  detail: { id: 'detail', label: '상세 정보', minHeight: 260, minWidth: 220 },
+  equipmentAnalysis: {
+    id: 'equipmentAnalysis',
+    label: '센서 기준 범위 분석',
+    minHeight: 260,
+    minWidth: 240,
+  },
+  errorDonut: { id: 'errorDonut', label: '에러 발생 도넛 차트', minHeight: 180, minWidth: 220 },
   factory: { id: 'factory', label: '3D 공장 화면', minHeight: 240, minWidth: 340 },
   metricChart: { id: 'metricChart', label: '그래프', minHeight: 150, minWidth: 220 },
 }
 const visibleWidgetMap = reactive({
   assistant: true,
   detail: true,
+  equipmentAnalysis: false,
+  errorDonut: false,
   factory: true,
   metricChart: true,
 })
 const widgetLayouts = reactive({
   assistant: { x: 75, y: 0, w: 25, h: 100 },
   detail: { x: 50, y: 0, w: 25, h: 50 },
+  equipmentAnalysis: { x: 0, y: 0, w: 25, h: 50 },
+  errorDonut: { x: 25, y: 0, w: 25, h: 50 },
   factory: { x: 0, y: 0, w: 50, h: 100 },
   metricChart: { x: 50, y: 50, w: 25, h: 50 },
 })
@@ -155,6 +179,8 @@ const previewLayouts = reactive({})
 const defaultLayoutGrid = {
   assistant: { col: 3, cols: 1, row: 0, rows: 2 },
   detail: { col: 2, cols: 1, row: 0, rows: 1 },
+  equipmentAnalysis: { col: 0, cols: 1, row: 0, rows: 1 },
+  errorDonut: { col: 1, cols: 1, row: 0, rows: 1 },
   factory: { col: 0, cols: 2, row: 0, rows: 2 },
   metricChart: { col: 2, cols: 1, row: 1, rows: 1 },
 }
@@ -848,6 +874,98 @@ function applyDefaultLayouts() {
   })
 }
 
+function normalizeStoredWidgetGrid(widgetId, grid, metrics) {
+  if (!grid || typeof grid !== 'object') {
+    return null
+  }
+
+  const values = [grid.col, grid.cols, grid.row, grid.rows].map(Number)
+
+  if (!values.every(Number.isFinite)) {
+    return null
+  }
+
+  const minSize = getMinGridSize(widgetId, metrics)
+  const cols = clamp(Math.round(grid.cols), minSize.cols, layoutGridColumns)
+  const rows = clamp(Math.round(grid.rows), minSize.rows, layoutGridRows)
+
+  return {
+    col: clamp(Math.round(grid.col), 0, layoutGridColumns - cols),
+    cols,
+    row: clamp(Math.round(grid.row), 0, layoutGridRows - rows),
+    rows,
+  }
+}
+
+function restoreDashboardLayout() {
+  const state = loadDashboardLayoutState()
+  const metrics = getGridMetrics()
+
+  if (!state || !metrics) {
+    return false
+  }
+
+  const storedGridMap = Object.fromEntries(
+    widgetOrder
+      .map((widgetId) => [
+        widgetId,
+        normalizeStoredWidgetGrid(widgetId, state.layouts?.[widgetId], metrics),
+      ])
+      .filter(([, grid]) => grid),
+  )
+  const visibleWidgetIds = widgetOrder.filter(
+    (widgetId) => state.visibleWidgets?.[widgetId] ?? visibleWidgetMap[widgetId],
+  )
+  const hasCollision = visibleWidgetIds.some((widgetId, index) =>
+    visibleWidgetIds
+      .slice(index + 1)
+      .some(
+        (targetId) =>
+          storedGridMap[widgetId] &&
+          storedGridMap[targetId] &&
+          gridsOverlap(storedGridMap[widgetId], storedGridMap[targetId]),
+      ),
+  )
+
+  if (!Object.keys(storedGridMap).length || hasCollision) {
+    return false
+  }
+
+  Object.entries(storedGridMap).forEach(([widgetId, grid]) => {
+    widgetLayouts[widgetId] = gridToPercentLayout(grid, metrics)
+  })
+  widgetOrder.forEach((widgetId) => {
+    const storedVisibility = state.visibleWidgets?.[widgetId]
+
+    if (typeof storedVisibility === 'boolean') {
+      visibleWidgetMap[widgetId] = storedVisibility
+    }
+  })
+  hasCustomLayout.value = true
+
+  return true
+}
+
+function persistDashboardLayout() {
+  const metrics = getGridMetrics()
+
+  if (!metrics) {
+    return
+  }
+
+  const layouts = Object.fromEntries(
+    widgetOrder.map((widgetId) => [
+      widgetId,
+      percentToGrid(widgetLayouts[widgetId], widgetId, metrics),
+    ]),
+  )
+  const visibleWidgets = Object.fromEntries(
+    widgetOrder.map((widgetId) => [widgetId, visibleWidgetMap[widgetId]]),
+  )
+
+  saveDashboardLayoutState({ layouts, visibleWidgets })
+}
+
 function getLayoutGap() {
   const boardRect = getBoardRect()
 
@@ -1214,11 +1332,13 @@ function restoreWidget(id) {
   hasCustomLayout.value = true
   widgetLayouts[id] = restoreLayout
   visibleWidgetMap[id] = true
+  persistDashboardLayout()
 }
 
 function stashWidget(id) {
   hasCustomLayout.value = true
   visibleWidgetMap[id] = false
+  persistDashboardLayout()
 }
 
 function updateWidgetLayout(id, nextLayout) {
@@ -1232,6 +1352,7 @@ function updateWidgetLayout(id, nextLayout) {
       widgetLayouts[widgetId] = snapLayoutToGrid(layout, widgetId)
     }
   })
+  persistDashboardLayout()
 }
 
 function requestContentRenderFrame(callback) {
@@ -1282,7 +1403,9 @@ async function loadInitialDashboardContent() {
 onMounted(() => {
   loadInitialDashboardContent()
 
-  applyDefaultLayouts()
+  if (!restoreDashboardLayout()) {
+    applyDefaultLayouts()
+  }
 
   if (typeof ResizeObserver === 'undefined') {
     return
@@ -1427,6 +1550,35 @@ watch(
             @send-message="sendAssistantMessage"
           />
         </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.equipmentAnalysis"
+          id="equipmentAnalysis"
+          :layout="getWidgetLayout('equipmentAnalysis')"
+          :min-width="widgetMeta.equipmentAnalysis.minWidth"
+          :min-height="widgetMeta.equipmentAnalysis.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('equipmentAnalysis')"
+          @update:layout="updateWidgetLayout('equipmentAnalysis', $event)"
+        >
+          <EquipmentAnalysisPanel :equipment-id="selectedEquipmentId" />
+        </DashboardEditableWidget>
+
+        <DashboardEditableWidget
+          v-if="visibleWidgetMap.errorDonut"
+          id="errorDonut"
+          :layout="getWidgetLayout('errorDonut')"
+          :min-width="widgetMeta.errorDonut.minWidth"
+          :min-height="widgetMeta.errorDonut.minHeight"
+          :resolve-layout="resolveLayoutChange"
+          @preview:layout="setPreviewLayouts"
+          @stash="stashWidget('errorDonut')"
+          @update:layout="updateWidgetLayout('errorDonut', $event)"
+        >
+          <ErrorDonutPanel :equipment-id="selectedEquipmentId" />
+        </DashboardEditableWidget>
+
         </div>
       </div>
     </section>

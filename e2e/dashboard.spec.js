@@ -81,14 +81,16 @@ test('renders dashboard and supports sidebar and layout editing interactions', a
 
   await expect(page.locator('.dashboard-page')).toBeVisible({ timeout: 15000 })
   await expect(sidebar).toHaveAttribute('data-open', 'false')
-  await expect.poll(() => getCanvasPaintRatio(factoryCanvas), { timeout: 15000 }).toBeGreaterThan(0.08)
+  await expect
+    .poll(() => getCanvasPaintRatio(factoryCanvas), { timeout: 15000 })
+    .toBeGreaterThan(0.08)
   await expect(page.locator('.factory-viewport__status-stack')).toContainText('양호')
   await expect(page.locator('.factory-viewport__status-stack')).toContainText('위험')
   await expect(page.locator('[data-test="assistant-messages"] article')).toHaveCount(0)
   await expect(page.locator('[data-test="quick-commands"]')).toHaveCount(0)
   await expect(page.locator('[data-test="equipment-chart-panel"]')).toBeVisible()
   await expect(chartTitle).toBeVisible()
-  await expect(page.locator('[data-test="metric-chart-x-label"]')).toHaveCount(5)
+  await expect(page.locator('[data-test="chartjs-canvas"]')).toBeVisible()
   await expect
     .poll(() =>
       page.locator('.detail-panel__info-grid').evaluate((element) => {
@@ -111,15 +113,22 @@ test('renders dashboard and supports sidebar and layout editing interactions', a
   await page.locator('[data-test="metric-gasFlow"]').click()
   await expect.poll(() => chartTitle.textContent()).not.toBe(rfPowerChartTitle)
 
-  await page.locator('.factory-viewport__label--warning, .factory-viewport__label--danger').first().click()
+  await page
+    .locator('.factory-viewport__label--warning, .factory-viewport__label--danger')
+    .first()
+    .click()
   await expect(page.locator('[data-test="factory-alert-checklist"]')).toBeVisible()
+  await expect(page.locator('[data-test="factory-equipment-reinspection"]')).toHaveCount(0)
   await dragBy(page, factoryCanvas, 56, 18)
   await expect(page.locator('[data-test="factory-alert-checklist"]')).toBeVisible()
   await page.locator('.factory-viewport__camera-tools button').click()
   await expect(page.locator('[data-test="factory-alert-checklist"]')).toHaveCount(0)
 
   await page.locator('[data-test="factory-line-selector-toggle"]').click()
-  await page.locator('[data-test="factory-line-menu"] .factory-viewport__line-option').nth(1).click()
+  await page
+    .locator('[data-test="factory-line-menu"] .factory-viewport__line-option')
+    .nth(1)
+    .click()
   await expect(page.locator('[data-test="factory-line-loader"]')).toBeVisible()
   await expect(page.locator('[data-test="factory-line-loader"]')).toHaveCount(0, { timeout: 3000 })
 
@@ -201,6 +210,8 @@ test('renders dashboard and supports sidebar and layout editing interactions', a
   await page.locator('[data-test="dashboard-widget-dock-toggle"]').click()
   await expect(page.locator('[data-test="dashboard-widget-dock-panel"]')).toBeVisible()
   await expect(page.locator('[data-test="dock-restore-detail"]')).toBeVisible()
+  await expect(page.locator('[data-test="dock-restore-equipmentAnalysis"]')).toBeVisible()
+  await expect(page.locator('[data-test="dock-restore-errorDonut"]')).toBeVisible()
 
   await page.locator('[data-test="dock-restore-detail"]').click()
   await expect(page.locator('[data-widget-id="detail"]')).toBeVisible()
