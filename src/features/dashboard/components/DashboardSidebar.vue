@@ -6,7 +6,7 @@ import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
 import dashboardIcon from '@/assets/icons/dashboard/nav-dashboard.svg'
 import listIcon from '@/assets/icons/dashboard/nav-list.svg'
 import noteIcon from '@/assets/icons/dashboard/nav-note.svg'
-import storageIcon from '@/assets/icons/dashboard/nav-storage.svg'
+import widgetStorageIcon from '@/assets/icons/dashboard/nav-widget-storage.svg'
 import sidebarToggleIcon from '@/assets/icons/dashboard/sidebar-toggle.svg'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 
@@ -126,8 +126,8 @@ function restoreWidget(id) {
         data-test="dashboard-widget-dock-toggle"
         @click="isDockOpen = !isDockOpen"
       >
-        <img class="dashboard-sidebar__icon" :src="storageIcon" alt="" width="36" height="36" />
-        <span class="dashboard-sidebar__label">보관함</span>
+        <img class="dashboard-sidebar__icon" :src="widgetStorageIcon" alt="" width="36" height="36" />
+        <span class="dashboard-sidebar__label">위젯 보관함</span>
         <small v-if="dockWidgets.length > 0" class="dashboard-sidebar__storage-count">
           {{ dockWidgets.length }}
         </small>
@@ -135,7 +135,7 @@ function restoreWidget(id) {
 
       <div v-if="isDockOpen" class="dashboard-sidebar__dock-panel" data-test="dashboard-widget-dock-panel">
         <div class="dashboard-sidebar__dock-header">
-          <strong>보관함</strong>
+          <strong>위젯 보관함</strong>
           <span>{{ dockWidgets.length }}</span>
         </div>
 
@@ -153,7 +153,7 @@ function restoreWidget(id) {
           </button>
         </div>
 
-        <p v-else class="dashboard-sidebar__dock-empty">보관된 화면 없음</p>
+        <p v-else class="dashboard-sidebar__dock-empty">보관된 위젯 없음</p>
       </div>
     </div>
 
