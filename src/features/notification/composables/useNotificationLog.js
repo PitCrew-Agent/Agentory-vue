@@ -35,6 +35,12 @@ export function useNotificationLog() {
     return notificationItems.slice(startIndex, startIndex + notificationPagination.limit)
   })
 
+  const notificationDates = computed(() =>
+    [...new Set(notificationItems.map((item) => item.occurredDate).filter(Boolean))].toSorted(
+      (first, second) => second.localeCompare(first),
+    ),
+  )
+
   const notificationGroups = computed(() => groupNotificationRows(pagedNotificationItems.value))
 
   function findNotification(id) {
@@ -106,6 +112,22 @@ export function useNotificationLog() {
     syncPagination()
   }
 
+  function goToNotificationDate(date) {
+    const firstNotificationIndex = notificationItems.findIndex(
+      (notification) => notification.occurredDate === date,
+    )
+
+    if (firstNotificationIndex < 0) {
+      return false
+    }
+
+    notificationPagination.pageIndex =
+      Math.floor(firstNotificationIndex / notificationPagination.limit) + 1
+    syncPagination()
+
+    return true
+  }
+
   async function setNotificationReadStatus(id, readStatus) {
     const target = findNotification(id)
 
@@ -147,11 +169,13 @@ export function useNotificationLog() {
   }
 
   return {
+    goToNotificationDate,
     isNotificationLoading,
     loadNextNotificationsPage,
     loadNotifications,
     loadPreviousNotificationsPage,
     markAllNotificationsRead,
+    notificationDates,
     notificationGroups,
     notificationPagination,
     setNotificationReadStatus,

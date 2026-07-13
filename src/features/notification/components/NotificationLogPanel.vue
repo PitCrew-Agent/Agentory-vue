@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 import refreshIcon from '@/assets/icons/dashboard/refresh.svg'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
@@ -7,11 +7,23 @@ import DashboardTablePanel from '@/features/dashboard/components/DashboardTableP
 import { notificationReadStatusMap } from '@/constants/notificationStatus'
 
 defineProps({
+  activeNotificationId: {
+    type: Number,
+    default: null,
+  },
+  calendarDates: {
+    type: Array,
+    default: () => [],
+  },
   groups: {
     type: Array,
     required: true,
   },
   isLoading: {
+    type: Boolean,
+    default: false,
+  },
+  isResponding: {
     type: Boolean,
     default: false,
   },
@@ -25,9 +37,21 @@ defineProps({
       totalPages: 0,
     }),
   },
+  responseError: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['mark-all-read', 'next-page', 'previous-page', 'refresh', 'set-read-status'])
+const emit = defineEmits([
+  'mark-all-read',
+  'next-page',
+  'previous-page',
+  'refresh',
+  'select-date',
+  'set-read-status',
+  'start-response',
+])
 const tablePanelRef = ref(null)
 const isBulkConfirmOpen = ref(false)
 const activeReadStatusMenuId = ref('')
@@ -42,14 +66,20 @@ const notificationColumns = [
     cellClass: 'dashboard-table-panel__cell--center notification-log-panel__status-cell',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
+  {
+    key: 'response',
+    label: '대응',
+    cellClass: 'dashboard-table-panel__cell--center',
+    headerClass: 'dashboard-table-panel__header-cell--center',
+  },
 ]
 
-const readStatusOptions = [
-  { value: 'read', label: '읽음으로 표시' },
-]
+const readStatusOptions = [{ value: 'read', label: '읽음으로 표시' }]
 
 function getCodeTone(code) {
-  const normalizedCode = String(code ?? '').trim().toUpperCase()
+  const normalizedCode = String(code ?? '')
+    .trim()
+    .toUpperCase()
 
   if (/^(ERR|ERROR|DNG|DANGER|CRIT)/.test(normalizedCode)) {
     return 'danger'
@@ -88,6 +118,12 @@ function selectReadStatus(id, readStatus) {
 function scrollToDate(date) {
   tablePanelRef.value?.scrollToGroup(date)
 }
+
+async function selectCalendarDate(date) {
+  emit('select-date', date)
+  await nextTick()
+  scrollToDate(date)
+}
 </script>
 
 <template>
@@ -100,15 +136,15 @@ function scrollToDate(date) {
       action-label="일괄 읽음 처리"
       :columns="notificationColumns"
       :groups="groups"
-      grid-template-columns="minmax(150px, 180px) minmax(90px, 120px) minmax(240px, 1fr) minmax(106px, 122px)"
+      grid-template-columns="minmax(150px, 180px) minmax(90px, 120px) minmax(240px, 1fr) minmax(106px, 122px) minmax(92px, 108px)"
       @action="openBulkConfirm"
     >
       <template #title-actions>
         <DashboardCalendarPicker
           aria-label="알림 이력 날짜 선택"
           data-test-prefix="notification"
-          :dates="groups.map((group) => group.date)"
-          @select="scrollToDate"
+          :dates="calendarDates"
+          @select="selectCalendarDate"
         />
       </template>
 
@@ -128,7 +164,10 @@ function scrollToDate(date) {
       </template>
 
       <template #cell-code="{ row }">
-        <span class="notification-log-panel__code" :class="`notification-log-panel__code--${getCodeTone(row.code)}`">
+        <span
+          class="notification-log-panel__code"
+          :class="`notification-log-panel__code--${getCodeTone(row.code)}`"
+        >
           {{ row.code }}
         </span>
       </template>
@@ -163,7 +202,9 @@ function scrollToDate(date) {
                 v-for="option in readStatusOptions"
                 :key="option.value"
                 class="notification-log-panel__status-option"
-                :class="{ 'notification-log-panel__status-option--active': row.readStatus === option.value }"
+                :class="{
+                  'notification-log-panel__status-option--active': row.readStatus === option.value,
+                }"
                 type="button"
                 :data-test="`notification-read-option-${row.id}-${option.value}`"
                 @click="selectReadStatus(row.id, option.value)"
@@ -178,6 +219,18 @@ function scrollToDate(date) {
         </div>
       </template>
 
+      <template #cell-response="{ row }">
+        <button
+          class="notification-log-panel__response"
+          type="button"
+          :disabled="isResponding"
+          :data-test="`notification-response-${row.id}`"
+          @click="emit('start-response', row)"
+        >
+          {{ activeNotificationId === Number(row.id) ? '생성 중' : '대응 시작' }}
+        </button>
+      </template>
+
       <template #footer>
         <div class="notification-log-panel__pagination" data-test="notification-pagination">
           <button
@@ -189,8 +242,8 @@ function scrollToDate(date) {
             이전
           </button>
           <span>
-            {{ pagination.totalPages ? pagination.pageIndex : 0 }} / {{ pagination.totalPages }}페이지
-            · 총 {{ pagination.totalItems }}건
+            {{ pagination.totalPages ? pagination.pageIndex : 0 }} /
+            {{ pagination.totalPages }}페이지 · 총 {{ pagination.totalItems }}건
           </span>
           <button
             type="button"
@@ -203,6 +256,10 @@ function scrollToDate(date) {
         </div>
       </template>
     </DashboardTablePanel>
+
+    <p v-if="responseError" class="notification-log-panel__response-error" role="alert">
+      {{ responseError }}
+    </p>
 
     <div
       v-if="isBulkConfirmOpen"
@@ -266,6 +323,39 @@ function scrollToDate(date) {
 
 .notification-log-panel__message {
   font-weight: var(--agentory-font-weight-regular);
+}
+
+.notification-log-panel__response {
+  min-height: 30px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-12);
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.notification-log-panel__response:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.notification-log-panel__response-error {
+  position: absolute;
+  z-index: 5;
+  right: var(--agentory-spacing-16);
+  bottom: var(--agentory-spacing-16);
+  max-width: 420px;
+  margin: 0;
+  padding: var(--agentory-spacing-8) var(--agentory-spacing-12);
+  color: var(--agentory-color-status-danger-text);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 8%);
+  border-radius: var(--agentory-radius-8);
+  box-shadow: var(--agentory-shadow-panel-soft);
+  font-size: var(--agentory-font-size-body-sm);
 }
 
 .notification-log-panel__refresh {
