@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import structureIcon from '@/assets/icons/dashboard/action-3d-object.png'
 import closeIcon from '@/assets/icons/dashboard/close.svg'
@@ -8,7 +8,7 @@ import { equipmentStatusMap } from '@/constants/equipmentStatus'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
 
-defineProps({
+const props = defineProps({
   groups: {
     type: Array,
     required: true,
@@ -22,6 +22,17 @@ defineProps({
 const tablePanelRef = ref(null)
 const isLineMenuOpen = ref(false)
 const isStructureOpen = ref(false)
+const selectedStructureEquipmentId = ref('')
+
+const selectedStructureEquipment = computed(() =>
+  props.lineGroups
+    .flatMap((line) => line.equipment)
+    .find((equipment) => equipment.id === selectedStructureEquipmentId.value),
+)
+
+const selectedStructureChecklist = computed(
+  () => selectedStructureEquipment.value?.checklist ?? [],
+)
 
 const equipmentColumns = [
   { key: 'equipmentId', label: '장비 ID', cellClass: 'dashboard-table-panel__cell--light' },
@@ -45,6 +56,15 @@ function scrollToLine(lineId) {
   tablePanelRef.value?.scrollToGroup(lineId)
   isLineMenuOpen.value = false
 }
+
+function openStructure() {
+  selectedStructureEquipmentId.value = props.lineGroups[0]?.equipment[0]?.id ?? ''
+  isStructureOpen.value = true
+}
+
+function selectStructureEquipment(equipmentId) {
+  selectedStructureEquipmentId.value = equipmentId
+}
 </script>
 
 <template>
@@ -61,7 +81,7 @@ function scrollToLine(lineId) {
       :groups="groups"
       grid-template-columns="92px 136px 124px 78px 72px 82px 82px 92px 88px minmax(220px, 1fr)"
       table-min-width="1290px"
-      @action="isStructureOpen = true"
+      @action="openStructure"
     >
       <template #title-actions>
         <div class="equipment-list-panel__line-picker">
@@ -127,7 +147,12 @@ function scrollToLine(lineId) {
           >
             <img :src="closeIcon" alt="" width="22" height="22" />
           </button>
-          <FactoryViewport :lines="lineGroups" />
+          <FactoryViewport
+            :checklist-items="selectedStructureChecklist"
+            :lines="lineGroups"
+            :selected-equipment-id="selectedStructureEquipmentId"
+            @select-equipment="selectStructureEquipment"
+          />
         </section>
       </div>
     </Transition>

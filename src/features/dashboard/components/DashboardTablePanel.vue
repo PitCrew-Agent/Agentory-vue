@@ -311,8 +311,8 @@ defineExpose({
   width: 100%;
   min-width: var(--dashboard-table-min-width);
   overflow: hidden;
-  background: color-mix(in srgb, var(--agentory-color-bg-app), var(--agentory-color-border-inverse) 72%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 36%);
+  background: var(--agentory-color-table-surface);
+  border: 1px solid var(--agentory-color-table-divider);
   border-radius: var(--agentory-radius-8);
 }
 
@@ -331,8 +331,8 @@ defineExpose({
     var(--agentory-spacing-10)
     calc(var(--dashboard-table-content-left) + var(--dashboard-table-body-inset));
   color: var(--agentory-color-text-muted);
-  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 78%);
-  border-bottom: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 36%);
+  background: var(--agentory-color-table-header);
+  border-bottom: 1px solid var(--agentory-color-table-divider);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-body-sm);
@@ -356,7 +356,7 @@ defineExpose({
     var(--agentory-spacing-14) var(--dashboard-table-content-left);
   color: var(--agentory-color-text-primary);
   background: transparent;
-  border-bottom: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
+  border-bottom: 1px solid var(--agentory-color-table-divider);
   font-size: var(--agentory-font-size-body);
   line-height: var(--agentory-line-height-body);
   transition: background-color 160ms var(--agentory-ease-soft);
@@ -367,7 +367,7 @@ defineExpose({
 }
 
 .dashboard-table-panel__row:hover {
-  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 86%);
+  background: var(--agentory-color-table-hover);
 }
 
 .dashboard-table-panel__cell {

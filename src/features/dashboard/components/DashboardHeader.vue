@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
@@ -32,11 +32,36 @@ const uiStore = useUiStore()
 const { loadNotifications, markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
+const notificationRef = ref(null)
+const profileRef = ref(null)
 const shouldSkipHeaderApi = import.meta.env.MODE === 'test'
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
 const currentUser = computed(() => authStore.currentUser)
 const currentUserName = computed(() => authStore.currentUserName)
 const currentUserInitial = computed(() => currentUserName.value.trim().charAt(0).toUpperCase() || 'A')
+const userRoleLabelMap = {
+  admin: '관리자',
+  engineer: '엔지니어',
+  field_engineer: '현장 엔지니어',
+  manager: '운영 관리자',
+  operator: '운영 담당자',
+}
+const userStatusLabelMap = {
+  active: '이용 가능',
+  inactive: '비활성',
+  pending: '승인 대기',
+  suspended: '이용 제한',
+}
+const currentUserRoleLabel = computed(() => {
+  const role = String(currentUser.value.role ?? '').trim().toLowerCase()
+
+  return userRoleLabelMap[role] ?? (role ? role.replaceAll('_', ' ') : '-')
+})
+const currentUserStatusLabel = computed(() => {
+  const status = String(currentUser.value.status ?? '').trim().toLowerCase()
+
+  return userStatusLabelMap[status] ?? (status ? '상태 확인 필요' : '-')
+})
 
 function toggleNotificationPanel() {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -52,6 +77,23 @@ function toggleTheme() {
   uiStore.toggleTheme()
 }
 
+function closeHeaderPopoversOnOutsidePointer(event) {
+  if (isNotificationOpen.value && !notificationRef.value?.contains(event.target)) {
+    isNotificationOpen.value = false
+  }
+
+  if (isProfileOpen.value && !profileRef.value?.contains(event.target)) {
+    isProfileOpen.value = false
+  }
+}
+
+function closeHeaderPopoversOnEscape(event) {
+  if (event.key === 'Escape') {
+    isNotificationOpen.value = false
+    isProfileOpen.value = false
+  }
+}
+
 async function handleLogout() {
   await authStore.logout()
   isProfileOpen.value = false
@@ -59,11 +101,18 @@ async function handleLogout() {
 }
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', closeHeaderPopoversOnOutsidePointer)
+  document.addEventListener('keydown', closeHeaderPopoversOnEscape)
   await authStore.loadCurrentUser()
 
   if (!shouldSkipHeaderApi) {
     loadNotifications({ unreadOnly: true })
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeHeaderPopoversOnOutsidePointer)
+  document.removeEventListener('keydown', closeHeaderPopoversOnEscape)
 })
 </script>
 
@@ -92,7 +141,7 @@ onMounted(async () => {
     </ul>
 
     <div class="dashboard-header__tools">
-      <div class="dashboard-header__notification">
+      <div ref="notificationRef" class="dashboard-header__notification">
         <button
           class="dashboard-header__notification-button"
           type="button"
@@ -132,9 +181,13 @@ onMounted(async () => {
               v-for="notification in unreadNotifications"
               :key="notification.id"
               class="dashboard-header__notification-item"
+              :class="`dashboard-header__notification-item--${notification.tone}`"
             >
               <div class="dashboard-header__notification-copy">
-                <strong>{{ notification.code }}</strong>
+                <div class="dashboard-header__notification-code">
+                  <span class="dashboard-header__notification-status-dot" aria-hidden="true"></span>
+                  <strong>{{ notification.code }}</strong>
+                </div>
                 <span>{{ notification.message }}</span>
                 <time>{{ notification.occurredAt }}</time>
               </div>
@@ -175,7 +228,7 @@ onMounted(async () => {
         한 / EN
       </span>
 
-      <div class="dashboard-header__profile">
+      <div ref="profileRef" class="dashboard-header__profile">
         <button
           class="dashboard-header__user-button"
           type="button"
@@ -205,7 +258,7 @@ onMounted(async () => {
           <dl class="dashboard-header__profile-list">
             <div>
               <dt>권한</dt>
-              <dd data-test="dashboard-header-profile-department">{{ currentUser.role || '-' }}</dd>
+              <dd data-test="dashboard-header-profile-department">{{ currentUserRoleLabel }}</dd>
             </div>
             <div>
               <dt>담당 라인</dt>
@@ -213,7 +266,10 @@ onMounted(async () => {
             </div>
             <div>
               <dt>상태</dt>
-              <dd>{{ currentUser.status || '-' }}</dd>
+              <dd class="dashboard-header__profile-status">
+                <span aria-hidden="true"></span>
+                {{ currentUserStatusLabel }}
+              </dd>
             </div>
           </dl>
 
@@ -441,10 +497,21 @@ onMounted(async () => {
   gap: var(--agentory-spacing-12);
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  background: var(--agentory-color-bg-app);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 62%);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 14%),
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 34%) 52%,
+      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
+    );
+  border: 0;
   border-radius: var(--agentory-radius-16);
-  box-shadow: var(--agentory-shadow-panel-soft);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 24%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%),
+    var(--agentory-shadow-panel-strong);
+  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(112%);
 }
 
 .dashboard-header__notification-panel-header {
@@ -481,13 +548,26 @@ onMounted(async () => {
 }
 
 .dashboard-header__notification-item {
+  --dashboard-notification-tone: var(--agentory-color-status-warning);
+
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--agentory-spacing-12);
   padding: var(--agentory-spacing-10) var(--agentory-spacing-12);
-  background: var(--agentory-color-bg-surface);
+  background: transparent;
   border-radius: var(--agentory-radius-8);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 72%);
+}
+
+.dashboard-header__notification-item--warning {
+  background: transparent;
+}
+
+.dashboard-header__notification-item--danger {
+  --dashboard-notification-tone: var(--agentory-color-status-danger-text);
+
+  background: transparent;
 }
 
 .dashboard-header__notification-copy {
@@ -497,11 +577,29 @@ onMounted(async () => {
   gap: var(--agentory-spacing-4);
 }
 
+.dashboard-header__notification-code {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--agentory-spacing-6);
+}
+
+.dashboard-header__notification-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--dashboard-notification-tone);
+  border-radius: var(--agentory-radius-pill);
+}
+
 .dashboard-header__notification-copy strong {
-  color: var(--agentory-color-status-danger-text);
+  overflow: hidden;
+  color: var(--dashboard-notification-tone);
   font-size: var(--agentory-font-size-body);
   font-weight: var(--agentory-font-weight-bold);
   line-height: var(--agentory-line-height-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashboard-header__notification-copy span,
@@ -549,13 +647,21 @@ onMounted(async () => {
   flex-direction: column;
   gap: var(--agentory-spacing-16);
   color: var(--agentory-color-text-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 2%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-inverse), transparent 34%);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 12%),
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 30%) 54%,
+      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 80%)
+    );
+  border: 0;
   border-radius: var(--agentory-radius-16);
   box-shadow:
-    var(--agentory-shadow-panel-soft),
-    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 12%);
-  backdrop-filter: var(--agentory-blur-glass);
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 20%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%),
+    var(--agentory-shadow-panel-strong);
+  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(112%);
 }
 
 .dashboard-header__profile-summary {
@@ -564,7 +670,7 @@ onMounted(async () => {
   align-items: center;
   gap: var(--agentory-spacing-12);
   padding: var(--agentory-spacing-12);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
+  background: color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 56%);
   border-radius: var(--agentory-radius-12);
 }
 
@@ -622,7 +728,7 @@ onMounted(async () => {
   gap: var(--agentory-spacing-10);
   min-height: 34px;
   padding: 0 var(--agentory-spacing-8);
-  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 88%);
+  background: color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 66%);
   border-radius: var(--agentory-radius-8);
 }
 
@@ -642,6 +748,20 @@ onMounted(async () => {
   line-height: var(--agentory-line-height-body);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dashboard-header__profile-list .dashboard-header__profile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-6);
+}
+
+.dashboard-header__profile-status span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--agentory-color-status-normal-text);
+  border-radius: var(--agentory-radius-pill);
 }
 
 .dashboard-header__logout-button {
