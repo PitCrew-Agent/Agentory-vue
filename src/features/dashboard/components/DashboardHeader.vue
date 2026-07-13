@@ -9,6 +9,7 @@ import themeMoonIcon from '@/assets/icons/dashboard/theme-moon.svg'
 import themeSunIcon from '@/assets/icons/dashboard/theme-sun.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
+import { LOCALE_OPTIONS } from '@/features/i18n/constants/locales'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
@@ -75,6 +76,14 @@ function toggleProfilePanel() {
 
 function toggleTheme() {
   uiStore.toggleTheme()
+}
+
+function selectLocale(locale) {
+  if (!uiStore.setLocale(locale)) {
+    return
+  }
+
+  window.location.reload()
 }
 
 function closeHeaderPopoversOnOutsidePointer(event) {
@@ -224,9 +233,23 @@ onBeforeUnmount(() => {
         />
       </button>
 
-      <span class="dashboard-header__language-indicator" aria-label="한국어와 영어 지원 준비 중">
-        한 / EN
-      </span>
+      <div class="dashboard-header__language-switch" role="group" aria-label="응답 언어 선택">
+        <button
+          v-for="option in LOCALE_OPTIONS"
+          :key="option.locale"
+          class="dashboard-header__language-option"
+          :class="{
+            'dashboard-header__language-option--active': uiStore.currentLocale === option.locale,
+          }"
+          type="button"
+          :aria-label="option.name"
+          :aria-pressed="uiStore.currentLocale === option.locale"
+          :data-test="`dashboard-header-locale-${option.locale}`"
+          @click="selectLocale(option.locale)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
 
       <div ref="profileRef" class="dashboard-header__profile">
         <button
@@ -430,16 +453,48 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
-.dashboard-header__language-indicator {
+.dashboard-header__language-switch {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 var(--agentory-spacing-8);
-  color: color-mix(in srgb, var(--agentory-color-text-inverse), transparent 18%);
+  height: 28px;
+  padding: var(--agentory-spacing-2);
+  background: color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 10%);
+  border-radius: var(--agentory-radius-8);
+}
+
+.dashboard-header__language-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 24px;
+  padding: 0 var(--agentory-spacing-6);
+  color: color-mix(in srgb, var(--agentory-color-text-inverse), transparent 32%);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-semi-bold);
-  line-height: var(--agentory-line-height-body-sm);
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-5);
+  cursor: pointer;
   white-space: nowrap;
+  transition:
+    color 160ms var(--agentory-ease-soft),
+    background-color 160ms var(--agentory-ease-soft);
+}
+
+.dashboard-header__language-option:hover {
+  color: var(--agentory-color-text-inverse);
+}
+
+.dashboard-header__language-option--active {
+  color: var(--agentory-color-bg-primary);
+  background: var(--agentory-color-text-inverse);
+}
+
+.dashboard-header__language-option:focus-visible {
+  outline: 2px solid var(--agentory-color-border-inverse);
+  outline-offset: 1px;
 }
 
 .dashboard-header__notification-icon {

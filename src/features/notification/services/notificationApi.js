@@ -1,5 +1,7 @@
 import { normalizeNotificationReadStatus } from '@/constants/notificationStatus'
+import { getAcceptLanguage } from '@/features/i18n/services/localePreference'
 import { buildApiUrl, http } from '@/services/api/http'
+import { subscribeToSse } from '@/services/api/sse'
 
 function formatDate(value) {
   const date = new Date(value)
@@ -17,7 +19,9 @@ function formatDateTime(value) {
   const date = new Date(value)
 
   if (Number.isNaN(date.getTime())) {
-    return String(value ?? '').replace('T', ' ').slice(0, 16)
+    return String(value ?? '')
+      .replace('T', ' ')
+      .slice(0, 16)
   }
 
   return `${formatDate(value)} ${String(date.getHours()).padStart(2, '0')}:${String(
@@ -35,7 +39,9 @@ export function normalizeNotificationTone(item = {}) {
   )
     .trim()
     .toLowerCase()
-  const code = String(item.alarm_code ?? item.code ?? '').trim().toUpperCase()
+  const code = String(item.alarm_code ?? item.code ?? '')
+    .trim()
+    .toUpperCase()
 
   if (['danger', 'critical', 'error', '위험'].includes(rawTone) || code.startsWith('ERR-')) {
     return 'danger'
@@ -176,32 +182,41 @@ export function markAllNotificationsReadRequest() {
 }
 
 export function subscribeNotificationStream({ afterId = 0, onError, onNotification } = {}) {
-  if (typeof EventSource === 'undefined') {
-    return () => {}
+  let latestNotificationId = Number(afterId) || 0
+
+  function getStreamUrl() {
+    const streamUrl = new URL(buildApiUrl('/api/v1/notifications/stream'))
+    streamUrl.searchParams.set('after_id', String(latestNotificationId))
+
+    return streamUrl.toString()
   }
 
-  const streamUrl = new URL(buildApiUrl('/api/v1/notifications/stream'))
-  streamUrl.searchParams.set('after_id', String(afterId))
-
-  const eventSource = new EventSource(streamUrl.toString(), {
-    withCredentials: true,
-  })
-
   function handleNotification(event) {
+    if (event.event !== 'notification') {
+      return
+    }
+
     try {
-      onNotification?.(JSON.parse(event.data))
+      const notification = JSON.parse(event.data)
+      const notificationId = Number(notification.id)
+
+      if (Number.isFinite(notificationId)) {
+        latestNotificationId = Math.max(latestNotificationId, notificationId)
+      }
+
+      onNotification?.(notification)
     } catch (error) {
       onError?.(error)
     }
   }
 
-  eventSource.addEventListener('notification', handleNotification)
-  eventSource.onerror = (event) => {
-    onError?.(event)
-  }
-
-  return () => {
-    eventSource.removeEventListener('notification', handleNotification)
-    eventSource.close()
-  }
+  return subscribeToSse({
+    getUrl: getStreamUrl,
+    headers: {
+      Accept: 'text/event-stream',
+      'Accept-Language': getAcceptLanguage(),
+    },
+    onError,
+    onEvent: handleNotification,
+  })
 }
