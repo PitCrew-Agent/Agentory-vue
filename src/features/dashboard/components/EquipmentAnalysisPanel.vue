@@ -1,0 +1,412 @@
+<script setup>
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+
+import DashboardDataPanel from '@/features/dashboard/components/DashboardDataPanel.vue'
+import { metricConfigs, metricIds } from '@/features/dashboard/constants/equipmentMetrics'
+import { fetchEquipmentSensorSeries } from '@/features/dashboard/services/equipmentInsightApi'
+
+const props = defineProps({
+  equipmentId: {
+    type: String,
+    default: '',
+  },
+})
+
+const errorMessage = ref('')
+const isLoading = ref(false)
+const series = ref([])
+let refreshTimer = 0
+let requestId = 0
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function formatValue(value, precision) {
+  if (!Number.isFinite(value)) {
+    return '-'
+  }
+
+  return precision === 0 ? `${Math.round(value)}` : value.toFixed(precision)
+}
+
+function getMetricStatus(value, thresholds) {
+  if (!Number.isFinite(value)) {
+    return { label: '데이터 없음', tone: 'normal' }
+  }
+
+  if (value <= thresholds.lsl || value >= thresholds.usl) {
+    return { label: '위험', tone: 'danger' }
+  }
+
+  if (value <= thresholds.lcl || value >= thresholds.ucl) {
+    return { label: '주의', tone: 'warning' }
+  }
+
+  return { label: '양호', tone: 'normal' }
+}
+
+const metricRows = computed(() =>
+  metricIds.map((metricId) => {
+    const config = metricConfigs[metricId]
+    const values = series.value
+      .slice(-12)
+      .map((point) => point[metricId])
+      .filter(Number.isFinite)
+    const currentValue = values.at(-1) ?? null
+    const range = config.thresholds.usl - config.thresholds.lsl
+    const displayPadding = range * 0.12
+    const displayMin = config.thresholds.lsl - displayPadding
+    const displayMax = config.thresholds.usl + displayPadding
+    const displayRange = displayMax - displayMin
+    const position = (value) => clamp(((value - displayMin) / displayRange) * 100, 0, 100)
+    const status = getMetricStatus(currentValue, config.thresholds)
+    const recentMin = values.length ? Math.min(...values) : null
+    const recentMax = values.length ? Math.max(...values) : null
+    const recentStart = Number.isFinite(recentMin) ? position(recentMin) : 0
+    const recentEnd = Number.isFinite(recentMax) ? position(recentMax) : 0
+    const trend = values.length > 1 ? currentValue - values[0] : 0
+    const thresholdPositions = [
+      position(config.thresholds.lsl),
+      position(config.thresholds.lcl),
+      position(config.thresholds.ucl),
+      position(config.thresholds.usl),
+    ]
+
+    return {
+      currentLabel: formatValue(currentValue, config.precision),
+      currentPosition: Number.isFinite(currentValue) ? position(currentValue) : 0,
+      displayMaxLabel: formatValue(displayMax, config.precision),
+      displayMinLabel: formatValue(displayMin, config.precision),
+      id: metricId,
+      label: config.label,
+      normalRangeLabel: `${formatValue(config.thresholds.lcl, config.precision)} - ${formatValue(
+        config.thresholds.ucl,
+        config.precision,
+      )}`,
+      recentLeft: recentStart,
+      recentWidth: Math.max(recentEnd - recentStart, values.length ? 1.5 : 0),
+      segments: [
+        { tone: 'danger', width: thresholdPositions[0] },
+        { tone: 'warning', width: thresholdPositions[1] - thresholdPositions[0] },
+        { tone: 'normal', width: thresholdPositions[2] - thresholdPositions[1] },
+        { tone: 'warning', width: thresholdPositions[3] - thresholdPositions[2] },
+        { tone: 'danger', width: 100 - thresholdPositions[3] },
+      ],
+      status,
+      trendLabel: `${trend > 0 ? '+' : ''}${formatValue(trend, config.precision)}`,
+      unit: config.unit,
+    }
+  }),
+)
+
+const hasAnalysisData = computed(() => metricRows.value.some((metric) => metric.currentLabel !== '-'))
+
+async function loadSeries() {
+  if (!props.equipmentId) {
+    series.value = []
+    return
+  }
+
+  const currentRequestId = ++requestId
+
+  isLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const nextSeries = await fetchEquipmentSensorSeries(props.equipmentId)
+
+    if (currentRequestId === requestId) {
+      series.value = nextSeries
+    }
+  } catch {
+    if (currentRequestId === requestId) {
+      series.value = []
+      errorMessage.value = '센서 분석 데이터를 불러오지 못했습니다.'
+    }
+  } finally {
+    if (currentRequestId === requestId) {
+      isLoading.value = false
+    }
+  }
+}
+
+watch(
+  () => props.equipmentId,
+  () => {
+    loadSeries()
+    window.clearInterval(refreshTimer)
+    refreshTimer = window.setInterval(loadSeries, 15000)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  window.clearInterval(refreshTimer)
+})
+</script>
+
+<template>
+  <DashboardDataPanel title="센서 기준 범위 분석" :context="equipmentId">
+    <div class="equipment-analysis-panel">
+      <div class="equipment-analysis-panel__legend">
+        <span><i class="equipment-analysis-panel__legend-range"></i>최근 12개 범위</span>
+        <span><i class="equipment-analysis-panel__legend-current"></i>현재값</span>
+      </div>
+
+      <div v-if="hasAnalysisData" class="equipment-analysis-panel__metrics">
+        <article v-for="metric in metricRows" :key="metric.id" class="equipment-analysis-panel__metric">
+          <header>
+            <div>
+              <strong>{{ metric.label }}</strong>
+              <span>최근 변화 {{ metric.trendLabel }} {{ metric.unit }}</span>
+            </div>
+            <div class="equipment-analysis-panel__value">
+              <strong>{{ metric.currentLabel }}</strong>
+              <span>{{ metric.unit }}</span>
+              <small :class="`equipment-analysis-panel__status--${metric.status.tone}`">
+                {{ metric.status.label }}
+              </small>
+            </div>
+          </header>
+
+          <div class="equipment-analysis-panel__track-wrap">
+            <div class="equipment-analysis-panel__track" aria-hidden="true">
+              <span
+                v-for="(segment, index) in metric.segments"
+                :key="`${metric.id}-${index}`"
+                :class="`equipment-analysis-panel__segment--${segment.tone}`"
+                :style="{ width: `${segment.width}%` }"
+              ></span>
+              <i
+                class="equipment-analysis-panel__recent-range"
+                :style="{ left: `${metric.recentLeft}%`, width: `${metric.recentWidth}%` }"
+              ></i>
+              <i
+                class="equipment-analysis-panel__current-marker"
+                :class="`equipment-analysis-panel__current-marker--${metric.status.tone}`"
+                :style="{ left: `${metric.currentPosition}%` }"
+              ></i>
+            </div>
+            <div class="equipment-analysis-panel__scale">
+              <span>{{ metric.displayMinLabel }}</span>
+              <span>양호 {{ metric.normalRangeLabel }}</span>
+              <span>{{ metric.displayMaxLabel }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <p v-else class="equipment-analysis-panel__state">
+        {{ isLoading ? '분석 데이터를 불러오는 중입니다.' : errorMessage || '분석할 센서 데이터가 없습니다.' }}
+      </p>
+    </div>
+  </DashboardDataPanel>
+</template>
+
+<style scoped>
+.equipment-analysis-panel {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--agentory-spacing-8);
+}
+
+.equipment-analysis-panel__legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--agentory-spacing-12);
+}
+
+.equipment-analysis-panel__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-4);
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+}
+
+.equipment-analysis-panel__legend i {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.equipment-analysis-panel__legend-range {
+  width: 14px;
+  height: 6px;
+  background: var(--agentory-color-bg-primary-glass);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.equipment-analysis-panel__legend-current {
+  width: 3px;
+  height: 12px;
+  background: var(--agentory-color-text-primary);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.equipment-analysis-panel__metrics {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: repeat(4, minmax(52px, 1fr));
+  gap: var(--agentory-spacing-6);
+}
+
+.equipment-analysis-panel__metric {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: var(--agentory-spacing-4);
+}
+
+.equipment-analysis-panel__metric header,
+.equipment-analysis-panel__metric header > div,
+.equipment-analysis-panel__value {
+  display: flex;
+  align-items: baseline;
+}
+
+.equipment-analysis-panel__metric header {
+  min-width: 0;
+  justify-content: space-between;
+  gap: var(--agentory-spacing-8);
+}
+
+.equipment-analysis-panel__metric header > div:first-child {
+  min-width: 0;
+  gap: var(--agentory-spacing-6);
+}
+
+.equipment-analysis-panel__metric header strong {
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  white-space: nowrap;
+}
+
+.equipment-analysis-panel__metric header span,
+.equipment-analysis-panel__value small,
+.equipment-analysis-panel__scale {
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+}
+
+.equipment-analysis-panel__metric header > div:first-child > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.equipment-analysis-panel__value {
+  flex: 0 0 auto;
+  gap: var(--agentory-spacing-4);
+}
+
+.equipment-analysis-panel__value > strong {
+  font-size: var(--agentory-font-size-body);
+}
+
+.equipment-analysis-panel__value small {
+  margin-left: var(--agentory-spacing-2);
+  font-weight: var(--agentory-font-weight-semi-bold);
+}
+
+.equipment-analysis-panel__status--normal {
+  color: var(--agentory-color-status-normal-text) !important;
+}
+
+.equipment-analysis-panel__status--warning {
+  color: var(--agentory-color-status-warning) !important;
+}
+
+.equipment-analysis-panel__status--danger {
+  color: var(--agentory-color-status-danger-text) !important;
+}
+
+.equipment-analysis-panel__track-wrap {
+  min-width: 0;
+}
+
+.equipment-analysis-panel__track {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 10px;
+  overflow: visible;
+  border-radius: var(--agentory-radius-pill);
+}
+
+.equipment-analysis-panel__track > span:first-child {
+  border-radius: var(--agentory-radius-pill) 0 0 var(--agentory-radius-pill);
+}
+
+.equipment-analysis-panel__track > span:nth-child(5) {
+  border-radius: 0 var(--agentory-radius-pill) var(--agentory-radius-pill) 0;
+}
+
+.equipment-analysis-panel__segment--normal {
+  background: color-mix(in srgb, var(--agentory-color-status-normal-text), transparent 70%);
+}
+
+.equipment-analysis-panel__segment--warning {
+  background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 62%);
+}
+
+.equipment-analysis-panel__segment--danger {
+  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 68%);
+}
+
+.equipment-analysis-panel__recent-range {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  height: 6px;
+  background: var(--agentory-color-bg-primary-glass);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.equipment-analysis-panel__current-marker {
+  position: absolute;
+  z-index: 3;
+  top: -4px;
+  width: 3px;
+  height: 18px;
+  border-radius: var(--agentory-radius-pill);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px var(--agentory-color-bg-app);
+}
+
+.equipment-analysis-panel__current-marker--normal {
+  background: var(--agentory-color-status-normal-text);
+}
+
+.equipment-analysis-panel__current-marker--warning {
+  background: var(--agentory-color-status-warning);
+}
+
+.equipment-analysis-panel__current-marker--danger {
+  background: var(--agentory-color-status-danger-text);
+}
+
+.equipment-analysis-panel__scale {
+  display: flex;
+  justify-content: space-between;
+  padding-top: var(--agentory-spacing-2);
+}
+
+.equipment-analysis-panel__scale span:nth-child(2) {
+  color: var(--agentory-color-text-subtle);
+}
+
+.equipment-analysis-panel__state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  text-align: center;
+}
+</style>
