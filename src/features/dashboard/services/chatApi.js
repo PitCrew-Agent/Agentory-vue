@@ -481,7 +481,7 @@ export async function fetchChatSessionDetail(sessionId) {
 }
 
 export function deleteChatSession(sessionId) {
-  return http.delete(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`)
+  return http.remove(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`)
 }
 
 export async function streamChatQuery({ equipmentId = '', message, onEvent, sessionId }) {

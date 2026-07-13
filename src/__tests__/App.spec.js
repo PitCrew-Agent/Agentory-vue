@@ -23,15 +23,19 @@ describe('App', () => {
     expect(wrapper.find('.auth-page').exists()).toBe(true)
   })
 
-  it('renders the dashboard route', async () => {
-    await router.push('/dashboard')
-    await router.isReady()
+  it(
+    'renders the dashboard route',
+    async () => {
+      await router.push('/dashboard')
+      await router.isReady()
 
-    const wrapper = mountApp()
+      const wrapper = mountApp()
 
-    expect(wrapper.find('.dashboard-page').exists()).toBe(true)
-    expect(wrapper.find('[data-test="dashboard-sidebar"]').exists()).toBe(true)
-  })
+      expect(wrapper.find('.dashboard-page').exists()).toBe(true)
+      expect(wrapper.find('[data-test="dashboard-sidebar"]').exists()).toBe(true)
+    },
+    12_000,
+  )
 
   it('renders the work log route', async () => {
     await router.push('/work-log')

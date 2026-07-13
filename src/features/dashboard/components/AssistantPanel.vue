@@ -35,7 +35,9 @@ const props = defineProps({
 const emit = defineEmits(['delete-history', 'select-history', 'send-message'])
 const activePanelView = ref('history')
 const inputMessage = ref('')
+const inputRef = ref(null)
 const messageListRef = ref(null)
+const pendingDeleteHistoryItem = ref(null)
 const thinkingTextMap = ref({})
 const thinkingTypingTimers = new Map()
 
@@ -513,8 +515,21 @@ function selectHistoryItem(item) {
   closeHistoryView()
 }
 
-function deleteHistoryItem(item) {
-  emit('delete-history', item.value)
+function requestDeleteHistoryItem(item) {
+  pendingDeleteHistoryItem.value = item
+}
+
+function cancelDeleteHistoryItem() {
+  pendingDeleteHistoryItem.value = null
+}
+
+function confirmDeleteHistoryItem() {
+  if (!pendingDeleteHistoryItem.value) {
+    return
+  }
+
+  emit('delete-history', pendingDeleteHistoryItem.value.value)
+  pendingDeleteHistoryItem.value = null
 }
 
 function submitMessage(message = inputMessage.value) {
@@ -536,7 +551,11 @@ function submitMessage(message = inputMessage.value) {
 }
 
 function submitQuickCommand(command) {
-  submitMessage(command.message)
+  inputMessage.value = command.message
+  nextTick(() => {
+    inputRef.value?.focus()
+    inputRef.value?.setSelectionRange(inputMessage.value.length, inputMessage.value.length)
+  })
 }
 
 function handleInputKeydown(event) {
@@ -622,7 +641,7 @@ onBeforeUnmount(() => {
             class="assistant-panel__history-delete"
             :aria-label="`${item.title} 대화 삭제`"
             title="삭제"
-            @click="deleteHistoryItem(item)"
+            @click="requestDeleteHistoryItem(item)"
           >
             <img :src="historyDeleteIcon" alt="" width="18" height="18" />
           </button>
@@ -800,6 +819,7 @@ onBeforeUnmount(() => {
 
       <div class="assistant-panel__input-row">
         <textarea
+          ref="inputRef"
           v-model="inputMessage"
           rows="2"
           placeholder="Tory에게 메시지를 입력해주세요."
@@ -811,11 +831,42 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
+
+    <Transition name="assistant-delete-confirm">
+      <div
+        v-if="pendingDeleteHistoryItem"
+        class="assistant-panel__delete-overlay"
+        @click.self="cancelDeleteHistoryItem"
+      >
+        <section
+          class="assistant-panel__delete-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="assistant-delete-dialog-title"
+        >
+          <div class="assistant-panel__delete-copy">
+            <strong id="assistant-delete-dialog-title">대화를 삭제할까요?</strong>
+            <span>{{ pendingDeleteHistoryItem.title }}</span>
+          </div>
+          <div class="assistant-panel__delete-actions">
+            <button type="button" @click="cancelDeleteHistoryItem">취소</button>
+            <button
+              type="button"
+              class="assistant-panel__delete-confirm"
+              @click="confirmDeleteHistoryItem"
+            >
+              삭제
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
   </aside>
 </template>
 
 <style scoped>
 .assistant-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -910,10 +961,14 @@ onBeforeUnmount(() => {
   width: 6px;
 }
 
-.assistant-panel__history::-webkit-scrollbar-button {
+.assistant-panel__history::-webkit-scrollbar-button,
+.assistant-panel__history::-webkit-scrollbar-button:single-button,
+.assistant-panel__history::-webkit-scrollbar-button:vertical:start:decrement,
+.assistant-panel__history::-webkit-scrollbar-button:vertical:end:increment {
   display: none;
   width: 0;
   height: 0;
+  background: transparent;
 }
 
 .assistant-panel__history::-webkit-scrollbar-track {
@@ -1023,6 +1078,7 @@ onBeforeUnmount(() => {
 .assistant-panel__history-delete img {
   width: 18px;
   height: 18px;
+  filter: var(--agentory-filter-history-delete);
   opacity: 0.68;
 }
 
@@ -1105,10 +1161,15 @@ onBeforeUnmount(() => {
   width: 6px;
 }
 
-.assistant-panel__messages::-webkit-scrollbar-button {
+.assistant-panel__messages::-webkit-scrollbar-button,
+.assistant-panel__messages::-webkit-scrollbar-button:single-button,
+.assistant-panel__messages::-webkit-scrollbar-button:vertical:start:decrement,
+.assistant-panel__messages::-webkit-scrollbar-button:vertical:end:increment {
   display: none;
   width: 0;
   height: 0;
+  min-height: 0;
+  background: transparent;
 }
 
 .assistant-panel__thinking-trace::-webkit-scrollbar-button,
@@ -1562,14 +1623,29 @@ onBeforeUnmount(() => {
 }
 
 .assistant-panel__quick {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--agentory-spacing-8);
   margin: var(--agentory-spacing-10);
   padding: var(--agentory-spacing-10);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 94%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
+  overflow: hidden;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 18%),
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 62%) 48%,
+      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
+    );
+  border: 0;
   border-radius: var(--agentory-radius-12);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 26%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%),
+    0 10px 24px color-mix(in srgb, var(--agentory-color-text-primary), transparent 90%);
+  backdrop-filter: blur(22px) saturate(190%) contrast(112%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%) contrast(112%);
+  isolation: isolate;
 }
 
 .assistant-panel__quick-header {
@@ -1644,9 +1720,17 @@ onBeforeUnmount(() => {
 
 .assistant-panel__quick-loading-row {
   min-height: 34px;
-  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 4%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 38%),
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 72%)
+    );
+  border: 0;
   border-radius: var(--agentory-radius-10);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 48%);
+  backdrop-filter: blur(14px) saturate(175%);
+  -webkit-backdrop-filter: blur(14px) saturate(175%);
 }
 
 .assistant-panel__quick button {
@@ -1656,9 +1740,18 @@ onBeforeUnmount(() => {
     var(--agentory-spacing-20);
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 2%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 34%),
+      color-mix(in srgb, var(--agentory-color-bg-app), transparent 70%)
+    );
+  border: 0;
   border-radius: var(--agentory-radius-10);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 36%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%),
+    0 5px 14px color-mix(in srgb, var(--agentory-color-text-primary), transparent 94%);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-medium);
   line-height: var(--agentory-line-height-body-sm);
@@ -1666,9 +1759,10 @@ onBeforeUnmount(() => {
   text-wrap: balance;
   cursor: pointer;
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
+    box-shadow 220ms var(--agentory-ease-soft),
     transform 220ms var(--agentory-ease-elastic);
+  backdrop-filter: blur(16px) saturate(185%) contrast(108%);
+  -webkit-backdrop-filter: blur(16px) saturate(185%) contrast(108%);
 }
 
 .assistant-panel__quick button::before {
@@ -1683,7 +1777,26 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
 }
 
+.assistant-panel__quick button::after {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 18%,
+      color-mix(in srgb, var(--agentory-color-border-inverse), transparent 68%) 46%,
+      transparent 72%
+    );
+  opacity: 0.42;
+  pointer-events: none;
+  content: '';
+  transform: translateX(-72%);
+  transition: transform 520ms var(--agentory-ease-soft);
+}
+
 .assistant-panel__quick button span {
+  position: relative;
+  z-index: 1;
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -1692,9 +1805,106 @@ onBeforeUnmount(() => {
 
 .assistant-panel__quick button:hover {
   color: var(--agentory-color-bg-primary);
-  background: var(--agentory-color-bg-app);
-  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 62%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 18%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%),
+    0 8px 18px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 90%);
   transform: translateY(-1px);
+}
+
+.assistant-panel__quick button:hover::after {
+  transform: translateX(72%);
+}
+
+.assistant-panel__delete-overlay {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--agentory-spacing-20);
+  background: color-mix(in srgb, var(--agentory-color-text-primary), transparent 82%);
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+}
+
+.assistant-panel__delete-dialog {
+  display: flex;
+  width: min(286px, 100%);
+  padding: var(--agentory-spacing-20);
+  flex-direction: column;
+  gap: var(--agentory-spacing-20);
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 8%);
+  border: 0;
+  border-radius: var(--agentory-radius-12);
+  box-shadow: var(--agentory-shadow-panel-strong);
+}
+
+.assistant-panel__delete-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--agentory-spacing-6);
+}
+
+.assistant-panel__delete-copy strong {
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  line-height: var(--agentory-line-height-body-lg);
+}
+
+.assistant-panel__delete-copy span {
+  overflow: hidden;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  line-height: var(--agentory-line-height-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-panel__delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--agentory-spacing-8);
+}
+
+.assistant-panel__delete-actions button {
+  min-width: 64px;
+  height: 32px;
+  color: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-surface);
+  border: 0;
+  border-radius: var(--agentory-radius-8);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  cursor: pointer;
+}
+
+.assistant-panel__delete-actions .assistant-panel__delete-confirm {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-status-danger);
+}
+
+.assistant-delete-confirm-enter-active,
+.assistant-delete-confirm-leave-active {
+  transition: opacity 180ms var(--agentory-ease-soft);
+}
+
+.assistant-delete-confirm-enter-active .assistant-panel__delete-dialog,
+.assistant-delete-confirm-leave-active .assistant-panel__delete-dialog {
+  transition: transform 240ms var(--agentory-ease-elastic);
+}
+
+.assistant-delete-confirm-enter-from,
+.assistant-delete-confirm-leave-to {
+  opacity: 0;
+}
+
+.assistant-delete-confirm-enter-from .assistant-panel__delete-dialog,
+.assistant-delete-confirm-leave-to .assistant-panel__delete-dialog {
+  transform: scale(0.96) translateY(6px);
 }
 
 .assistant-panel__input-row {

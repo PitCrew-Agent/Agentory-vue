@@ -45,13 +45,16 @@ const selectedLine = computed(
 const activeEquipmentList = computed(() => selectedLine.value?.equipment ?? [])
 
 const selectedLineSummary = computed(() =>
-  selectedLine.value ? `${selectedLine.value.label} ${activeEquipmentList.value.length}대 설비` : '',
+  selectedLine.value
+    ? `${selectedLine.value.label} ${activeEquipmentList.value.length}대 설비`
+    : '',
 )
 
 const activeStatusSummary = computed(() =>
   statusSummaryOrder.map((status) => ({
     ...status,
-    count: activeEquipmentList.value.filter((equipment) => equipment.status.tone === status.id).length,
+    count: activeEquipmentList.value.filter((equipment) => equipment.status.tone === status.id)
+      .length,
   })),
 )
 
@@ -131,13 +134,13 @@ function getCssToken(tokenName, fallback) {
 
 function getScenePalette() {
   return {
-    accent: getCssToken('--agentory-color-bg-primary', '#237ce2'),
+    accent: getCssToken('--agentory-color-factory-structure-accent', '#237ce2'),
     danger: getCssToken('--agentory-color-status-danger', '#a40601'),
-    dark: getCssToken('--agentory-color-text-primary', '#323232'),
-    floor: getCssToken('--agentory-color-bg-app', '#f8f9f6'),
-    muted: getCssToken('--agentory-color-bg-muted', '#d9d9d9'),
+    dark: getCssToken('--agentory-color-factory-structure-dark', '#444444'),
+    floor: getCssToken('--agentory-color-factory-structure-floor', '#f8f9f6'),
+    muted: getCssToken('--agentory-color-factory-structure-muted', '#d9d9d9'),
     normal: getCssToken('--agentory-color-status-normal', '#00ff37'),
-    panel: getCssToken('--agentory-color-bg-surface', '#ededed'),
+    panel: getCssToken('--agentory-color-factory-structure-panel', '#ededed'),
     warning: getCssToken('--agentory-color-status-warning', '#f4c300'),
   }
 }
@@ -252,7 +255,6 @@ function createFoupLoaderEquipment(group, palette) {
   addBox(group, { x: 1.18, y: 1.02, z: 0.72 }, { x: 0, y: 0.56, z: 0.02 }, bodyMaterial)
   addBox(group, { x: 0.88, y: 0.14, z: 0.78 }, { x: 0, y: 1.16, z: 0.02 }, accentMaterial)
   addBox(group, { x: 0.62, y: 0.4, z: 0.06 }, { x: 0, y: 0.68, z: -0.38 }, glassMaterial)
-
   ;[-0.34, 0.34].forEach((x) => {
     addCylinder(group, 0.18, 0.28, { x, y: 1.4, z: -0.12 }, podMaterial, 32)
     addBox(group, { x: 0.34, y: 0.16, z: 0.42 }, { x, y: 1.24, z: -0.12 }, podMaterial)
@@ -286,16 +288,29 @@ function createEtchEquipment(group, palette) {
 
 function createTransferRobotEquipment(group, palette) {
   const bodyMaterial = createStandardMaterial(palette.panel)
-  const accentMaterial = createStandardMaterial(palette.accent, { metalness: 0.12, roughness: 0.38 })
+  const accentMaterial = createStandardMaterial(palette.accent, {
+    metalness: 0.12,
+    roughness: 0.38,
+  })
   const darkMaterial = createStandardMaterial(palette.dark, { opacity: 0.84, transparent: true })
 
   addBox(group, { x: 1.08, y: 0.16, z: 1.18 }, { x: 0, y: 0.13, z: 0 }, darkMaterial)
   addCylinder(group, 0.34, 0.26, { x: 0, y: 0.34, z: 0 }, accentMaterial)
   addCylinder(group, 0.16, 0.72, { x: 0, y: 0.82, z: 0 }, bodyMaterial)
 
-  const shoulder = addBox(group, { x: 1.08, y: 0.14, z: 0.18 }, { x: 0.32, y: 1.16, z: 0 }, accentMaterial)
+  const shoulder = addBox(
+    group,
+    { x: 1.08, y: 0.14, z: 0.18 },
+    { x: 0.32, y: 1.16, z: 0 },
+    accentMaterial,
+  )
   shoulder.rotation.z = -0.28
-  const forearm = addBox(group, { x: 0.78, y: 0.12, z: 0.16 }, { x: 0.78, y: 1.26, z: 0 }, bodyMaterial)
+  const forearm = addBox(
+    group,
+    { x: 0.78, y: 0.12, z: 0.16 },
+    { x: 0.78, y: 1.26, z: 0 },
+    bodyMaterial,
+  )
   forearm.rotation.z = 0.36
   addBox(group, { x: 0.7, y: 0.08, z: 0.5 }, { x: 1.12, y: 1.12, z: -0.28 }, darkMaterial)
   addToolPort(group, palette, -0.28)
@@ -429,13 +444,22 @@ function buildProcessInfrastructure(group, palette) {
   addBox(group, { x: lineLength, y: 0.02, z: 1.3 }, { x: centerX, y: 0.028, z: 1.8 }, bayMaterial)
   addBox(group, { x: lineLength, y: 0.02, z: 1.3 }, { x: centerX, y: 0.028, z: -1.8 }, bayMaterial)
 
-  addBox(group, { x: lineLength, y: 0.035, z: 0.08 }, { x: centerX, y: 0.09, z: -0.48 }, railMaterial)
-  addBox(group, { x: lineLength, y: 0.035, z: 0.08 }, { x: centerX, y: 0.09, z: 0.48 }, railMaterial)
+  addBox(
+    group,
+    { x: lineLength, y: 0.035, z: 0.08 },
+    { x: centerX, y: 0.09, z: -0.48 },
+    railMaterial,
+  )
+  addBox(
+    group,
+    { x: lineLength, y: 0.035, z: 0.08 },
+    { x: centerX, y: 0.09, z: 0.48 },
+    railMaterial,
+  )
 
   addHorizontalCylinder(group, 0.04, lineLength, { x: centerX, y: 2.72, z: -0.32 }, railMaterial)
   addHorizontalCylinder(group, 0.04, lineLength, { x: centerX, y: 2.72, z: 0.32 }, railMaterial)
   addBox(group, { x: lineLength, y: 0.04, z: 0.72 }, { x: centerX, y: 2.58, z: 0 }, utilityMaterial)
-
   ;[minX + 1.2, centerX - 0.35, maxX - 1.2].forEach((x, index) => {
     const pod = addBox(
       group,
@@ -455,8 +479,18 @@ function buildProcessInfrastructure(group, palette) {
     )
   })
 
-  addBox(group, { x: lineLength, y: 0.08, z: 0.18 }, { x: centerX, y: 0.08, z: 2.72 }, utilityMaterial)
-  addBox(group, { x: lineLength, y: 0.08, z: 0.18 }, { x: centerX, y: 0.08, z: -2.72 }, utilityMaterial)
+  addBox(
+    group,
+    { x: lineLength, y: 0.08, z: 0.18 },
+    { x: centerX, y: 0.08, z: 2.72 },
+    utilityMaterial,
+  )
+  addBox(
+    group,
+    { x: lineLength, y: 0.08, z: 0.18 },
+    { x: centerX, y: 0.08, z: -2.72 },
+    utilityMaterial,
+  )
 
   addHorizontalCylinder(group, 0.032, lineLength, { x: centerX, y: 2.96, z: 0.86 }, pipeMaterial)
   addHorizontalCylinder(group, 0.032, lineLength, { x: centerX, y: 2.96, z: -0.86 }, pipeMaterial)
@@ -482,7 +516,14 @@ function buildProcessInfrastructure(group, palette) {
       { x: equipment.position.x, y: 0.31, z: portZ },
       railMaterial,
     )
-    addCylinder(group, 0.018, 0.9, { x: equipment.position.x, y: 2.25, z: trackZ }, pipeMaterial, 16)
+    addCylinder(
+      group,
+      0.018,
+      0.9,
+      { x: equipment.position.x, y: 2.25, z: trackZ },
+      pipeMaterial,
+      16,
+    )
     addHorizontalCylinder(
       group,
       0.02,
@@ -611,7 +652,10 @@ function setFocusForEquipment(equipment, immediate = false) {
   const sideOffset = new THREE.Vector3(1.6, 3.15, 0)
 
   const focusDistance = clamp(currentOffset.length() || 5.6, 2.8, 8.8)
-  const cameraTarget = target.clone().add(frontDirection.multiplyScalar(focusDistance)).add(sideOffset)
+  const cameraTarget = target
+    .clone()
+    .add(frontDirection.multiplyScalar(focusDistance))
+    .add(sideOffset)
 
   isLineOverviewFocused = false
   targetFocus = { camera: cameraTarget, target }
@@ -811,8 +855,7 @@ function getPriorityAlertEquipment(excludeEquipmentId = '') {
   return ['danger', 'warning']
     .map((tone) =>
       activeEquipmentList.value.find(
-        (equipment) =>
-          equipment.id !== excludeEquipmentId && equipment.status?.tone === tone,
+        (equipment) => equipment.id !== excludeEquipmentId && equipment.status?.tone === tone,
       ),
     )
     .find(Boolean)
@@ -1137,7 +1180,11 @@ watch(
     currentSelectedEquipmentId.value = equipmentId
     syncLineWithEquipment(equipmentId)
     updateSelectionVisuals()
-    if (!hasCompletedInitialOverview || shouldFocusLineOverview || !hasFocusedEquipmentByInteraction) {
+    if (
+      !hasCompletedInitialOverview ||
+      shouldFocusLineOverview ||
+      !hasFocusedEquipmentByInteraction
+    ) {
       nextTick(() => setLineOverviewFocus())
       return
     }
@@ -1171,7 +1218,11 @@ watch(
     rememberActiveEquipmentStatuses()
     updateSelectionVisuals()
 
-    if (!activeEquipmentList.value.some((equipment) => equipment.id === currentSelectedEquipmentId.value)) {
+    if (
+      !activeEquipmentList.value.some(
+        (equipment) => equipment.id === currentSelectedEquipmentId.value,
+      )
+    ) {
       const firstEquipment = activeEquipmentList.value[0]
 
       if (firstEquipment) {
@@ -1306,7 +1357,11 @@ onBeforeUnmount(() => {
         </header>
 
         <ul class="factory-viewport__checklist-list">
-          <li v-for="item in checklistItems" :key="item.id" class="factory-viewport__checklist-item">
+          <li
+            v-for="item in checklistItems"
+            :key="item.id"
+            class="factory-viewport__checklist-item"
+          >
             <span
               class="factory-viewport__checklist-dot"
               :class="{ 'factory-viewport__checklist-dot--checked': item.checked }"
@@ -1416,16 +1471,10 @@ onBeforeUnmount(() => {
   padding: var(--agentory-spacing-8);
   margin: 0;
   list-style: none;
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-12);
-  box-shadow:
-    var(--factory-glass-shadow);
+  box-shadow: var(--factory-glass-shadow);
   backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
   pointer-events: auto;
@@ -1510,12 +1559,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--agentory-spacing-6);
   padding: var(--agentory-spacing-4);
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-pill);
   box-shadow: var(--factory-glass-shadow);
@@ -1567,12 +1611,7 @@ onBeforeUnmount(() => {
   max-width: min(220px, 44cqw);
   padding: var(--agentory-spacing-6) var(--agentory-spacing-12);
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-pill);
   box-shadow: var(--factory-glass-shadow);
@@ -1594,12 +1633,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--agentory-spacing-5);
   overflow: auto;
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-12);
   box-shadow: var(--factory-glass-shadow);
@@ -1711,16 +1745,10 @@ onBeforeUnmount(() => {
   gap: var(--agentory-spacing-8);
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-12);
-  box-shadow:
-    var(--factory-glass-shadow);
+  box-shadow: var(--factory-glass-shadow);
   backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
 }
@@ -1850,12 +1878,7 @@ onBeforeUnmount(() => {
   min-height: 34px;
   padding: var(--agentory-spacing-6) var(--agentory-spacing-10);
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      135deg,
-      var(--factory-glass-bg-start),
-      var(--factory-glass-bg-end)
-    );
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
   border-radius: var(--agentory-radius-8);
   box-shadow: var(--factory-glass-shadow);
