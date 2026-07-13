@@ -89,7 +89,4 @@ const props = defineProps({
   min-height: 0;
 }
 
-.chart-panel__body :deep(.line-chart__svg) {
-  height: 100%;
-}
 </style>
