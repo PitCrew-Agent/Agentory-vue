@@ -30,10 +30,20 @@ function toLocalDateTime(date, time) {
 function createWorkLogPayload(log) {
   return {
     content: log.task.trim(),
-    ended_at: null,
+    ended_at: log.endedDate ? toLocalDateTime(log.endedDate, log.endedTime) : null,
+    source_notification_id: log.sourceNotificationId ?? null,
     started_at: toLocalDateTime(log.date, log.time),
     status: toWorkLogStatusLabel(log.status),
+    work_type: log.workType || '기타',
   }
+}
+
+function createWorkLogUpdatePayload(log) {
+  const payload = createWorkLogPayload(log)
+
+  delete payload.source_notification_id
+
+  return payload
 }
 
 function normalizeWorkLogItems(items) {
@@ -42,17 +52,23 @@ function normalizeWorkLogItems(items) {
 
 function normalizeWorkLog(item) {
   const date = formatDate(item.started_at)
+  const endedDate = item.ended_at ? formatDate(item.ended_at) : ''
 
   return {
+    alarmCode: item.alarm_code ?? '',
     date,
-    equipmentCode: '',
-    equipmentId: '',
+    endedDate,
+    endedTime: item.ended_at ? formatTime(item.ended_at) : '',
+    equipmentCode: item.equipment_id ?? '',
+    equipmentId: item.equipment_id ?? '',
     id: item.id,
     lineId: '',
     operator: item.worker_name,
+    sourceNotificationId: item.source_notification_id ?? null,
     status: normalizeWorkLogStatus(item.status),
     task: item.content,
     time: formatTime(item.started_at),
+    workType: item.work_type ?? '기타',
   }
 }
 
@@ -89,7 +105,10 @@ export async function createWorkLogRequest(log) {
 }
 
 export async function updateWorkLogRequest(log) {
-  const updatedLog = await http.patch(`/api/v1/work-logs/${encodeURIComponent(log.id)}`, createWorkLogPayload(log))
+  const updatedLog = await http.patch(
+    `/api/v1/work-logs/${encodeURIComponent(log.id)}`,
+    createWorkLogUpdatePayload(log),
+  )
 
   return normalizeWorkLog(updatedLog)
 }
