@@ -33,9 +33,17 @@ import {
   saveDashboardLayoutState,
 } from '@/features/dashboard/utils/dashboardLayoutStorage'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
+import { useIncidentResponse } from '@/features/incident/composables/useIncidentResponse'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
+const {
+  activeNotificationId,
+  incidentErrorMessage,
+  incidentErrorNotificationId,
+  isIncidentCreating,
+  startIncidentResponse,
+} = useIncidentResponse()
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
 const assistantHistoryItems = ref([])
@@ -1464,7 +1472,14 @@ watch(
       @toggle="toggleSidebar"
     />
 
-    <DashboardAlertToast :toast="alertToast" />
+    <DashboardAlertToast
+      :active-notification-id="activeNotificationId"
+      :is-responding="isIncidentCreating"
+      :response-error="incidentErrorMessage"
+      :response-error-notification-id="incidentErrorNotificationId"
+      :toast="alertToast"
+      @respond="startIncidentResponse"
+    />
 
     <section class="dashboard-content" aria-label="대시보드 편집 영역">
       <Transition name="dashboard-content-loader">

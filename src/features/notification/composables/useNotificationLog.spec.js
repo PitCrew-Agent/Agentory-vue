@@ -51,6 +51,16 @@ function createNotifications(count) {
   }))
 }
 
+function createNotificationsForDate(date, count, startId) {
+  return Array.from({ length: count }, (_, index) => ({
+    assignedLine: true,
+    id: startId + index,
+    occurredAt: `${date} 12:${String(index).padStart(2, '0')}`,
+    occurredDate: date,
+    readStatus: 'unread',
+  }))
+}
+
 describe('useNotificationLog', () => {
   beforeEach(() => {
     fetchAllNotificationItemsMock.mockReset()
@@ -99,5 +109,27 @@ describe('useNotificationLog', () => {
     expect(markNotificationReadRequestMock).toHaveBeenCalledWith(2)
     expect(applyNotificationReadStatusMock).toHaveBeenCalledWith(2, 'read')
     expect(notificationLog.notificationGroups.value[0].rows[1].readStatus).toBe('read')
+  })
+
+  it('전체 알림 날짜를 제공하고 선택 날짜가 처음 등장하는 페이지로 이동한다', async () => {
+    fetchAllNotificationItemsMock.mockResolvedValue([
+      ...createNotificationsForDate('2026-07-12', 12, 1),
+      ...createNotificationsForDate('2026-07-11', 5, 13),
+      ...createNotificationsForDate('2026-07-10', 3, 18),
+    ])
+    const notificationLog = useNotificationLog()
+
+    await notificationLog.loadNotifications()
+
+    expect(notificationLog.notificationDates.value).toEqual([
+      '2026-07-12',
+      '2026-07-11',
+      '2026-07-10',
+    ])
+    expect(notificationLog.goToNotificationDate('2026-07-11')).toBe(true)
+    expect(notificationLog.notificationPagination.pageIndex).toBe(2)
+    expect(notificationLog.notificationGroups.value[0].rows.map((row) => row.id)).toContain(13)
+    expect(notificationLog.goToNotificationDate('2026-07-09')).toBe(false)
+    expect(notificationLog.notificationPagination.pageIndex).toBe(2)
   })
 })

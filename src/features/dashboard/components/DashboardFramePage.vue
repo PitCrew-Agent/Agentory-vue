@@ -8,6 +8,7 @@ import DashboardSidebar from '@/features/dashboard/components/DashboardSidebar.v
 import { createDashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
+import { useIncidentResponse } from '@/features/incident/composables/useIncidentResponse'
 
 const props = defineProps({
   activeNavigationId: {
@@ -26,6 +27,13 @@ const props = defineProps({
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
+const {
+  activeNotificationId,
+  incidentErrorMessage,
+  incidentErrorNotificationId,
+  isIncidentCreating,
+  startIncidentResponse,
+} = useIncidentResponse()
 const navigationItems = computed(() => createDashboardNavigation(props.activeNavigationId))
 const isContentLoading = ref(true)
 const shouldSkipFrameApi = import.meta.env.MODE === 'test'
@@ -112,7 +120,14 @@ watch(
       @toggle="toggleSidebar"
     />
 
-    <DashboardAlertToast :toast="alertToast" />
+    <DashboardAlertToast
+      :active-notification-id="activeNotificationId"
+      :is-responding="isIncidentCreating"
+      :response-error="incidentErrorMessage"
+      :response-error-notification-id="incidentErrorNotificationId"
+      :toast="alertToast"
+      @respond="startIncidentResponse"
+    />
 
     <section class="dashboard-frame-page__content" :aria-busy="isContentLoading" :aria-label="props.contentLabel">
       <Transition name="dashboard-content-loader">

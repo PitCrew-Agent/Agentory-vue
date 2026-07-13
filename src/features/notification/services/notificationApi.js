@@ -29,6 +29,25 @@ export function getNotificationGroupDate(item) {
   return formatDate(item.occurred_at ?? item.occurredAt)
 }
 
+export function normalizeNotificationTone(item = {}) {
+  const rawTone = String(
+    item.severity ?? item.status ?? item.status_level ?? item.statusLevel ?? item.tone ?? '',
+  )
+    .trim()
+    .toLowerCase()
+  const code = String(item.alarm_code ?? item.code ?? '').trim().toUpperCase()
+
+  if (['danger', 'critical', 'error', '위험'].includes(rawTone) || code.startsWith('ERR-')) {
+    return 'danger'
+  }
+
+  if (['warning', 'warn', '주의'].includes(rawTone) || code.startsWith('WRN-')) {
+    return 'warning'
+  }
+
+  return 'warning'
+}
+
 export function normalizeNotification(item) {
   const occurredAt = item.occurred_at ?? item.occurredAt
 
@@ -50,6 +69,7 @@ export function normalizeNotification(item) {
     occurredAt: formatDateTime(occurredAt),
     occurredDate: formatDate(occurredAt),
     readStatus: normalizeNotificationReadStatus(item.is_read ?? item.isRead),
+    tone: normalizeNotificationTone(item),
   }
 }
 

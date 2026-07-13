@@ -1,10 +1,28 @@
 <script setup>
 defineProps({
+  activeNotificationId: {
+    type: Number,
+    default: null,
+  },
+  isResponding: {
+    type: Boolean,
+    default: false,
+  },
+  responseError: {
+    type: String,
+    default: '',
+  },
+  responseErrorNotificationId: {
+    type: Number,
+    default: null,
+  },
   toast: {
     type: Object,
     default: null,
   },
 })
+
+defineEmits(['respond'])
 </script>
 
 <template>
@@ -20,8 +38,18 @@ defineProps({
       <div class="dashboard-alert-toast__copy">
         <strong>{{ toast.code }}</strong>
         <span>{{ toast.message }}</span>
+        <small v-if="responseErrorNotificationId === Number(toast.id)">{{ responseError }}</small>
       </div>
-      <time>{{ toast.occurredAt }}</time>
+      <div class="dashboard-alert-toast__actions">
+        <time>{{ toast.occurredAt }}</time>
+        <button
+          type="button"
+          :disabled="isResponding || !Number.isInteger(Number(toast.id))"
+          @click="$emit('respond', toast)"
+        >
+          {{ activeNotificationId === Number(toast.id) ? '계획 생성 중' : '대응 시작' }}
+        </button>
+      </div>
     </aside>
   </Transition>
 </template>
@@ -92,8 +120,38 @@ defineProps({
   white-space: nowrap;
 }
 
+.dashboard-alert-toast__copy small {
+  color: var(--agentory-color-status-danger-text);
+  font-size: var(--agentory-font-size-caption);
+  line-height: var(--agentory-line-height-caption);
+}
+
 .dashboard-alert-toast time {
   color: var(--agentory-color-text-subtle);
+}
+
+.dashboard-alert-toast__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--agentory-spacing-8);
+}
+
+.dashboard-alert-toast__actions button {
+  min-height: 30px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-12);
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-semi-bold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dashboard-alert-toast__actions button:disabled {
+  opacity: 0.58;
+  cursor: wait;
 }
 
 .dashboard-alert-toast-enter-active,

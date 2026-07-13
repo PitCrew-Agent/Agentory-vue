@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import WorkLogPanel from '@/features/workLog/components/WorkLogPanel.vue'
@@ -9,12 +9,15 @@ import {
   fetchWorkLogGroups,
   updateWorkLogRequest,
 } from '@/features/workLog/services/workLogApi'
+import { useIncidentPlanStore } from '@/features/incident/stores/incidentPlanStore'
 
+const incidentPlanStore = useIncidentPlanStore()
 const workLogGroupState = ref([])
 const isWorkLogLoading = ref(false)
 const isWorkLogSubmitting = ref(false)
 const workLogErrorMessage = ref('')
 const shouldSkipWorkLogApi = import.meta.env.MODE === 'test'
+const pendingIncidentPlan = computed(() => incidentPlanStore.pendingPlan)
 
 function insertWorkLog(log) {
   let targetGroup = workLogGroupState.value.find((group) => group.id === log.date)
@@ -140,10 +143,12 @@ onMounted(() => {
     <WorkLogPanel
       :error-message="workLogErrorMessage"
       :groups="workLogGroupState"
+      :incident-plan="pendingIncidentPlan"
       :is-loading="isWorkLogLoading"
       :is-submitting="isWorkLogSubmitting"
       @create-log="createWorkLog"
       @delete-log="deleteWorkLog"
+      @incident-draft-consumed="incidentPlanStore.consumePendingPlan"
       @update-log="updateWorkLog"
     />
   </DashboardFramePage>
