@@ -53,10 +53,14 @@ describe('AssistantPanel', () => {
     expect(cells).toContain('15.9 - 42.9 (로그 단위)')
   })
 
-  it('emits delete-history from the history delete action', async () => {
+  it('confirms before emitting delete-history', async () => {
     const wrapper = mountAssistantPanel()
 
     await wrapper.find('.assistant-panel__history-delete').trigger('click')
+    expect(wrapper.emitted('delete-history')).toBeUndefined()
+    expect(wrapper.find('.assistant-panel__delete-dialog').exists()).toBe(true)
+
+    await wrapper.find('.assistant-panel__delete-confirm').trigger('click')
 
     expect(wrapper.emitted('delete-history')).toEqual([
       [
@@ -66,5 +70,19 @@ describe('AssistantPanel', () => {
         },
       ],
     ])
+  })
+
+  it('moves a recommended question into the composer without sending it', async () => {
+    const wrapper = mountAssistantPanel({
+      props: {
+        quickCommands: [{ id: 'quick-1', label: '압력 이력을 확인해줘' }],
+      },
+    })
+
+    await wrapper.find('.assistant-panel__quick button').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('textarea').element.value).toBe('압력 이력을 확인해줘')
+    expect(wrapper.emitted('send-message')).toBeUndefined()
   })
 })
