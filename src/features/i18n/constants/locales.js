@@ -6,11 +6,11 @@ export const LOCALE_OPTIONS = [
   {
     label: '한',
     locale: 'ko',
-    name: '한국어',
+    nameKey: 'common.languageKorean',
   },
   {
     label: 'EN',
     locale: 'en',
-    name: 'English',
+    nameKey: 'common.languageEnglish',
   },
 ]

@@ -1,18 +1,16 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
 import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
 import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
-import themeMoonIcon from '@/assets/icons/dashboard/theme-moon.svg'
-import themeSunIcon from '@/assets/icons/dashboard/theme-sun.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
-import { LOCALE_OPTIONS } from '@/features/i18n/constants/locales'
 import { useAuthStore } from '@/stores/authStore'
-import { useUiStore } from '@/stores/uiStore'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
+import AppPreferenceControls from '@/features/i18n/components/AppPreferenceControls.vue'
 
 defineProps({
   summary: {
@@ -28,8 +26,8 @@ const statusIconMap = {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 const authStore = useAuthStore()
-const uiStore = useUiStore()
 const { loadNotifications, markNotificationRead, unreadNotifications } = useNotificationCenter()
 const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
@@ -40,29 +38,35 @@ const hasUnreadNotifications = computed(() => unreadNotifications.value.length >
 const currentUser = computed(() => authStore.currentUser)
 const currentUserName = computed(() => authStore.currentUserName)
 const currentUserInitial = computed(() => currentUserName.value.trim().charAt(0).toUpperCase() || 'A')
-const userRoleLabelMap = {
-  admin: '관리자',
-  engineer: '엔지니어',
-  field_engineer: '현장 엔지니어',
-  manager: '운영 관리자',
-  operator: '운영 담당자',
+const userRoleLabelKeyMap = {
+  admin: 'header.roles.admin',
+  engineer: 'header.roles.engineer',
+  field_engineer: 'header.roles.field_engineer',
+  manager: 'header.roles.manager',
+  operator: 'header.roles.operator',
 }
-const userStatusLabelMap = {
-  active: '이용 가능',
-  inactive: '비활성',
-  pending: '승인 대기',
-  suspended: '이용 제한',
+const userStatusLabelKeyMap = {
+  active: 'header.statuses.active',
+  inactive: 'header.statuses.inactive',
+  pending: 'header.statuses.pending',
+  suspended: 'header.statuses.suspended',
 }
 const currentUserRoleLabel = computed(() => {
   const role = String(currentUser.value.role ?? '').trim().toLowerCase()
+  const labelKey = userRoleLabelKeyMap[role]
 
-  return userRoleLabelMap[role] ?? (role ? role.replaceAll('_', ' ') : '-')
+  return labelKey ? t(labelKey) : role ? role.replaceAll('_', ' ') : '-'
 })
 const currentUserStatusLabel = computed(() => {
   const status = String(currentUser.value.status ?? '').trim().toLowerCase()
+  const labelKey = userStatusLabelKeyMap[status]
 
-  return userStatusLabelMap[status] ?? (status ? '상태 확인 필요' : '-')
+  return labelKey ? t(labelKey) : status ? t('header.statuses.unknown') : '-'
 })
+
+function getSummaryLabel(item) {
+  return statusIconMap[item.tone] ? t(`status.${item.tone}`) : item.label
+}
 
 function toggleNotificationPanel() {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -72,18 +76,6 @@ function toggleNotificationPanel() {
 function toggleProfilePanel() {
   isProfileOpen.value = !isProfileOpen.value
   isNotificationOpen.value = false
-}
-
-function toggleTheme() {
-  uiStore.toggleTheme()
-}
-
-function selectLocale(locale) {
-  if (!uiStore.setLocale(locale)) {
-    return
-  }
-
-  window.location.reload()
 }
 
 function closeHeaderPopoversOnOutsidePointer(event) {
@@ -129,7 +121,7 @@ onBeforeUnmount(() => {
   <header class="dashboard-header">
     <img class="dashboard-header__logo" :src="logoImage" alt="Agentory" width="266" height="49" />
 
-    <ul v-if="summary.length" class="dashboard-header__summary" aria-label="설비 상태 요약">
+    <ul v-if="summary.length" class="dashboard-header__summary" :aria-label="t('header.equipmentSummary')">
       <li
         v-for="item in summary"
         :key="item.id"
@@ -143,7 +135,7 @@ onBeforeUnmount(() => {
           width="20"
           height="20"
         />
-        <span>{{ item.label }}</span>
+        <span>{{ getSummaryLabel(item) }}</span>
         <span class="dashboard-header__divider">·</span>
         <strong>{{ item.count }}</strong>
       </li>
@@ -154,7 +146,7 @@ onBeforeUnmount(() => {
         <button
           class="dashboard-header__notification-button"
           type="button"
-          aria-label="읽지 않은 알림 확인"
+          :aria-label="t('header.notificationCheck')"
           :aria-expanded="isNotificationOpen"
           data-test="dashboard-header-notification-toggle"
           @click="toggleNotificationPanel"
@@ -179,10 +171,10 @@ onBeforeUnmount(() => {
           v-if="isNotificationOpen"
           class="dashboard-header__notification-panel"
           data-test="dashboard-header-notification-dropdown"
-          aria-label="읽지 않은 알림"
+          :aria-label="t('header.unreadNotifications')"
         >
           <header class="dashboard-header__notification-panel-header">
-            <strong>읽지 않은 알림</strong>
+            <strong>{{ t('header.unreadNotifications') }}</strong>
           </header>
 
           <ul v-if="unreadNotifications.length" class="dashboard-header__notification-list">
@@ -206,50 +198,22 @@ onBeforeUnmount(() => {
                 :data-test="`dashboard-header-notification-read-${notification.id}`"
                 @click="markNotificationRead(notification.id)"
               >
-                읽음
+                {{ t('header.markRead') }}
               </button>
             </li>
           </ul>
 
-          <p v-else class="dashboard-header__notification-empty">읽지 않은 알림 없음</p>
+          <p v-else class="dashboard-header__notification-empty">
+            {{ t('header.noUnreadNotifications') }}
+          </p>
         </section>
       </div>
 
-      <button
-        class="dashboard-header__theme-button"
-        type="button"
-        :aria-label="uiStore.isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환'"
-        :aria-pressed="uiStore.isDarkMode"
-        :title="uiStore.isDarkMode ? '라이트 모드' : '다크 모드'"
-        data-test="dashboard-header-theme-toggle"
-        @click="toggleTheme"
-      >
-        <img
-          class="dashboard-header__theme-icon"
-          :src="uiStore.isDarkMode ? themeSunIcon : themeMoonIcon"
-          alt=""
-          width="20"
-          height="20"
-        />
-      </button>
-
-      <div class="dashboard-header__language-switch" role="group" aria-label="응답 언어 선택">
-        <button
-          v-for="option in LOCALE_OPTIONS"
-          :key="option.locale"
-          class="dashboard-header__language-option"
-          :class="{
-            'dashboard-header__language-option--active': uiStore.currentLocale === option.locale,
-          }"
-          type="button"
-          :aria-label="option.name"
-          :aria-pressed="uiStore.currentLocale === option.locale"
-          :data-test="`dashboard-header-locale-${option.locale}`"
-          @click="selectLocale(option.locale)"
-        >
-          {{ option.label }}
-        </button>
-      </div>
+      <AppPreferenceControls
+        reload-on-locale-change
+        test-prefix="dashboard-header"
+        variant="header"
+      />
 
       <div ref="profileRef" class="dashboard-header__profile">
         <button
@@ -266,7 +230,7 @@ onBeforeUnmount(() => {
           v-if="isProfileOpen"
           class="dashboard-header__profile-card"
           data-test="dashboard-header-profile-card"
-          aria-label="사용자 프로필"
+          :aria-label="t('header.profile')"
         >
           <div class="dashboard-header__profile-summary">
             <span class="dashboard-header__profile-avatar" aria-hidden="true">
@@ -280,15 +244,15 @@ onBeforeUnmount(() => {
 
           <dl class="dashboard-header__profile-list">
             <div>
-              <dt>권한</dt>
+              <dt>{{ t('header.role') }}</dt>
               <dd data-test="dashboard-header-profile-department">{{ currentUserRoleLabel }}</dd>
             </div>
             <div>
-              <dt>담당 라인</dt>
+              <dt>{{ t('header.assignedLine') }}</dt>
               <dd>{{ currentUser.assignedLineLabel || '-' }}</dd>
             </div>
             <div>
-              <dt>상태</dt>
+              <dt>{{ t('header.status') }}</dt>
               <dd class="dashboard-header__profile-status">
                 <span aria-hidden="true"></span>
                 {{ currentUserStatusLabel }}
@@ -302,7 +266,7 @@ onBeforeUnmount(() => {
             data-test="dashboard-header-logout"
             @click="handleLogout"
           >
-            로그아웃
+            {{ t('header.logout') }}
           </button>
         </section>
       </div>
@@ -416,85 +380,6 @@ onBeforeUnmount(() => {
 .dashboard-header__notification-button:focus-visible {
   outline: 2px solid var(--agentory-color-border-inverse);
   outline-offset: 2px;
-}
-
-.dashboard-header__theme-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--agentory-radius-pill);
-  cursor: pointer;
-  transition:
-    background-color 160ms var(--agentory-ease-soft),
-    transform 180ms var(--agentory-ease-soft);
-}
-
-.dashboard-header__theme-button:hover {
-  background: var(--agentory-color-bg-glass-white);
-}
-
-.dashboard-header__theme-button:focus-visible {
-  outline: 2px solid var(--agentory-color-border-inverse);
-  outline-offset: 2px;
-}
-
-.dashboard-header__theme-button:active {
-  transform: scale(0.94);
-}
-
-.dashboard-header__theme-icon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.dashboard-header__language-switch {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: var(--agentory-spacing-2);
-  background: color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 10%);
-  border-radius: var(--agentory-radius-8);
-}
-
-.dashboard-header__language-option {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 30px;
-  height: 24px;
-  padding: 0 var(--agentory-spacing-6);
-  color: color-mix(in srgb, var(--agentory-color-text-inverse), transparent 32%);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-semi-bold);
-  line-height: 1;
-  background: transparent;
-  border: 0;
-  border-radius: var(--agentory-radius-5);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    color 160ms var(--agentory-ease-soft),
-    background-color 160ms var(--agentory-ease-soft);
-}
-
-.dashboard-header__language-option:hover {
-  color: var(--agentory-color-text-inverse);
-}
-
-.dashboard-header__language-option--active {
-  color: var(--agentory-color-bg-primary);
-  background: var(--agentory-color-text-inverse);
-}
-
-.dashboard-header__language-option:focus-visible {
-  outline: 2px solid var(--agentory-color-border-inverse);
-  outline-offset: 1px;
 }
 
 .dashboard-header__notification-icon {

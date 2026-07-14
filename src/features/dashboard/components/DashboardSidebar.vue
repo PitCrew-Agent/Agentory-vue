@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
@@ -30,6 +31,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['restore-widget', 'toggle'])
+const { t } = useI18n()
 const { sidebarActiveIndex } = useDashboardSidebar()
 
 const iconMap = {
@@ -77,6 +79,10 @@ function restoreWidget(id) {
   emit('restore-widget', id)
   isDockOpen.value = false
 }
+
+function getItemLabel(item) {
+  return item.labelKey ? t(item.labelKey) : item.label
+}
 </script>
 
 <template>
@@ -88,7 +94,7 @@ function restoreWidget(id) {
   >
     <nav
       class="dashboard-sidebar__nav"
-      aria-label="대시보드 메뉴"
+      :aria-label="t('navigation.label')"
       :style="{ '--sidebar-active-index': visualActiveIndex }"
     >
       <span v-if="visualActiveIndex >= 0" class="dashboard-sidebar__active-indicator" aria-hidden="true"></span>
@@ -102,7 +108,7 @@ function restoreWidget(id) {
           :aria-current="item.active ? 'page' : undefined"
         >
           <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
-          <span class="dashboard-sidebar__label">{{ item.label }}</span>
+          <span class="dashboard-sidebar__label">{{ getItemLabel(item) }}</span>
         </RouterLink>
 
         <button
@@ -113,7 +119,7 @@ function restoreWidget(id) {
           :aria-current="item.active ? 'page' : undefined"
         >
           <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
-          <span class="dashboard-sidebar__label">{{ item.label }}</span>
+          <span class="dashboard-sidebar__label">{{ getItemLabel(item) }}</span>
         </button>
       </template>
     </nav>
@@ -127,7 +133,7 @@ function restoreWidget(id) {
         @click="isDockOpen = !isDockOpen"
       >
         <img class="dashboard-sidebar__icon" :src="widgetStorageIcon" alt="" width="36" height="36" />
-        <span class="dashboard-sidebar__label">위젯 보관함</span>
+        <span class="dashboard-sidebar__label">{{ t('sidebar.widgetStorage') }}</span>
         <small v-if="dockWidgets.length > 0" class="dashboard-sidebar__storage-count">
           {{ dockWidgets.length }}
         </small>
@@ -135,7 +141,7 @@ function restoreWidget(id) {
 
       <div v-if="isDockOpen" class="dashboard-sidebar__dock-panel" data-test="dashboard-widget-dock-panel">
         <div class="dashboard-sidebar__dock-header">
-          <strong>위젯 보관함</strong>
+          <strong>{{ t('sidebar.widgetStorage') }}</strong>
           <span>{{ dockWidgets.length }}</span>
         </div>
 
@@ -149,11 +155,11 @@ function restoreWidget(id) {
             @click="restoreWidget(widget.id)"
           >
             <span>{{ widget.label }}</span>
-            <small>꺼내기</small>
+            <small>{{ t('sidebar.restore') }}</small>
           </button>
         </div>
 
-        <p v-else class="dashboard-sidebar__dock-empty">보관된 위젯 없음</p>
+        <p v-else class="dashboard-sidebar__dock-empty">{{ t('sidebar.emptyStorage') }}</p>
       </div>
     </div>
 
@@ -168,7 +174,7 @@ function restoreWidget(id) {
         class="dashboard-sidebar__toggle"
         :class="{ 'dashboard-sidebar__toggle--open': props.open }"
         type="button"
-        :aria-label="props.open ? '사이드바 닫기' : '사이드바 열기'"
+        :aria-label="props.open ? t('sidebar.close') : t('sidebar.open')"
         @click="emit('toggle')"
       >
         <img :src="sidebarToggleIcon" alt="" width="18" height="18" />

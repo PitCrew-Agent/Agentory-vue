@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createPinia, setActivePinia } from 'pinia'
 
+import { i18n } from '@/features/i18n'
 import { useUiStore } from '@/stores/uiStore'
 
 describe('useUiStore', () => {
@@ -30,6 +31,7 @@ describe('useUiStore', () => {
     uiStore.setLocale('en')
 
     expect(uiStore.currentLocale).toBe('en')
+    expect(i18n.global.locale.value).toBe('en')
     expect(document.documentElement.lang).toBe('en')
     expect(window.localStorage.getItem('agentory-locale')).toBe('en')
   })

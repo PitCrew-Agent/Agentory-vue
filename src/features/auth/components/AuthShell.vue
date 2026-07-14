@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import backArrowIcon from '@/assets/icons/back-arrow.png'
 import logoImage from '@/assets/images/agentory-logo.png'
 import AuthOnboardingShowcase from '@/features/auth/components/AuthOnboardingShowcase.vue'
+import AppPreferenceControls from '@/features/i18n/components/AppPreferenceControls.vue'
 
 defineProps({
   title: {
@@ -28,6 +29,12 @@ defineProps({
 <template>
   <main class="auth-page" :class="`auth-page--${cardVariant}`">
     <div class="auth-layout-frame">
+      <AppPreferenceControls
+        class="auth-layout-frame__preferences"
+        test-prefix="auth-preferences"
+        variant="auth"
+      />
+
       <section class="auth-content" :class="`auth-content--${cardVariant}`">
         <div class="auth-card" :class="`auth-card--${cardVariant}`">
           <div class="auth-form-wrap">
@@ -37,7 +44,7 @@ defineProps({
                   v-if="showBack"
                   class="auth-back-link"
                   :to="backTo"
-                  aria-label="이전 화면으로 이동"
+                  :aria-label="$t('common.back')"
                 >
                   <img class="auth-back-icon" :src="backArrowIcon" alt="" width="30" height="30" />
                 </RouterLink>
@@ -99,6 +106,7 @@ defineProps({
 }
 
 .auth-layout-frame {
+  position: relative;
   display: grid;
   grid-template-columns: 751fr 869fr;
   width: min(
@@ -111,6 +119,13 @@ defineProps({
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-22);
+}
+
+.auth-layout-frame__preferences {
+  position: absolute;
+  z-index: 5;
+  top: clamp(14px, 2.22dvh, 24px);
+  right: clamp(16px, 1.88vw, 30px);
 }
 
 .auth-content {
@@ -284,8 +299,15 @@ defineProps({
 }
 
 @media (max-width: 1024px) {
+  .auth-layout-frame__preferences {
+    --preference-control-background: var(--agentory-color-bg-primary);
+  }
+
   .auth-layout-frame {
     grid-template-columns: 1fr;
+    width: min(720px, calc(100vw - clamp(48px, 8vw, 80px)));
+    height: min(720px, calc(100dvh - clamp(48px, 8dvh, 80px)));
+    aspect-ratio: auto;
   }
 
   .auth-visual {
@@ -319,6 +341,11 @@ defineProps({
     width: 100%;
     min-height: auto;
     max-width: calc(100% - var(--agentory-spacing-24));
+  }
+
+  .auth-layout-frame {
+    width: calc(100vw - (var(--agentory-spacing-16) * 2));
+    height: calc(100dvh - (var(--agentory-spacing-16) * 2));
   }
 
   .auth-title-row {

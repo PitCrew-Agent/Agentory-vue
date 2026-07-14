@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import aiEvidenceDocumentsImage from '@/assets/images/onboarding/ai-evidence-documents.png'
 import equipmentRiskAlertImage from '@/assets/images/onboarding/equipment-risk-alert.png'
@@ -7,44 +8,37 @@ import factoryEquipmentMonitoringImage from '@/assets/images/onboarding/factory-
 
 const carouselStep = 120
 const rotationDelay = 4600
+const { t } = useI18n()
 
-const slides = [
+const slides = computed(() => [
   {
     id: 'factory-monitoring',
     image: factoryEquipmentMonitoringImage,
-    titleLines: ['공장 장비 상태', '한눈에 모니터링'],
-    descriptionLines: [
-      '3D 공장 전경과 장비 상태 그래프를 함께 확인하고',
-      '이상 징후와 생산 현황을 빠르게 파악하세요.',
-    ],
+    title: t('onboarding.slides.factoryMonitoring'),
   },
   {
     id: 'risk-alert',
     image: equipmentRiskAlertImage,
-    titleLines: ['장비 위험 알림', '즉시 확인'],
-    descriptionLines: [
-      '장비별 위험 · 주의 알림을 빠르게 파악하고',
-      '긴급도 높은 이슈부터 즉시 대응하세요.',
-    ],
+    title: t('onboarding.slides.riskAlert'),
   },
   {
     id: 'ai-evidence',
     image: aiEvidenceDocumentsImage,
-    titleLines: ['AI 근거 문서', '기반 확인'],
-    descriptionLines: ['RAG 기반으로', 'AI가 답변 근거를 높은 정확도로 빠르게 찾아줍니다.'],
+    title: t('onboarding.slides.aiEvidence'),
   },
-]
+])
 
-const serviceSummaryLines = [
-  '3D 공장 모니터링과 장비 위험 알림,',
-  'AI 근거 문서까지 한 화면에서 확인하세요.',
-]
+const serviceSummaryLines = computed(() => [
+  t('onboarding.summaryLine1'),
+  t('onboarding.summaryLine2'),
+])
 
 const rotationIndex = ref(0)
 let rotationTimer
 
 const activeIndex = computed(
-  () => ((rotationIndex.value % slides.length) + slides.length) % slides.length,
+  () =>
+    ((rotationIndex.value % slides.value.length) + slides.value.length) % slides.value.length,
 )
 
 const ringStyle = computed(() => ({
@@ -52,7 +46,7 @@ const ringStyle = computed(() => ({
 }))
 
 function getRelativePosition(index) {
-  const total = slides.length
+  const total = slides.value.length
   const rawOffset = index - activeIndex.value
 
   return ((rawOffset + total + Math.floor(total / 2)) % total) - Math.floor(total / 2)
@@ -89,7 +83,7 @@ function startRotation() {
 }
 
 function setActiveSlide(index) {
-  const forwardStep = (index - activeIndex.value + slides.length) % slides.length
+  const forwardStep = (index - activeIndex.value + slides.value.length) % slides.value.length
 
   rotationIndex.value += forwardStep
   startRotation()
@@ -101,7 +95,7 @@ onBeforeUnmount(stopRotation)
 </script>
 
 <template>
-  <div class="auth-onboarding" aria-label="Agentory 핵심 기능 소개">
+  <div class="auth-onboarding" :aria-label="t('onboarding.label')">
     <div class="auth-onboarding__stage">
       <div class="auth-onboarding__ring" :style="ringStyle">
         <button
@@ -111,7 +105,7 @@ onBeforeUnmount(stopRotation)
           :class="{ 'auth-onboarding__panel--active': index === activeIndex }"
           type="button"
           :style="getPanelStyle(index)"
-          :aria-label="`${slide.titleLines.join(' ')} 보기`"
+          :aria-label="t('onboarding.slideView', { title: slide.title })"
           :aria-pressed="index === activeIndex"
           @click="setActiveSlide(index)"
         >
@@ -119,7 +113,7 @@ onBeforeUnmount(stopRotation)
             <img
               class="auth-onboarding__image"
               :src="slide.image"
-              :alt="slide.titleLines.join(' ')"
+              :alt="slide.title"
             />
           </span>
 
@@ -134,14 +128,14 @@ onBeforeUnmount(stopRotation)
       <span v-for="line in serviceSummaryLines" :key="line">{{ line }}</span>
     </p>
 
-    <div class="auth-onboarding__controls" aria-label="온보딩 화면 선택">
+    <div class="auth-onboarding__controls" :aria-label="t('onboarding.controls')">
       <button
         v-for="(slide, index) in slides"
         :key="`${slide.id}-control`"
         class="auth-onboarding__control"
         :class="{ 'auth-onboarding__control--active': index === activeIndex }"
         type="button"
-        :aria-label="slide.titleLines.join(' ')"
+        :aria-label="slide.title"
         :aria-current="index === activeIndex"
         @click="setActiveSlide(index)"
       ></button>
@@ -292,7 +286,7 @@ onBeforeUnmount(stopRotation)
 
 .auth-onboarding__control--active {
   width: clamp(22px, 1.65vw, 32px);
-  background: var(--agentory-color-bg-app);
+  background: var(--agentory-color-text-inverse);
 }
 
 @media (max-height: 760px) {

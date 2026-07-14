@@ -4,11 +4,12 @@ import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import App from '../App.vue'
 import router from '../router'
+import { i18n } from '../features/i18n'
 
 function mountApp() {
   return mount(App, {
     global: {
-      plugins: [createPinia(), router],
+      plugins: [createPinia(), i18n, router],
     },
   })
 }
@@ -21,6 +22,9 @@ describe('App', () => {
     const wrapper = mountApp()
 
     expect(wrapper.find('.auth-page').exists()).toBe(true)
+    expect(wrapper.find('[data-test="auth-preferences-theme-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="auth-preferences-locale-ko"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="auth-preferences-locale-en"]').exists()).toBe(true)
   })
 
   it('renders the dashboard route', async () => {

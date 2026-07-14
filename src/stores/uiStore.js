@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { DEFAULT_LOCALE } from '@/features/i18n/constants/locales'
+import { syncI18nLocale } from '@/features/i18n'
 import {
   applyDocumentLocale,
   getSavedLocale,
@@ -42,6 +43,7 @@ export const useUiStore = defineStore('ui', () => {
     currentLocale.value = getSavedLocale()
     applyDocumentTheme(currentTheme.value)
     applyDocumentLocale(currentLocale.value)
+    syncI18nLocale(currentLocale.value)
     isInitialized.value = true
   }
 
@@ -54,6 +56,7 @@ export const useUiStore = defineStore('ui', () => {
     currentLocale.value = normalizedLocale
     saveLocale(normalizedLocale)
     applyDocumentLocale(normalizedLocale)
+    syncI18nLocale(normalizedLocale)
 
     return hasChanged
   }

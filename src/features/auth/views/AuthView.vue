@@ -1,10 +1,12 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import microsoftIcon from '@/assets/icons/microsoft.svg'
 import AuthShell from '@/features/auth/components/AuthShell.vue'
 import { redirectToAuthFlow } from '@/features/auth/services/authApi'
 
+const { t } = useI18n()
 const isAuthRedirecting = ref(false)
 const toastMessage = ref('')
 
@@ -34,7 +36,7 @@ async function startAuthRedirect(flow) {
     await redirectToAuthFlow(flow)
   } catch {
     isAuthRedirecting.value = false
-    showToast('인증 서비스 연결에 실패했습니다.')
+    showToast(t('auth.connectionError'))
   }
 }
 
@@ -47,12 +49,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="auth-view-root">
-    <AuthShell title="로그인" card-variant="login">
+    <AuthShell :title="t('auth.title')" card-variant="login">
       <section class="auth-sso" aria-labelledby="auth-sso-title">
         <div class="auth-sso__copy">
-          <span class="auth-sso__eyebrow">Microsoft Azure SSO</span>
-          <h2 id="auth-sso-title">조직 계정으로 접속</h2>
-          <p>Agentory를 안전하게 시작하세요.</p>
+          <span class="auth-sso__eyebrow">{{ t('auth.eyebrow') }}</span>
+          <h2 id="auth-sso-title">{{ t('auth.accessTitle') }}</h2>
+          <p>{{ t('auth.accessDescription') }}</p>
         </div>
 
         <div class="auth-sso__actions">
@@ -63,7 +65,7 @@ onBeforeUnmount(() => {
             @click="startAuthRedirect('login')"
           >
             <img class="auth-sso__microsoft-icon" :src="microsoftIcon" alt="" />
-            <span>Microsoft로 계속</span>
+            <span>{{ t('auth.continueMicrosoft') }}</span>
           </button>
 
           <button
@@ -72,11 +74,11 @@ onBeforeUnmount(() => {
             :disabled="isAuthRedirecting"
             @click="startAuthRedirect('passwordReset')"
           >
-            <span>비밀번호 찾기</span>
+            <span>{{ t('auth.passwordReset') }}</span>
           </button>
         </div>
 
-        <p class="auth-sso__note">계정과 권한은 관리자에게 요청하세요.</p>
+        <p class="auth-sso__note">{{ t('auth.accountNote') }}</p>
       </section>
 
       <Teleport to="body">
