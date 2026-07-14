@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import NotificationLogPanel from '@/features/notification/components/NotificationLogPanel.vue'
@@ -18,6 +19,7 @@ const {
   notificationPagination,
   setNotificationReadStatus,
 } = useNotificationLog()
+const { t } = useI18n()
 const shouldSkipNotificationApi = import.meta.env.MODE === 'test'
 const { activeNotificationId, incidentErrorMessage, isIncidentCreating, startIncidentResponse } =
   useIncidentResponse()
@@ -38,7 +40,7 @@ onMounted(() => {
 <template>
   <DashboardFramePage
     active-navigation-id="notification"
-    content-label="알림 이력 영역"
+    :content-label="t('notificationLog.contentLabel')"
     :is-loading="isNotificationLoading"
   >
     <NotificationLogPanel

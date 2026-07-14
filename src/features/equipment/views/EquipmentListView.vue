@@ -1,11 +1,13 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import EquipmentListPanel from '@/features/equipment/components/EquipmentListPanel.vue'
 import { fetchEquipmentListPageData } from '@/features/equipment/services/equipmentApi'
 
 const groups = ref([])
+const { t } = useI18n()
 const isEquipmentListLoading = ref(false)
 const lineGroups = ref([])
 const shouldSkipEquipmentApi = import.meta.env.MODE === 'test'
@@ -51,7 +53,10 @@ onMounted(() => {
   }
 
   loadEquipmentListPageData()
-  equipmentListInterval = window.setInterval(() => loadEquipmentListPageData({ silent: true }), 5000)
+  equipmentListInterval = window.setInterval(
+    () => loadEquipmentListPageData({ silent: true }),
+    5000,
+  )
 })
 
 onBeforeUnmount(() => {
@@ -62,7 +67,7 @@ onBeforeUnmount(() => {
 <template>
   <DashboardFramePage
     active-navigation-id="equipment"
-    content-label="설비 목록 영역"
+    :content-label="t('equipmentList.contentLabel')"
     :is-loading="isEquipmentListLoading"
   >
     <EquipmentListPanel :groups="groups" :line-groups="lineGroups" />

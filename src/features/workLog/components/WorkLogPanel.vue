@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import closeIcon from '@/assets/icons/dashboard/close.svg'
 import pencilIcon from '@/assets/icons/dashboard/action-pencil.png'
@@ -33,6 +34,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['create-log', 'delete-log', 'incident-draft-consumed', 'update-log'])
+const { t } = useI18n()
 const authStore = useAuthStore()
 const tablePanelRef = ref(null)
 const isDeleteConfirmOpen = ref(false)
@@ -53,24 +55,36 @@ const createLogForm = reactive({
   workType: '기타',
 })
 
-const workLogColumns = [
-  { key: 'time', label: '작업 시간', cellClass: 'dashboard-table-panel__cell--light' },
-  { key: 'operator', label: '작업 진행자', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'workType', label: '작업 유형' },
-  { key: 'task', label: '작업 내용', cellClass: 'dashboard-table-panel__cell--strong' },
+const workLogColumns = computed(() => [
+  {
+    key: 'time',
+    label: t('workLog.columns.time'),
+    cellClass: 'dashboard-table-panel__cell--light',
+  },
+  {
+    key: 'operator',
+    label: t('workLog.columns.operator'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  { key: 'workType', label: t('workLog.columns.workType') },
+  {
+    key: 'task',
+    label: t('workLog.columns.task'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
   {
     key: 'status',
-    label: '상태',
+    label: t('workLog.columns.status'),
     cellClass: 'dashboard-table-panel__cell--center work-log-panel__status-cell',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
   {
     key: 'actions',
-    label: '관리',
+    label: t('workLog.columns.actions'),
     cellClass: 'dashboard-table-panel__cell--center work-log-panel__actions-cell',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
-]
+])
 
 const tableGroups = computed(() =>
   props.groups.map((group) => ({
@@ -82,20 +96,43 @@ const tableGroups = computed(() =>
 const statusOptions = computed(() =>
   ['waiting', 'complete', 'progress'].map((value) => ({
     ...workLogStatusMap[value],
+    label: t(`workLog.statuses.${value}`),
     value,
   })),
 )
-const workTypeOptions = ['정기점검', '수리점검', '예방점검', '긴급수리', '기타']
+const workTypeOptions = computed(() => [
+  { label: t('workLog.types.periodicInspection'), value: '정기점검' },
+  { label: t('workLog.types.repairInspection'), value: '수리점검' },
+  { label: t('workLog.types.preventiveInspection'), value: '예방점검' },
+  { label: t('workLog.types.emergencyRepair'), value: '긴급수리' },
+  { label: t('workLog.types.etc'), value: '기타' },
+])
 
-const operatorName = computed(() => authStore.currentUserName || '사용자')
+const workTypeKeyByValue = {
+  긴급수리: 'emergencyRepair',
+  기타: 'etc',
+  예방점검: 'preventiveInspection',
+  수리점검: 'repairInspection',
+  정기점검: 'periodicInspection',
+}
+
+function getWorkTypeLabel(value) {
+  const key = workTypeKeyByValue[value]
+
+  return key ? t(`workLog.types.${key}`) : value
+}
+
+const operatorName = computed(() => authStore.currentUserName || t('workLog.defaultOperator'))
 const isEditMode = computed(() => logModalMode.value === 'edit')
-const logModalTitle = computed(() => (isEditMode.value ? '작업 로그 수정' : '작업 로그 작성'))
+const logModalTitle = computed(() =>
+  isEditMode.value ? t('workLog.editTitle') : t('workLog.createTitle'),
+)
 const logSubmitLabel = computed(() => {
   if (props.isSubmitting) {
-    return isEditMode.value ? '수정 중' : '저장 중'
+    return isEditMode.value ? t('workLog.updating') : t('workLog.saving')
   }
 
-  return isEditMode.value ? '수정 저장' : '작업 로그 저장'
+  return isEditMode.value ? t('workLog.submitUpdate') : t('workLog.submitCreate')
 })
 
 function getToday() {
@@ -209,7 +246,7 @@ function submitLogForm() {
       operator: createLogForm.operator,
       sourceNotificationId: createLogForm.sourceNotificationId,
       status: createLogForm.status,
-      task: createLogForm.task.trim() || '작업 내용 미입력',
+      task: createLogForm.task.trim() || t('workLog.defaultTask'),
       time: createLogForm.time,
       workType: createLogForm.workType,
     },
@@ -258,10 +295,10 @@ watch(
   <div class="work-log-panel">
     <DashboardTablePanel
       ref="tablePanelRef"
-      title="작업 로그"
+      :title="t('workLog.title')"
       data-test="work-log-panel"
       row-test-prefix="work-log-row"
-      action-label="작업 로그 작성"
+      :action-label="t('workLog.action')"
       :action-icon="pencilIcon"
       :columns="workLogColumns"
       :groups="tableGroups"
@@ -270,7 +307,7 @@ watch(
     >
       <template #title-actions>
         <DashboardCalendarPicker
-          aria-label="작업 로그 날짜 선택"
+          :aria-label="t('workLog.calendar')"
           data-test-prefix="work-log"
           :dates="tableGroups.map((group) => group.date)"
           @select="scrollToDate"
@@ -282,7 +319,7 @@ watch(
           class="work-log-panel__status"
           :class="`work-log-panel__status--${workLogStatusMap[row.status].tone}`"
         >
-          {{ workLogStatusMap[row.status].label }}
+          {{ t(`workLog.statuses.${row.status}`) }}
         </span>
       </template>
 
@@ -295,12 +332,16 @@ watch(
         </div>
       </template>
 
+      <template #cell-workType="{ row }">
+        {{ getWorkTypeLabel(row.workType) }}
+      </template>
+
       <template #cell-actions="{ row }">
         <div class="work-log-panel__row-actions">
           <button
             class="work-log-panel__row-action"
             type="button"
-            aria-label="작업 로그 수정"
+            :aria-label="t('workLog.editAria')"
             :disabled="isSubmitting"
             @click="openEditModal(row)"
           >
@@ -309,7 +350,7 @@ watch(
           <button
             class="work-log-panel__row-action work-log-panel__row-action--danger"
             type="button"
-            aria-label="작업 로그 삭제"
+            :aria-label="t('workLog.deleteAria')"
             :disabled="isSubmitting"
             @click="openDeleteConfirm(row)"
           >
@@ -320,9 +361,13 @@ watch(
     </DashboardTablePanel>
 
     <p v-if="isLoading" class="work-log-panel__state" data-test="work-log-loading">
-      작업 로그를 불러오는 중입니다.
+      {{ t('workLog.loading') }}
     </p>
-    <p v-else-if="errorMessage" class="work-log-panel__state work-log-panel__state--error" data-test="work-log-error">
+    <p
+      v-else-if="errorMessage"
+      class="work-log-panel__state work-log-panel__state--error"
+      data-test="work-log-error"
+    >
       {{ errorMessage }}
     </p>
 
@@ -342,12 +387,14 @@ watch(
         >
           <header class="work-log-panel__modal-header">
             <div>
-              <h2 id="work-log-create-title">{{ activeIncidentPlan ? '대응 작업 로그 작성' : logModalTitle }}</h2>
+              <h2 id="work-log-create-title">
+                {{ activeIncidentPlan ? t('workLog.incidentTitle') : logModalTitle }}
+              </h2>
             </div>
             <button
               class="work-log-panel__modal-close"
               type="button"
-              aria-label="작업 로그 모달 닫기"
+              :aria-label="t('workLog.modalClose')"
               :disabled="isSubmitting"
               @click="closeLogModal"
             >
@@ -368,11 +415,17 @@ watch(
               <div v-for="deviation in activeIncidentPlan.deviations" :key="deviation.metric">
                 <span>{{ deviation.label }}</span>
                 <strong>{{ deviation.incident }} {{ deviation.unit }}</strong>
-                <small v-if="deviation.delta !== null">기준 대비 {{ deviation.delta > 0 ? '+' : '' }}{{ deviation.delta }}</small>
+                <small v-if="deviation.delta !== null">
+                  {{
+                    t('workLog.variance', {
+                      value: `${deviation.delta > 0 ? '+' : ''}${deviation.delta}`,
+                    })
+                  }}
+                </small>
               </div>
             </div>
             <div v-if="activeIncidentPlan.citations.length" class="work-log-panel__citations">
-              <span>근거 문서</span>
+              <span>{{ t('workLog.citations') }}</span>
               <strong v-for="citation in activeIncidentPlan.citations" :key="citation.docId">
                 {{ citation.docId }}
               </strong>
@@ -384,16 +437,20 @@ watch(
 
           <div class="work-log-panel__modal-toolbar">
             <label class="work-log-panel__field work-log-panel__field--type">
-              <span>작업 유형</span>
+              <span>{{ t('workLog.fields.type') }}</span>
               <select v-model="createLogForm.workType" :disabled="isSubmitting">
-                <option v-for="workType in workTypeOptions" :key="workType" :value="workType">
-                  {{ workType }}
+                <option
+                  v-for="workType in workTypeOptions"
+                  :key="workType.value"
+                  :value="workType.value"
+                >
+                  {{ workType.label }}
                 </option>
               </select>
             </label>
 
             <fieldset class="work-log-panel__status-field">
-              <legend>작업 상태</legend>
+              <legend>{{ t('workLog.fields.status') }}</legend>
               <div class="work-log-panel__status-options">
                 <button
                   v-for="option in statusOptions"
@@ -414,9 +471,12 @@ watch(
           </div>
 
           <div class="work-log-panel__editor-layout">
-            <aside class="work-log-panel__schedule-panel" aria-label="작업 일정">
+            <aside
+              class="work-log-panel__schedule-panel"
+              :aria-label="t('workLog.fields.schedule')"
+            >
               <label class="work-log-panel__field">
-                <span>작업 진행자</span>
+                <span>{{ t('workLog.fields.operator') }}</span>
                 <input
                   v-model="createLogForm.operator"
                   type="text"
@@ -426,25 +486,27 @@ watch(
               </label>
 
               <section class="work-log-panel__schedule-group">
-                <strong>시작</strong>
+                <strong>{{ t('workLog.start') }}</strong>
                 <label class="work-log-panel__field">
-                  <span>날짜</span>
+                  <span>{{ t('workLog.fields.date') }}</span>
                   <input v-model="createLogForm.date" type="date" data-test="work-log-form-date" />
                 </label>
                 <label class="work-log-panel__field">
-                  <span>시간</span>
+                  <span>{{ t('workLog.fields.time') }}</span>
                   <input v-model="createLogForm.time" type="time" data-test="work-log-form-time" />
                 </label>
               </section>
 
               <section class="work-log-panel__schedule-group">
-                <strong>종료 <small>선택</small></strong>
+                <strong
+                  >{{ t('workLog.end') }} <small>{{ t('workLog.optional') }}</small></strong
+                >
                 <label class="work-log-panel__field">
-                  <span>날짜</span>
+                  <span>{{ t('workLog.fields.date') }}</span>
                   <input v-model="createLogForm.endedDate" type="date" :disabled="isSubmitting" />
                 </label>
                 <label class="work-log-panel__field">
-                  <span>시간</span>
+                  <span>{{ t('workLog.fields.time') }}</span>
                   <input
                     v-model="createLogForm.endedTime"
                     type="time"
@@ -455,17 +517,21 @@ watch(
             </aside>
 
             <label class="work-log-panel__field work-log-panel__field--content">
-              <span>작업 내용</span>
+              <span>{{ t('workLog.fields.content') }}</span>
               <textarea
                 v-model="createLogForm.task"
                 data-test="work-log-form-task"
-                placeholder="설비 상태, 확인 항목과 조치 내용을 입력하세요"
+                :placeholder="t('workLog.placeholder')"
                 :disabled="isSubmitting"
               ></textarea>
             </label>
           </div>
 
-          <p v-if="errorMessage" class="work-log-panel__modal-error" data-test="work-log-form-error">
+          <p
+            v-if="errorMessage"
+            class="work-log-panel__modal-error"
+            data-test="work-log-form-error"
+          >
             {{ errorMessage }}
           </p>
 
@@ -476,7 +542,7 @@ watch(
               :disabled="isSubmitting"
               @click="closeLogModal"
             >
-              취소
+              {{ t('common.cancel') }}
             </button>
             <button
               class="work-log-panel__submit"
@@ -503,13 +569,13 @@ watch(
         <section class="work-log-panel__confirm">
           <header class="work-log-panel__modal-header">
             <div>
-              <h2 id="work-log-delete-title">작업 로그를 삭제할까요?</h2>
-              <p>삭제한 작업 로그는 목록에서 제거됩니다.</p>
+              <h2 id="work-log-delete-title">{{ t('workLog.deleteConfirmTitle') }}</h2>
+              <p>{{ t('workLog.deleteConfirmDescription') }}</p>
             </div>
             <button
               class="work-log-panel__modal-close"
               type="button"
-              aria-label="작업 로그 삭제 취소"
+              :aria-label="t('workLog.deleteCancelAria')"
               :disabled="isSubmitting"
               @click="closeDeleteConfirm"
             >
@@ -529,7 +595,7 @@ watch(
               :disabled="isSubmitting"
               @click="closeDeleteConfirm"
             >
-              취소
+              {{ t('common.cancel') }}
             </button>
             <button
               class="work-log-panel__confirm-button work-log-panel__confirm-button--danger"
@@ -537,7 +603,7 @@ watch(
               :disabled="isSubmitting"
               @click="confirmDeleteLog"
             >
-              {{ isSubmitting ? '삭제 중' : '삭제' }}
+              {{ isSubmitting ? t('workLog.deleting') : t('common.delete') }}
             </button>
           </div>
         </section>
@@ -646,8 +712,8 @@ watch(
   width: 16px;
   height: 16px;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(49%) sepia(5%) saturate(91%) hue-rotate(20deg) brightness(96%)
-    contrast(88%);
+  filter: brightness(0) saturate(100%) invert(49%) sepia(5%) saturate(91%) hue-rotate(20deg)
+    brightness(96%) contrast(88%);
 }
 
 .work-log-panel__row-action:hover img {

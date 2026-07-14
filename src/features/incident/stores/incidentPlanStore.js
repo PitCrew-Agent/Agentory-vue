@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import { createIncidentPlanRequest } from '@/features/incident/services/incidentPlanApi'
+import { translate } from '@/features/i18n'
 
 export const useIncidentPlanStore = defineStore('incidentPlan', {
   state: () => ({
@@ -41,7 +42,7 @@ export const useIncidentPlanStore = defineStore('incidentPlan', {
 
         return plan
       } catch {
-        this.errorMessage = '대응 계획을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        this.errorMessage = translate('incident.error')
         this.errorNotificationId = normalizedId
         return null
       } finally {
