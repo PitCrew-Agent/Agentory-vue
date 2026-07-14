@@ -1,5 +1,6 @@
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/features/auth/constants/authEvents'
 import { buildApiUrl, http } from '@/services/api/http'
+import { getAcceptLanguage } from '@/features/i18n/services/localePreference'
 
 function normalizeCitation(citation, index) {
   return {
@@ -57,10 +58,17 @@ function normalizeChatSessionSummary(session = {}, index = 0) {
     equipmentId,
     id: sessionId || `chat-session-${index + 1}`,
     messageCount: Number.isFinite(messageCount) ? messageCount : 0,
-    preview: equipmentId ? `${equipmentId} · ${messageCount || 0}개 메시지` : `${messageCount || 0}개 메시지`,
+    preview: equipmentId
+      ? `${equipmentId} · ${messageCount || 0}개 메시지`
+      : `${messageCount || 0}개 메시지`,
     sessionId,
     title: title || `대화 ${index + 1}`,
-    updatedAt: session.last_message_at ?? session.lastMessageAt ?? session.created_at ?? session.createdAt ?? '',
+    updatedAt:
+      session.last_message_at ??
+      session.lastMessageAt ??
+      session.created_at ??
+      session.createdAt ??
+      '',
   }
 }
 
@@ -155,7 +163,10 @@ function getErrorPayloadMessage(payload) {
   }
 
   if (Array.isArray(payload.detail)) {
-    return payload.detail.map((item) => item.msg ?? item.message).filter(Boolean).join('\n')
+    return payload.detail
+      .map((item) => item.msg ?? item.message)
+      .filter(Boolean)
+      .join('\n')
   }
 
   return payload.detail ?? payload.message ?? payload.error ?? ''
@@ -416,7 +427,9 @@ function applyStreamEventToResult(result, event) {
   if (event.kind === 'final') {
     result.answer = event.answer || result.answer
     result.citations = event.citations?.length ? event.citations : result.citations
-    result.reasoningSteps = event.reasoningSteps?.length ? event.reasoningSteps : result.reasoningSteps
+    result.reasoningSteps = event.reasoningSteps?.length
+      ? event.reasoningSteps
+      : result.reasoningSteps
     result.suggestedQuestions = event.suggestedQuestions?.length
       ? event.suggestedQuestions
       : result.suggestedQuestions
@@ -463,8 +476,8 @@ export async function sendChatQuery({
     reasoningSteps: (response.reasoning_steps ?? []).map(normalizeReasoningStep),
     suggestedQuestions:
       suggestedQuestions.length || !includeAnswerSuggestions
-      ? suggestedQuestions
-      : parseSuggestedQuestionsFromAnswer(answer),
+        ? suggestedQuestions
+        : parseSuggestedQuestionsFromAnswer(answer),
   }
 }
 
@@ -494,6 +507,7 @@ export async function streamChatQuery({ equipmentId = '', message, onEvent, sess
     credentials: 'include',
     headers: {
       Accept: 'text/event-stream, application/x-ndjson, application/json',
+      'Accept-Language': getAcceptLanguage(),
       'Content-Type': 'application/json',
     },
     method: 'POST',

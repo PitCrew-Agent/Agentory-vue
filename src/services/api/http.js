@@ -1,6 +1,8 @@
 import axios from 'axios'
 
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/features/auth/constants/authEvents'
+import { getAcceptLanguage } from '@/features/i18n/services/localePreference'
+import { createHttpError, unwrapApiResponse } from '@/services/api/apiResponse'
 
 function getRequiredEnv(key) {
   const value = import.meta.env[key]
@@ -29,25 +31,35 @@ export const apiClient = axios.create({
   withCredentials: true,
 })
 
+apiClient.interceptors.request.use((config) => {
+  const acceptLanguage = getAcceptLanguage()
+
+  if (typeof config.headers?.set === 'function') {
+    config.headers.set('Accept-Language', acceptLanguage)
+  } else {
+    config.headers = {
+      ...config.headers,
+      'Accept-Language': acceptLanguage,
+    }
+  }
+
+  return config
+})
+
 apiClient.interceptors.response.use(
   (response) => {
     if (response.status === 204) {
       return null
     }
 
-    return response.data
+    return unwrapApiResponse(response.data)
   },
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT))
     }
 
-    const apiError = new Error('API request failed')
-    apiError.status = error.response?.status
-    apiError.data = error.response?.data
-    apiError.cause = error
-
-    return Promise.reject(apiError)
+    return Promise.reject(createHttpError(error))
   },
 )
 

@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { AUTH_SESSION_EXPIRED_EVENT } from './features/auth/constants/authEvents'
+import { i18n } from './features/i18n'
 import { useAuthStore } from './stores/authStore'
 import { useUiStore } from './stores/uiStore'
 
@@ -15,6 +16,7 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
+app.use(i18n)
 app.use(router)
 
 useUiStore(pinia).initialize()
