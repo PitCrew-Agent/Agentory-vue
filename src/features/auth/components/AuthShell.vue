@@ -96,13 +96,7 @@ defineProps({
   height: 100dvh;
   padding: clamp(24px, 4.45dvh, 48px) clamp(24px, 5vw, 96px);
   overflow: hidden;
-  background: linear-gradient(
-    180deg,
-    var(--agentory-color-bg-app) 0%,
-    var(--agentory-color-bg-auth-gradient-soft) 77.404%,
-    var(--agentory-color-bg-auth-gradient-mid) 94.712%,
-    var(--agentory-color-bg-primary) 100%
-  );
+  background: var(--agentory-color-bg-surface);
 }
 
 .auth-layout-frame {
