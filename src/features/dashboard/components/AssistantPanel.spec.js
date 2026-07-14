@@ -3,15 +3,22 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
+import { i18n } from '@/features/i18n'
+
 import AssistantPanel from './AssistantPanel.vue'
 
 function mountAssistantPanel(options = {}) {
+  i18n.global.locale.value = 'ko'
+
   return mount(AssistantPanel, {
     props: {
       historyItems: [{ id: 'history-1', title: '최근 대화' }],
       messages: [],
       quickCommands: [],
       ...options.props,
+    },
+    global: {
+      plugins: [i18n],
     },
   })
 }

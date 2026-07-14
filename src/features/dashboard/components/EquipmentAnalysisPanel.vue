@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DashboardDataPanel from '@/features/dashboard/components/DashboardDataPanel.vue'
 import { metricConfigs, metricIds } from '@/features/dashboard/constants/equipmentMetrics'
@@ -11,6 +12,8 @@ const props = defineProps({
     default: '',
   },
 })
+
+const { t } = useI18n()
 
 const errorMessage = ref('')
 const isLoading = ref(false)
@@ -32,18 +35,18 @@ function formatValue(value, precision) {
 
 function getMetricStatus(value, thresholds) {
   if (!Number.isFinite(value)) {
-    return { label: '데이터 없음', tone: 'normal' }
+    return { labelKey: 'analysis.noData', tone: 'normal' }
   }
 
   if (value <= thresholds.lsl || value >= thresholds.usl) {
-    return { label: '위험', tone: 'danger' }
+    return { labelKey: 'status.danger', tone: 'danger' }
   }
 
   if (value <= thresholds.lcl || value >= thresholds.ucl) {
-    return { label: '주의', tone: 'warning' }
+    return { labelKey: 'status.warning', tone: 'warning' }
   }
 
-  return { label: '양호', tone: 'normal' }
+  return { labelKey: 'status.normal', tone: 'normal' }
 }
 
 const metricRows = computed(() =>
@@ -79,7 +82,7 @@ const metricRows = computed(() =>
       displayMaxLabel: formatValue(displayMax, config.precision),
       displayMinLabel: formatValue(displayMin, config.precision),
       id: metricId,
-      label: config.label,
+      labelKey: config.labelKey,
       normalRangeLabel: `${formatValue(config.thresholds.lcl, config.precision)} - ${formatValue(
         config.thresholds.ucl,
         config.precision,
@@ -100,7 +103,9 @@ const metricRows = computed(() =>
   }),
 )
 
-const hasAnalysisData = computed(() => metricRows.value.some((metric) => metric.currentLabel !== '-'))
+const hasAnalysisData = computed(() =>
+  metricRows.value.some((metric) => metric.currentLabel !== '-'),
+)
 
 async function loadSeries() {
   if (!props.equipmentId) {
@@ -122,7 +127,7 @@ async function loadSeries() {
   } catch {
     if (currentRequestId === requestId) {
       series.value = []
-      errorMessage.value = '센서 분석 데이터를 불러오지 못했습니다.'
+      errorMessage.value = t('analysis.error')
     }
   } finally {
     if (currentRequestId === requestId) {
@@ -147,25 +152,36 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <DashboardDataPanel title="센서 기준 범위 분석" :context="equipmentId">
+  <DashboardDataPanel :title="t('analysis.title')" :context="equipmentId">
     <div class="equipment-analysis-panel">
       <div class="equipment-analysis-panel__legend">
-        <span><i class="equipment-analysis-panel__legend-range"></i>최근 12개 범위</span>
-        <span><i class="equipment-analysis-panel__legend-current"></i>현재값</span>
+        <span
+          ><i class="equipment-analysis-panel__legend-range"></i
+          >{{ t('analysis.recentRange') }}</span
+        >
+        <span
+          ><i class="equipment-analysis-panel__legend-current"></i>{{ t('analysis.current') }}</span
+        >
       </div>
 
       <div v-if="hasAnalysisData" class="equipment-analysis-panel__metrics">
-        <article v-for="metric in metricRows" :key="metric.id" class="equipment-analysis-panel__metric">
+        <article
+          v-for="metric in metricRows"
+          :key="metric.id"
+          class="equipment-analysis-panel__metric"
+        >
           <header>
             <div>
-              <strong>{{ metric.label }}</strong>
-              <span>최근 변화 {{ metric.trendLabel }} {{ metric.unit }}</span>
+              <strong>{{ t(metric.labelKey) }}</strong>
+              <span>{{
+                t('analysis.recentChange', { value: metric.trendLabel, unit: metric.unit })
+              }}</span>
             </div>
             <div class="equipment-analysis-panel__value">
               <strong>{{ metric.currentLabel }}</strong>
               <span>{{ metric.unit }}</span>
               <small :class="`equipment-analysis-panel__status--${metric.status.tone}`">
-                {{ metric.status.label }}
+                {{ t(metric.status.labelKey) }}
               </small>
             </div>
           </header>
@@ -190,7 +206,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="equipment-analysis-panel__scale">
               <span>{{ metric.displayMinLabel }}</span>
-              <span>양호 {{ metric.normalRangeLabel }}</span>
+              <span>{{ t('analysis.normalRange', { range: metric.normalRangeLabel }) }}</span>
               <span>{{ metric.displayMaxLabel }}</span>
             </div>
           </div>
@@ -198,7 +214,7 @@ onBeforeUnmount(() => {
       </div>
 
       <p v-else class="equipment-analysis-panel__state">
-        {{ isLoading ? '분석 데이터를 불러오는 중입니다.' : errorMessage || '분석할 센서 데이터가 없습니다.' }}
+        {{ isLoading ? t('analysis.loading') : errorMessage || t('analysis.empty') }}
       </p>
     </div>
   </DashboardDataPanel>

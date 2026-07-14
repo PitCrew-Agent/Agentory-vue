@@ -1,10 +1,15 @@
-import { equipmentStatusMap, equipmentStatusOrder, normalizeEquipmentStatus } from '@/constants/equipmentStatus'
+import {
+  equipmentStatusMap,
+  equipmentStatusOrder,
+  normalizeEquipmentStatus,
+} from '@/constants/equipmentStatus'
 import {
   createEmptyMetricChart,
   createEmptyMetricCharts,
   metricConfigs,
   metricIds,
 } from '@/features/dashboard/constants/equipmentMetrics'
+import { translate } from '@/features/i18n'
 import { http } from '@/services/api/http'
 
 const shapeByType = {
@@ -85,7 +90,9 @@ function getMetricIdFromSource(value) {
 function normalizeAlarmMetricIds(alarmMetrics, previousMetricIds = []) {
   const rawItems = Array.isArray(alarmMetrics)
     ? alarmMetrics
-    : compactText(alarmMetrics).split(/[,\s]+/).filter(Boolean)
+    : compactText(alarmMetrics)
+        .split(/[,\s]+/)
+        .filter(Boolean)
   const normalizedMetricIds = rawItems.map(getMetricIdFromSource).filter(Boolean)
 
   return normalizedMetricIds.length ? [...new Set(normalizedMetricIds)] : previousMetricIds
@@ -203,6 +210,7 @@ function createMetrics(detail = {}) {
       icon: config.icon,
       id: metricId,
       label: config.label,
+      labelKey: config.labelKey,
       statusLabel: status.label,
       statusTone: status.tone,
       unit: config.unit,
@@ -222,7 +230,8 @@ function createMetricChart(metricId, series = [], detail = {}) {
     .map((point, index) => {
       const value = getMetricRawValue(point, metricId)
       const status =
-        getMetricThresholdStatus(metricId, value) ?? getPointStatus(point, index, series.length, detail)
+        getMetricThresholdStatus(metricId, value) ??
+        getPointStatus(point, index, series.length, detail)
 
       return {
         alarmCode: compactText(point.alarm_code ?? point.alarmCode) || detail.alarm_code || '',
@@ -254,7 +263,9 @@ function createMetricChart(metricId, series = [], detail = {}) {
   }
 
   const values = points.map((point) => point.value)
-  const thresholdValues = Object.values(config.thresholds ?? {}).filter((value) => Number.isFinite(value))
+  const thresholdValues = Object.values(config.thresholds ?? {}).filter((value) =>
+    Number.isFinite(value),
+  )
   const scaleValues = [...values, ...thresholdValues]
   const configRange = Math.max(config.max - config.min, 1)
   const dataMinValue = scaleValues.length ? Math.min(...scaleValues) : config.min
@@ -272,6 +283,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
 
   return {
     max: Number((maxValue + padding).toFixed(config.precision)),
+    metricId,
     min: Number((minValue - padding).toFixed(config.precision)),
     points,
     precision: config.precision,
@@ -282,7 +294,9 @@ function createMetricChart(metricId, series = [], detail = {}) {
 }
 
 function createCharts(series = [], detail = {}) {
-  return Object.fromEntries(metricIds.map((metricId) => [metricId, createMetricChart(metricId, series, detail)]))
+  return Object.fromEntries(
+    metricIds.map((metricId) => [metricId, createMetricChart(metricId, series, detail)]),
+  )
 }
 
 function createLineId(lineName, index) {
@@ -296,7 +310,11 @@ function createLineId(lineName, index) {
 }
 
 function getLineCode(lineName, index) {
-  return compactText(lineName).match(/[a-z0-9]+/i)?.[0]?.toUpperCase() ?? String(index + 1)
+  return (
+    compactText(lineName)
+      .match(/[a-z0-9]+/i)?.[0]
+      ?.toUpperCase() ?? String(index + 1)
+  )
 }
 
 function normalizeLineItems(lineItems = [], statusItems = []) {
@@ -327,13 +345,19 @@ function normalizeShape(shape, processType) {
   const rawType = compactText(processType).toUpperCase()
   const normalizedShape = rawShape.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
 
-  return shapeAliases[normalizedShape] ?? shapeAliases[normalizedShape.replaceAll('_', '')] ?? shapeByType[rawType] ?? 'deposition'
+  return (
+    shapeAliases[normalizedShape] ??
+    shapeAliases[normalizedShape.replaceAll('_', '')] ??
+    shapeByType[rawType] ??
+    'deposition'
+  )
 }
 
 function deriveEquipmentPosition(statusItem, equipmentIndex) {
   const position = statusItem.position
   const bayZone = compactText(statusItem.bay_zone).toLowerCase()
-  const layout = bayLayout[bayZone] ?? (equipmentIndex % 2 === 0 ? bayLayout.north : bayLayout.south)
+  const layout =
+    bayLayout[bayZone] ?? (equipmentIndex % 2 === 0 ? bayLayout.north : bayLayout.south)
 
   return {
     x: toNumber(position?.x) ?? -4.8 + equipmentIndex * 1.5,
@@ -351,14 +375,15 @@ function deriveEquipmentRotation(statusItem, equipmentIndex) {
 
   const bayZone = compactText(statusItem.bay_zone).toLowerCase()
 
-  return (bayLayout[bayZone] ?? (equipmentIndex % 2 === 0 ? bayLayout.north : bayLayout.south)).rotationY
+  return (bayLayout[bayZone] ?? (equipmentIndex % 2 === 0 ? bayLayout.north : bayLayout.south))
+    .rotationY
 }
 
 function normalizeChecklist(checklist = [], equipmentId) {
   return checklist.map((item, index) => ({
     checked: false,
     id: `${equipmentId}-checklist-${index + 1}`,
-    label: compactText(item.text) || '체크리스트 항목 확인',
+    label: compactText(item.text) || translate('factory.checklistItem'),
   }))
 }
 
@@ -508,7 +533,10 @@ export async function fetchFactoryScene() {
   )
   const detailByEquipmentId = new Map(
     detailResults
-      .map((result, index) => [statusItems[index].equipment_id, result.status === 'fulfilled' ? result.value : null])
+      .map((result, index) => [
+        statusItems[index].equipment_id,
+        result.status === 'fulfilled' ? result.value : null,
+      ])
       .filter(([equipmentId]) => equipmentId),
   )
   const lineGroups = lines.map((line) => ({
@@ -517,7 +545,12 @@ export async function fetchFactoryScene() {
       .filter((statusItem) => statusItem.line_name === line.label)
       .toSorted((first, second) => (first.display_order ?? 0) - (second.display_order ?? 0))
       .map((statusItem, equipmentIndex) =>
-        normalizeEquipment(statusItem, detailByEquipmentId.get(statusItem.equipment_id), line, equipmentIndex),
+        normalizeEquipment(
+          statusItem,
+          detailByEquipmentId.get(statusItem.equipment_id),
+          line,
+          equipmentIndex,
+        ),
       ),
   }))
   const equipmentList = lineGroups.flatMap((line) => line.equipment)

@@ -3,6 +3,7 @@ export const metricConfigs = {
     apiKey: 'gas_flow',
     icon: 'gasFlow',
     label: '가스유량',
+    labelKey: 'metrics.gasFlow',
     max: 660,
     min: 540,
     precision: 0,
@@ -18,6 +19,7 @@ export const metricConfigs = {
     apiKey: 'pressure',
     icon: 'pressure',
     label: '압력',
+    labelKey: 'metrics.pressure',
     max: 55,
     min: 30,
     precision: 2,
@@ -33,6 +35,7 @@ export const metricConfigs = {
     apiKey: 'rf_power',
     icon: 'rfPower',
     label: 'RF 파워',
+    labelKey: 'metrics.rfPower',
     max: 3.05,
     min: 2.45,
     precision: 3,
@@ -48,6 +51,7 @@ export const metricConfigs = {
     apiKey: 'temperature',
     icon: 'temperature',
     label: '온도',
+    labelKey: 'metrics.temperature',
     max: 61.5,
     min: 58.5,
     precision: 2,
@@ -68,6 +72,7 @@ export function createEmptyMetricChart(metricId = 'temperature') {
 
   return {
     max: config.max,
+    metricId,
     min: config.min,
     points: [],
     precision: config.precision,
@@ -78,5 +83,7 @@ export function createEmptyMetricChart(metricId = 'temperature') {
 }
 
 export function createEmptyMetricCharts() {
-  return Object.fromEntries(metricIds.map((metricId) => [metricId, createEmptyMetricChart(metricId)]))
+  return Object.fromEntries(
+    metricIds.map((metricId) => [metricId, createEmptyMetricChart(metricId)]),
+  )
 }

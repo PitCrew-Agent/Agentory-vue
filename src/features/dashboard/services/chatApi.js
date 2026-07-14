@@ -1,4 +1,5 @@
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/features/auth/constants/authEvents'
+import { translate } from '@/features/i18n'
 import { buildApiUrl, http } from '@/services/api/http'
 import { getAcceptLanguage } from '@/features/i18n/services/localePreference'
 
@@ -59,10 +60,10 @@ function normalizeChatSessionSummary(session = {}, index = 0) {
     id: sessionId || `chat-session-${index + 1}`,
     messageCount: Number.isFinite(messageCount) ? messageCount : 0,
     preview: equipmentId
-      ? `${equipmentId} · ${messageCount || 0}개 메시지`
-      : `${messageCount || 0}개 메시지`,
+      ? `${equipmentId} · ${translate('assistant.messageCount', { count: messageCount || 0 })}`
+      : translate('assistant.messageCount', { count: messageCount || 0 }),
     sessionId,
-    title: title || `대화 ${index + 1}`,
+    title: title || translate('assistant.conversation', { index: index + 1 }),
     updatedAt:
       session.last_message_at ??
       session.lastMessageAt ??
@@ -189,24 +190,24 @@ async function createStreamRequestError(response) {
   return error
 }
 
-const STREAM_AGENT_LABELS = {
-  data_analysis: '데이터 분석 Agent',
-  knowledge: '근거 문서 Agent',
-  rediagnosis: '재진단 Agent',
-  supervisor: 'Supervisor',
+const STREAM_AGENT_KEYS = {
+  data_analysis: 'assistant.agents.data_analysis',
+  knowledge: 'assistant.agents.knowledge',
+  rediagnosis: 'assistant.agents.rediagnosis',
+  supervisor: 'assistant.agents.supervisor',
 }
 
-const STREAM_TOOL_LABELS = {
-  get_alarm_history: '알림 이력',
-  get_equipment_metadata: '설비 메타데이터',
-  get_sensor_logs: '실시간 센서 로그',
-  search_manuals: '근거 문서',
+const STREAM_TOOL_KEYS = {
+  get_alarm_history: 'assistant.tools.get_alarm_history',
+  get_equipment_metadata: 'assistant.tools.get_equipment_metadata',
+  get_sensor_logs: 'assistant.tools.get_sensor_logs',
+  search_manuals: 'assistant.tools.search_manuals',
 }
 
 function formatStreamAgent(agent) {
   const agentKey = String(agent ?? '').trim()
 
-  return STREAM_AGENT_LABELS[agentKey] ?? agentKey
+  return STREAM_AGENT_KEYS[agentKey] ? translate(STREAM_AGENT_KEYS[agentKey]) : agentKey
 }
 
 function formatStreamTool(tool) {
@@ -216,7 +217,9 @@ function formatStreamTool(tool) {
     return ''
   }
 
-  return STREAM_TOOL_LABELS[toolKey] ?? toolKey.replaceAll('_', ' ')
+  return STREAM_TOOL_KEYS[toolKey]
+    ? translate(STREAM_TOOL_KEYS[toolKey])
+    : toolKey.replaceAll('_', ' ')
 }
 
 function createReasoningStep(data, index = 0) {
@@ -262,7 +265,7 @@ function createStatusEvent(data, eventType) {
   if (eventType.includes('thought')) {
     return {
       detail: '',
-      label: `${agentLabel || 'Tory'}가 다음 작업을 판단 중입니다`,
+      label: translate('assistant.stream.thought', { agent: agentLabel || 'Tory' }),
       name: agentLabel,
       type: 'thought',
     }
@@ -271,7 +274,9 @@ function createStatusEvent(data, eventType) {
   if (eventType.includes('action')) {
     return {
       detail: '',
-      label: `${toolLabel || '필요한 데이터'} 조회 중입니다`,
+      label: translate('assistant.stream.action', {
+        tool: toolLabel || translate('assistant.stream.fallbackData'),
+      }),
       name: agentLabel,
       type: 'action',
     }
@@ -280,7 +285,9 @@ function createStatusEvent(data, eventType) {
   if (eventType.includes('observation')) {
     return {
       detail: '',
-      label: `${toolLabel || '조회'} 결과를 정리 중입니다`,
+      label: translate('assistant.stream.observation', {
+        tool: toolLabel || translate('assistant.stream.fallbackResult'),
+      }),
       name: agentLabel,
       type: 'observation',
     }
@@ -289,7 +296,7 @@ function createStatusEvent(data, eventType) {
   if (eventType.includes('ground')) {
     return {
       detail: '',
-      label: '답변 근거를 확인 중입니다',
+      label: translate('assistant.stream.grounding'),
       name: agentLabel,
       type: 'grounding',
     }
@@ -298,7 +305,7 @@ function createStatusEvent(data, eventType) {
   if (eventType.includes('suggest')) {
     return {
       detail: '',
-      label: '추천 질문을 준비 중입니다',
+      label: translate('assistant.stream.suggest'),
       name: agentLabel,
       type: 'suggest',
     }
@@ -306,7 +313,7 @@ function createStatusEvent(data, eventType) {
 
   return {
     detail: '',
-    label: 'Tory가 답변을 작성 중입니다',
+    label: translate('assistant.stream.answer'),
     name: agentLabel,
     type: eventType || 'status',
   }
@@ -363,7 +370,7 @@ function normalizeStreamEvent(rawEvent) {
     return {
       code: nestedData.code ?? '',
       kind: 'error',
-      message: nestedData.message ?? 'Agent 응답을 불러오지 못했습니다.',
+      message: nestedData.message ?? translate('assistant.responseError'),
     }
   }
 

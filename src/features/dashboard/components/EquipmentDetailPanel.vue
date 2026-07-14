@@ -1,4 +1,6 @@
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import gasFlowIcon from '@/assets/icons/dashboard/metric-gas-flow.svg'
 import pressureIcon from '@/assets/icons/dashboard/metric-pressure.png'
 import rfPowerIcon from '@/assets/icons/dashboard/metric-rf-power.svg'
@@ -16,6 +18,7 @@ defineProps({
 })
 
 const emit = defineEmits(['update:selectedMetricId'])
+const { t } = useI18n()
 
 const metricIconMap = {
   gasFlow: gasFlowIcon,
@@ -31,18 +34,25 @@ function selectMetric(metricId) {
 function isAlertMetric(metric) {
   return ['warning', 'danger'].includes(metric.statusTone)
 }
+
+function getMetricStatusLabel(metric) {
+  return t(`status.${metric.statusTone ?? 'normal'}`)
+}
 </script>
 
 <template>
   <section class="detail-panel" aria-labelledby="equipment-detail-title">
     <div class="detail-panel__section-header">
-      <h2 id="equipment-detail-title">상세 정보</h2>
+      <h2 id="equipment-detail-title">{{ t('detail.title') }}</h2>
     </div>
 
     <div class="detail-panel__title-row">
       <h3>{{ equipment.name }}</h3>
       <Transition name="detail-status-flow" mode="out-in">
-        <div :key="`${equipment.status.tone}-${equipment.alarmCode}`" class="detail-panel__status-row">
+        <div
+          :key="`${equipment.status.tone}-${equipment.alarmCode}`"
+          class="detail-panel__status-row"
+        >
           <span
             v-if="
               ['warning', 'danger'].includes(equipment.status.tone) &&
@@ -61,19 +71,19 @@ function isAlertMetric(metric) {
     <div class="detail-panel__body">
       <div class="detail-panel__info-grid">
         <div class="detail-panel__info-item">
-          <span>설비 유형</span>
+          <span>{{ t('detail.equipmentType') }}</span>
           <strong>{{ equipment.type }}</strong>
         </div>
         <div class="detail-panel__info-item">
-          <span>책임자</span>
+          <span>{{ t('detail.owner') }}</span>
           <strong>{{ equipment.ownerDisplay ?? equipment.owner }}</strong>
         </div>
         <div class="detail-panel__info-item">
-          <span>최근 업데이트</span>
+          <span>{{ t('detail.updatedAt') }}</span>
           <strong>{{ equipment.updatedAt.date }} {{ equipment.updatedAt.time }}</strong>
         </div>
         <div class="detail-panel__info-item">
-          <span>마지막 점검</span>
+          <span>{{ t('detail.lastInspection') }}</span>
           <strong>{{ equipment.inspectedAt }}</strong>
         </div>
       </div>
@@ -99,7 +109,9 @@ function isAlertMetric(metric) {
             <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
           </span>
           <div class="detail-panel__metric-copy">
-            <span class="detail-panel__metric-label">{{ metric.label }}</span>
+            <span class="detail-panel__metric-label">{{
+              t(metric.labelKey ?? `metrics.${metric.id}`)
+            }}</span>
             <Transition name="detail-value-flow" mode="out-in">
               <strong :key="`${metric.id}-${metric.value}-${metric.unit}`">
                 {{ metric.value }}
@@ -111,8 +123,8 @@ function isAlertMetric(metric) {
             v-if="isAlertMetric(metric)"
             class="detail-panel__metric-alert"
             :class="`detail-panel__metric-alert--${metric.statusTone}`"
-            :aria-label="metric.statusLabel ?? equipment.status.label"
-            :title="metric.statusLabel ?? equipment.status.label"
+            :aria-label="getMetricStatusLabel(metric)"
+            :title="getMetricStatusLabel(metric)"
           >
           </span>
         </button>
@@ -197,7 +209,11 @@ function isAlertMetric(metric) {
 }
 
 .detail-panel__alarm-code--warning {
-  color: color-mix(in srgb, var(--agentory-color-status-warning), var(--agentory-color-text-primary) 26%);
+  color: color-mix(
+    in srgb,
+    var(--agentory-color-status-warning),
+    var(--agentory-color-text-primary) 26%
+  );
   background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 84%);
 }
 
@@ -282,7 +298,11 @@ function isAlertMetric(metric) {
 
 .detail-panel__metric--selected {
   color: var(--agentory-color-text-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-bg-surface) 94%);
+  background: color-mix(
+    in srgb,
+    var(--agentory-color-bg-primary),
+    var(--agentory-color-bg-surface) 94%
+  );
   border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 52%);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 76%),

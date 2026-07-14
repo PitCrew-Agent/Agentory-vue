@@ -1,14 +1,17 @@
 export const equipmentStatusMap = {
   danger: {
     label: '위험',
+    labelKey: 'status.danger',
     tone: 'danger',
   },
   normal: {
     label: '양호',
+    labelKey: 'status.normal',
     tone: 'normal',
   },
   warning: {
     label: '주의',
+    labelKey: 'status.warning',
     tone: 'warning',
   },
 }
@@ -31,7 +34,11 @@ const statusToneByLabel = {
 export function normalizeEquipmentStatusTone(status) {
   const normalizedStatus = String(status ?? '').trim()
 
-  return statusToneByLabel[normalizedStatus] ?? statusToneByLabel[normalizedStatus.toLowerCase()] ?? 'normal'
+  return (
+    statusToneByLabel[normalizedStatus] ??
+    statusToneByLabel[normalizedStatus.toLowerCase()] ??
+    'normal'
+  )
 }
 
 export function normalizeEquipmentStatus(status) {

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import historyDeleteIcon from '@/assets/icons/dashboard/action-trash.svg'
 import chatBackIcon from '@/assets/icons/dashboard/chat-back.svg'
@@ -33,6 +34,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['delete-history', 'select-history', 'send-message'])
+const { locale, t } = useI18n()
 const activePanelView = ref('history')
 const inputMessage = ref('')
 const inputRef = ref(null)
@@ -49,9 +51,12 @@ const historyListItems = computed(() =>
 
     return {
       id: item.id ?? `history-${index + 1}`,
-      meta: item.updatedAt || item.createdAt ? `${formatMessageDate(date)} ${formatMessageTime(date)}` : '',
+      meta:
+        item.updatedAt || item.createdAt
+          ? `${formatMessageDate(date)} ${formatMessageTime(date)}`
+          : '',
       preview: item.preview ?? item.lastMessage ?? '',
-      title: item.title ?? item.name ?? `대화 ${index + 1}`,
+      title: item.title ?? item.name ?? t('assistant.conversation', { index: index + 1 }),
       value: item,
     }
   }),
@@ -116,7 +121,7 @@ function getThinkingEvent(message) {
 }
 
 function getThinkingEventLabel(message) {
-  return getThinkingEvent(message)?.label ?? 'Tory가 생각 중입니다'
+  return getThinkingEvent(message)?.label ?? t('assistant.thinking')
 }
 
 function getThinkingTypingKey(message) {
@@ -206,7 +211,7 @@ function createMessageDate(value) {
 }
 
 function formatMessageDate(date) {
-  return date.toLocaleDateString('ko-KR', {
+  return date.toLocaleDateString(locale.value === 'ko' ? 'ko-KR' : 'en-US', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -225,7 +230,7 @@ function cleanAnswerTitle(value) {
     .trim()
 }
 
-function createAnswerSection(title = '답변 요약') {
+function createAnswerSection(title = t('assistant.answerSummary')) {
   return {
     bodyLines: [],
     items: [],
@@ -273,7 +278,7 @@ function splitDefaultAnswerSection(section) {
       createAnswerBlock({
         body: paragraphs[0],
         index: nextSections.length,
-        title: '핵심 요약',
+        title: t('assistant.answerSummary'),
         tone: 'summary',
       }),
     )
@@ -284,7 +289,7 @@ function splitDefaultAnswerSection(section) {
       createAnswerBlock({
         index: nextSections.length,
         items: section.items,
-        title: '확인 항목',
+        title: t('assistant.answerItems'),
         tone: 'action',
       }),
     )
@@ -295,7 +300,7 @@ function splitDefaultAnswerSection(section) {
       createAnswerBlock({
         index: nextSections.length,
         tables: section.tables,
-        title: '데이터 표',
+        title: t('assistant.answerTable'),
         tone: 'default',
       }),
     )
@@ -306,7 +311,7 @@ function splitDefaultAnswerSection(section) {
       createAnswerBlock({
         body: paragraphs.slice(1).join('\n\n'),
         index: nextSections.length,
-        title: '상세 내용',
+        title: t('assistant.answerDetail'),
         tone: 'default',
       }),
     )
@@ -314,7 +319,15 @@ function splitDefaultAnswerSection(section) {
 
   return nextSections.length
     ? nextSections
-    : [createAnswerBlock({ body: section.body, index: 0, items: section.items, title: '핵심 요약', tone: 'summary' })]
+    : [
+        createAnswerBlock({
+          body: section.body,
+          index: 0,
+          items: section.items,
+          title: t('assistant.answerSummary'),
+          tone: 'summary',
+        }),
+      ]
 }
 
 function parseAssistantAnswer(text = '') {
@@ -441,7 +454,12 @@ function parseAssistantAnswer(text = '') {
       return
     }
 
-    if (colonHeadingMatch && /요약|원인|위험|주의|대응|조치|근거|확인|결론|분석/.test(colonHeadingMatch[1])) {
+    if (
+      colonHeadingMatch &&
+      /요약|원인|위험|주의|대응|조치|근거|확인|결론|분석|summary|cause|risk|warning|response|action|evidence|check|conclusion|analysis|recommendation|details/i.test(
+        colonHeadingMatch[1],
+      )
+    ) {
       commitSection()
       currentSection = createAnswerSection(cleanAnswerTitle(colonHeadingMatch[1]))
 
@@ -480,13 +498,13 @@ function parseAssistantAnswer(text = '') {
       createAnswerBlock({
         body: trimmedText,
         index: 0,
-        title: '핵심 요약',
+        title: t('assistant.answerSummary'),
         tone: 'summary',
       }),
     ]
   }
 
-  if (sections.length === 1 && sections[0].title === '답변 요약') {
+  if (sections.length === 1 && sections[0].title === t('assistant.answerSummary')) {
     return splitDefaultAnswerSection(sections[0])
   }
 
@@ -595,7 +613,7 @@ onBeforeUnmount(() => {
         v-if="!isHistoryView"
         type="button"
         class="assistant-panel__nav-button"
-        aria-label="대화 히스토리 보기"
+        :aria-label="t('assistant.historyAria')"
         @click="openHistoryView"
       >
         <img :src="chatBackIcon" alt="" width="20" height="20" />
@@ -603,28 +621,24 @@ onBeforeUnmount(() => {
       <div class="assistant-panel__title">
         <h2 id="assistant-panel-title">Tory</h2>
         <span class="assistant-panel__role">
-          {{ isHistoryView ? '대화 히스토리' : 'AI 어시스턴트' }}
+          {{ isHistoryView ? t('assistant.history') : t('assistant.assistantRole') }}
         </span>
       </div>
     </div>
 
     <div class="assistant-panel__divider"></div>
 
-    <div
-      v-if="isHistoryView"
-      class="assistant-panel__history"
-      data-test="assistant-history"
-    >
-      <div v-if="isHistoryLoading" class="assistant-panel__history-loading" aria-label="대화 히스토리 불러오는 중">
+    <div v-if="isHistoryView" class="assistant-panel__history" data-test="assistant-history">
+      <div
+        v-if="isHistoryLoading"
+        class="assistant-panel__history-loading"
+        :aria-label="t('assistant.historyLoading')"
+      >
         <span v-for="item in 4" :key="`history-loading-${item}`"></span>
       </div>
 
       <template v-else>
-        <div
-          v-for="item in historyListItems"
-          :key="item.id"
-          class="assistant-panel__history-item"
-        >
+        <div v-for="item in historyListItems" :key="item.id" class="assistant-panel__history-item">
           <button
             type="button"
             class="assistant-panel__history-select"
@@ -632,15 +646,17 @@ onBeforeUnmount(() => {
           >
             <span class="assistant-panel__history-copy">
               <span class="assistant-panel__history-title">{{ item.title }}</span>
-              <span v-if="item.preview" class="assistant-panel__history-preview">{{ item.preview }}</span>
+              <span v-if="item.preview" class="assistant-panel__history-preview">{{
+                item.preview
+              }}</span>
             </span>
             <small v-if="item.meta">{{ item.meta }}</small>
           </button>
           <button
             type="button"
             class="assistant-panel__history-delete"
-            :aria-label="`${item.title} 대화 삭제`"
-            title="삭제"
+            :aria-label="t('assistant.deleteAria', { title: item.title })"
+            :title="t('assistant.delete')"
             @click="requestDeleteHistoryItem(item)"
           >
             <img :src="historyDeleteIcon" alt="" width="18" height="18" />
@@ -648,8 +664,11 @@ onBeforeUnmount(() => {
         </div>
       </template>
 
-      <div v-if="!isHistoryLoading && historyListItems.length === 0" class="assistant-panel__history-empty">
-        <strong>저장된 대화가 없습니다.</strong>
+      <div
+        v-if="!isHistoryLoading && historyListItems.length === 0"
+        class="assistant-panel__history-empty"
+      >
+        <strong>{{ t('assistant.emptyHistory') }}</strong>
       </div>
     </div>
 
@@ -671,13 +690,19 @@ onBeforeUnmount(() => {
           <div v-if="message.isStreaming" class="assistant-panel__thinking">
             <div class="assistant-panel__thinking-copy">
               <div class="assistant-panel__thinking-current">
-                <span v-if="message.streamEvents?.at(-1)?.name" class="assistant-panel__thinking-agent">
+                <span
+                  v-if="message.streamEvents?.at(-1)?.name"
+                  class="assistant-panel__thinking-agent"
+                >
                   {{ message.streamEvents.at(-1).name }}
                 </span>
                 <strong class="assistant-panel__thinking-status">
                   {{ getThinkingDisplayText(message) }}
                 </strong>
-                <small v-if="message.streamEvents?.at(-1)?.detail" class="assistant-panel__thinking-detail">
+                <small
+                  v-if="message.streamEvents?.at(-1)?.detail"
+                  class="assistant-panel__thinking-detail"
+                >
                   {{ message.streamEvents.at(-1).detail }}
                 </small>
               </div>
@@ -685,10 +710,7 @@ onBeforeUnmount(() => {
                 v-if="getPreviousStreamEvents(message.streamEvents).length"
                 class="assistant-panel__thinking-trace"
               >
-                <li
-                  v-for="event in getPreviousStreamEvents(message.streamEvents)"
-                  :key="event.id"
-                >
+                <li v-for="event in getPreviousStreamEvents(message.streamEvents)" :key="event.id">
                   <span class="assistant-panel__thinking-step-dot"></span>
                   <span class="assistant-panel__thinking-step-label">{{ event.label }}</span>
                 </li>
@@ -722,7 +744,10 @@ onBeforeUnmount(() => {
                   </thead>
                   <tbody>
                     <tr v-for="(row, rowIndex) in table.rows" :key="`${table.id}-${rowIndex}`">
-                      <td v-for="(cell, cellIndex) in row" :key="`${table.id}-${rowIndex}-${cellIndex}`">
+                      <td
+                        v-for="(cell, cellIndex) in row"
+                        :key="`${table.id}-${rowIndex}-${cellIndex}`"
+                      >
                         {{ cell }}
                       </td>
                     </tr>
@@ -735,12 +760,15 @@ onBeforeUnmount(() => {
             </section>
           </div>
 
-          <p v-else-if="message.text" :class="{ 'assistant-panel__streaming-text': message.isStreaming }">
+          <p
+            v-else-if="message.text"
+            :class="{ 'assistant-panel__streaming-text': message.isStreaming }"
+          >
             {{ message.text }}
           </p>
 
           <div v-if="message.citations?.length" class="assistant-panel__citations">
-            <strong>근거 문서</strong>
+            <strong>{{ t('assistant.citation') }}</strong>
             <ul>
               <li v-for="citation in message.citations" :key="citation.docId">
                 <span>{{ citation.docId }}</span>
@@ -753,7 +781,7 @@ onBeforeUnmount(() => {
             v-if="message.role !== 'assistant' || !message.isStreaming"
             class="assistant-panel__message-meta"
           >
-            {{ message.sentTime }} 전송됨
+            {{ t('assistant.sent', { time: message.sentTime }) }}
           </time>
         </article>
       </template>
@@ -762,7 +790,7 @@ onBeforeUnmount(() => {
         v-if="isLoading && !hasStreamingMessage"
         class="assistant-panel__message assistant-panel__message--assistant"
       >
-        <span class="assistant-panel__typing" aria-label="Tory 응답 생성 중">
+        <span class="assistant-panel__typing" :aria-label="t('assistant.responseLoading')">
           <span></span>
           <span></span>
           <span></span>
@@ -778,11 +806,11 @@ onBeforeUnmount(() => {
         data-test="quick-commands"
       >
         <div class="assistant-panel__quick-header">
-          <span class="assistant-panel__quick-title">추천 대화</span>
+          <span class="assistant-panel__quick-title">{{ t('assistant.quickTitle') }}</span>
           <small
             v-if="isQuickCommandLoading"
             class="assistant-panel__quick-dots"
-            aria-label="추천 대화 불러오는 중"
+            :aria-label="t('assistant.quickLoading')"
           >
             <span></span>
             <span></span>
@@ -822,11 +850,16 @@ onBeforeUnmount(() => {
           ref="inputRef"
           v-model="inputMessage"
           rows="2"
-          placeholder="Tory에게 메시지를 입력해주세요."
-          aria-label="Tory 메시지"
+          :placeholder="t('assistant.inputPlaceholder')"
+          :aria-label="t('assistant.inputAria')"
           @keydown="handleInputKeydown"
         />
-        <button type="button" aria-label="메시지 전송" :disabled="!canSubmit" @click="submitMessage()">
+        <button
+          type="button"
+          :aria-label="t('assistant.send')"
+          :disabled="!canSubmit"
+          @click="submitMessage()"
+        >
           <img :src="sendIcon" alt="" width="24" height="24" />
         </button>
       </div>
@@ -845,17 +878,19 @@ onBeforeUnmount(() => {
           aria-labelledby="assistant-delete-dialog-title"
         >
           <div class="assistant-panel__delete-copy">
-            <strong id="assistant-delete-dialog-title">대화를 삭제할까요?</strong>
+            <strong id="assistant-delete-dialog-title">{{ t('assistant.deleteConfirm') }}</strong>
             <span>{{ pendingDeleteHistoryItem.title }}</span>
           </div>
           <div class="assistant-panel__delete-actions">
-            <button type="button" @click="cancelDeleteHistoryItem">취소</button>
+            <button type="button" @click="cancelDeleteHistoryItem">
+              {{ t('assistant.cancelDelete') }}
+            </button>
             <button
               type="button"
               class="assistant-panel__delete-confirm"
               @click="confirmDeleteHistoryItem"
             >
-              삭제
+              {{ t('assistant.delete') }}
             </button>
           </div>
         </section>
@@ -989,13 +1024,12 @@ onBeforeUnmount(() => {
 .assistant-panel__history-loading span {
   min-height: 64px;
   overflow: hidden;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 0%,
-      color-mix(in srgb, var(--agentory-color-border-inverse), transparent 35%) 42%,
-      color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 84%
-    );
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 0%,
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 35%) 42%,
+    color-mix(in srgb, var(--agentory-color-bg-surface), transparent 8%) 84%
+  );
   background-size: 240% 100%;
   border-radius: var(--agentory-radius-12);
   animation: assistant-history-loading 1.2s ease-in-out infinite;
@@ -1321,7 +1355,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   overflow-x: auto;
   border-radius: var(--agentory-radius-10);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agentory-color-border-primary), transparent 68%);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--agentory-color-border-primary), transparent 68%);
   scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 56%) transparent;
   scrollbar-width: thin;
 }
@@ -1417,7 +1452,11 @@ onBeforeUnmount(() => {
   max-width: 100%;
   padding: 0 var(--agentory-spacing-6);
   overflow: hidden;
-  color: color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 18%);
+  color: color-mix(
+    in srgb,
+    var(--agentory-color-bg-primary),
+    var(--agentory-color-text-primary) 18%
+  );
   background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 88%);
   border-radius: var(--agentory-radius-pill);
   font-size: var(--agentory-font-size-caption);
@@ -1433,15 +1472,15 @@ onBeforeUnmount(() => {
   min-height: var(--agentory-line-height-body-sm);
   overflow: hidden;
   color: transparent;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 22%) 0%,
-      var(--agentory-color-bg-primary) 38%,
-      color-mix(in srgb, var(--agentory-color-text-inverse), var(--agentory-color-bg-primary) 12%) 50%,
-      var(--agentory-color-bg-primary) 62%,
-      color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 22%) 100%
-    );
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 22%) 0%,
+    var(--agentory-color-bg-primary) 38%,
+    color-mix(in srgb, var(--agentory-color-text-inverse), var(--agentory-color-bg-primary) 12%) 50%,
+    var(--agentory-color-bg-primary) 62%,
+    color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 22%)
+      100%
+  );
   background-clip: text;
   background-size: 220% 100%;
   font-size: var(--agentory-font-size-body-sm);
@@ -1630,13 +1669,12 @@ onBeforeUnmount(() => {
   margin: var(--agentory-spacing-10);
   padding: var(--agentory-spacing-10);
   overflow: hidden;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 18%),
-      color-mix(in srgb, var(--agentory-color-bg-app), transparent 62%) 48%,
-      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
-    );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 18%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 62%) 48%,
+    color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
+  );
   border: 0;
   border-radius: var(--agentory-radius-12);
   box-shadow:
@@ -1720,15 +1758,15 @@ onBeforeUnmount(() => {
 
 .assistant-panel__quick-loading-row {
   min-height: 34px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 38%),
-      color-mix(in srgb, var(--agentory-color-bg-app), transparent 72%)
-    );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 38%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 72%)
+  );
   border: 0;
   border-radius: var(--agentory-radius-10);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 48%);
+  box-shadow: inset 0 1px 0
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 48%);
   backdrop-filter: blur(14px) saturate(175%);
   -webkit-backdrop-filter: blur(14px) saturate(175%);
 }
@@ -1740,12 +1778,11 @@ onBeforeUnmount(() => {
     var(--agentory-spacing-20);
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 34%),
-      color-mix(in srgb, var(--agentory-color-bg-app), transparent 70%)
-    );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 34%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 70%)
+  );
   border: 0;
   border-radius: var(--agentory-radius-10);
   box-shadow:
@@ -1780,13 +1817,12 @@ onBeforeUnmount(() => {
 .assistant-panel__quick button::after {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      112deg,
-      transparent 18%,
-      color-mix(in srgb, var(--agentory-color-border-inverse), transparent 68%) 46%,
-      transparent 72%
-    );
+  background: linear-gradient(
+    112deg,
+    transparent 18%,
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 68%) 46%,
+    transparent 72%
+  );
   opacity: 0.42;
   pointer-events: none;
   content: '';

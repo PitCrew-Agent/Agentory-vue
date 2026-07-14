@@ -1,4 +1,6 @@
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 defineProps({
   activeNotificationId: {
     type: Number,
@@ -23,6 +25,8 @@ defineProps({
 })
 
 defineEmits(['respond'])
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -47,7 +51,9 @@ defineEmits(['respond'])
           :disabled="isResponding || !Number.isInteger(Number(toast.id))"
           @click="$emit('respond', toast)"
         >
-          {{ activeNotificationId === Number(toast.id) ? '계획 생성 중' : '대응 시작' }}
+          {{
+            activeNotificationId === Number(toast.id) ? t('incident.creating') : t('incident.start')
+          }}
         </button>
       </div>
     </aside>

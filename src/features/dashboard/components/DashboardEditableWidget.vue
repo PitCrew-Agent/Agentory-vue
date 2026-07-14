@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import widgetMenuIcon from '@/assets/icons/dashboard/widget-menu.svg'
 import widgetMoveIcon from '@/assets/icons/dashboard/widget-move.svg'
@@ -32,6 +33,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['preview:layout', 'stash', 'update:layout'])
+const { t } = useI18n()
 
 const widgetRef = ref(null)
 const activeMode = ref('')
@@ -215,7 +217,7 @@ onBeforeUnmount(() => {
         class="dashboard-widget__move"
         type="button"
         :data-test="`widget-move-${id}`"
-        aria-label="Move widget"
+        :aria-label="t('widget.move')"
         @pointerdown="startInteraction('move', $event)"
       >
         <img :src="widgetMoveIcon" alt="" width="14" height="14" />
@@ -229,7 +231,7 @@ onBeforeUnmount(() => {
           :data-test="`widget-save-${id}`"
           @click="saveResize"
         >
-          저장
+          {{ t('widget.save') }}
         </button>
 
         <button
@@ -237,16 +239,18 @@ onBeforeUnmount(() => {
           type="button"
           :aria-expanded="isMenuOpen"
           :data-test="`widget-menu-${id}`"
-          aria-label="Widget menu"
+          :aria-label="t('widget.menu')"
           @click="toggleMenu"
         >
           <img :src="widgetMenuIcon" alt="" width="16" height="16" />
         </button>
 
         <div v-if="isMenuOpen" class="dashboard-widget__menu" :data-test="`widget-menu-list-${id}`">
-          <button type="button" :data-test="`widget-stash-${id}`" @click="stashWidget">넣어두기</button>
+          <button type="button" :data-test="`widget-stash-${id}`" @click="stashWidget">
+            {{ t('widget.stash') }}
+          </button>
           <button type="button" :data-test="`widget-resize-mode-${id}`" @click="startResizeEditing">
-            리사이징
+            {{ t('widget.resize') }}
           </button>
         </div>
       </div>
@@ -261,56 +265,56 @@ onBeforeUnmount(() => {
         class="dashboard-widget__resize dashboard-widget__resize--left"
         type="button"
         :data-test="`widget-resize-left-${id}`"
-        aria-label="Resize widget from left"
+        :aria-label="t('widget.resizeLeft')"
         @pointerdown="startInteraction('left', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--top"
         type="button"
         :data-test="`widget-resize-top-${id}`"
-        aria-label="Resize widget from top"
+        :aria-label="t('widget.resizeTop')"
         @pointerdown="startInteraction('top', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--right"
         type="button"
         :data-test="`widget-resize-right-${id}`"
-        aria-label="Resize widget width"
+        :aria-label="t('widget.resizeRight')"
         @pointerdown="startInteraction('right', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--bottom"
         type="button"
         :data-test="`widget-resize-bottom-${id}`"
-        aria-label="Resize widget height"
+        :aria-label="t('widget.resizeBottom')"
         @pointerdown="startInteraction('bottom', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--left-top"
         type="button"
         :data-test="`widget-resize-left-top-${id}`"
-        aria-label="Resize widget from top left"
+        :aria-label="t('widget.resizeTopLeft')"
         @pointerdown="startInteraction('left-top', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--right-top"
         type="button"
         :data-test="`widget-resize-right-top-${id}`"
-        aria-label="Resize widget from top right"
+        :aria-label="t('widget.resizeTopRight')"
         @pointerdown="startInteraction('right-top', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--left-bottom"
         type="button"
         :data-test="`widget-resize-left-bottom-${id}`"
-        aria-label="Resize widget from bottom left"
+        :aria-label="t('widget.resizeBottomLeft')"
         @pointerdown="startInteraction('left-bottom', $event)"
       ></button>
       <button
         class="dashboard-widget__resize dashboard-widget__resize--corner"
         type="button"
         :data-test="`widget-resize-corner-${id}`"
-        aria-label="Resize widget"
+        :aria-label="t('widget.resizeBottomRight')"
         @pointerdown="startInteraction('right-bottom', $event)"
       ></button>
     </template>

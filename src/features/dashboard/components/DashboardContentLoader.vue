@@ -1,14 +1,20 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const props = defineProps({
   compact: {
     type: Boolean,
     default: false,
   },
   label: {
     type: String,
-    default: '화면을 불러오는 중',
+    default: '',
   },
 })
+
+const { t } = useI18n()
+const displayLabel = computed(() => props.label || t('common.loading'))
 </script>
 
 <template>
@@ -18,7 +24,7 @@ defineProps({
     role="status"
     aria-live="polite"
   >
-    <span class="sr-only">{{ label }}</span>
+    <span class="sr-only">{{ displayLabel }}</span>
     <span class="dashboard-content-loader__spinner" aria-hidden="true"></span>
   </div>
 </template>
@@ -35,7 +41,11 @@ defineProps({
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 20%), transparent 30%),
+    radial-gradient(
+      circle at 50% 44%,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 20%),
+      transparent 30%
+    ),
     color-mix(in srgb, var(--agentory-color-bg-app), transparent 42%);
   backdrop-filter: var(--agentory-blur-glass-strong);
   -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
@@ -48,14 +58,19 @@ defineProps({
 
   border-radius: inherit;
   background:
-    radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 12%), transparent 34%),
+    radial-gradient(
+      circle at 50% 46%,
+      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 12%),
+      transparent 34%
+    ),
     color-mix(in srgb, var(--agentory-color-bg-app), transparent 56%);
 }
 
 .dashboard-content-loader__spinner {
   width: var(--dashboard-loader-size);
   height: var(--dashboard-loader-size);
-  border: var(--dashboard-loader-border) solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
+  border: var(--dashboard-loader-border) solid
+    color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
   border-top-color: var(--agentory-color-bg-primary);
   border-right-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 30%);
   border-radius: var(--agentory-radius-pill);

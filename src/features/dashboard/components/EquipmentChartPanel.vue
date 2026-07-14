@@ -1,4 +1,7 @@
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
 import LineChart from '@/features/dashboard/components/LineChart.vue'
 
 const props = defineProps({
@@ -7,14 +10,27 @@ const props = defineProps({
     required: true,
   },
 })
+
+const { t } = useI18n()
+const metricTitle = computed(() => {
+  const label = props.chart.metricId ? t(`metrics.${props.chart.metricId}`) : props.chart.title
+
+  return props.chart.unit ? `${label} (${props.chart.unit})` : label
+})
 </script>
 
 <template>
-  <section class="chart-panel" aria-labelledby="equipment-chart-title" data-test="equipment-chart-panel">
+  <section
+    class="chart-panel"
+    aria-labelledby="equipment-chart-title"
+    data-test="equipment-chart-panel"
+  >
     <div class="chart-panel__section-header">
       <div class="chart-panel__title-group">
-        <h2 id="equipment-chart-title">그래프</h2>
-        <span class="chart-panel__metric-title" data-test="metric-chart-title">{{ props.chart.title }}</span>
+        <h2 id="equipment-chart-title">{{ t('chart.title') }}</h2>
+        <span class="chart-panel__metric-title" data-test="metric-chart-title">{{
+          metricTitle
+        }}</span>
       </div>
     </div>
 
@@ -88,5 +104,4 @@ const props = defineProps({
   height: 100%;
   min-height: 0;
 }
-
 </style>

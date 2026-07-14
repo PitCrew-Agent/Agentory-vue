@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import ChartCanvas from '@/features/dashboard/components/ChartCanvas.vue'
 import DashboardDataPanel from '@/features/dashboard/components/DashboardDataPanel.vue'
@@ -13,6 +14,8 @@ const props = defineProps({
     default: '',
   },
 })
+
+const { t } = useI18n()
 
 const METRIC_COLOR_TOKENS = {
   gasFlow: ['--agentory-color-chart-series-4', '#d57954'],
@@ -34,7 +37,7 @@ const sensorAlarmItems = computed(() =>
       item.metrics.map((metric) => ({
         ...item,
         metricId: metric.id,
-        metricLabel: metric.label,
+        metricLabel: t(metric.labelKey ?? `metrics.${metric.id}`),
         metricOrder: metric.order,
       })),
     )
@@ -125,7 +128,7 @@ function withOpacity(color, opacity) {
 }
 
 const chartData = computed(() => {
-  uiStore.currentTheme
+  void uiStore.currentTheme
 
   const surfaceColor = readChartToken('--agentory-color-bg-app', '#f8f9f6')
 
@@ -143,14 +146,14 @@ const chartData = computed(() => {
         borderWidth: 2,
         data: chartItems.value.map((item) => item.count),
         hoverOffset: 3,
-        label: '알람 코드',
+        label: t('errorDonut.alarmCode'),
       },
     ],
   }
 })
 
 const chartOptions = computed(() => {
-  uiStore.currentTheme
+  void uiStore.currentTheme
 
   return {
     animation: { duration: 520, easing: 'easeOutCubic' },
@@ -163,7 +166,11 @@ const chartOptions = computed(() => {
           label(context) {
             const item = chartItems.value[context.dataIndex]
 
-            return `${item.groupLabel} · ${item.alarmCode} · ${item.count}건`
+            return t('errorDonut.tooltip', {
+              code: item.alarmCode,
+              count: item.count,
+              metric: item.groupLabel,
+            })
           },
         },
       },
@@ -192,7 +199,7 @@ async function loadSummary() {
   } catch {
     if (currentRequestId === requestId) {
       summaryItems.value = []
-      errorMessage.value = '알람 집계를 불러오지 못했습니다.'
+      errorMessage.value = t('errorDonut.error')
     }
   } finally {
     if (currentRequestId === requestId) {
@@ -217,13 +224,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <DashboardDataPanel title="에러 발생 도넛 차트" :context="equipmentId">
+  <DashboardDataPanel :title="t('errorDonut.title')" :context="equipmentId">
     <div v-if="summaryItems.length" class="error-donut-panel">
       <div class="error-donut-panel__visual">
         <ChartCanvas type="doughnut" :data="chartData" :options="chartOptions" />
         <div class="error-donut-panel__total" aria-hidden="true">
           <strong>{{ sensorAlarmCount }}</strong>
-          <span>센서별 발생</span>
+          <span>{{ t('errorDonut.sensorTotal') }}</span>
         </div>
       </div>
 
@@ -236,12 +243,12 @@ onBeforeUnmount(() => {
               aria-hidden="true"
             ></span>
             <strong>{{ group.label }}</strong>
-            <small>{{ group.count }}건</small>
+            <small>{{ t('errorDonut.count', { count: group.count }) }}</small>
           </div>
           <div class="error-donut-panel__codes">
             <span v-for="item in group.items" :key="item.alarmCode">
               <b :class="`error-donut-panel__code--${item.statusTone}`">{{ item.alarmCode }}</b>
-              <small>{{ item.count }}건</small>
+              <small>{{ t('errorDonut.count', { count: item.count }) }}</small>
             </span>
           </div>
         </li>
@@ -249,7 +256,7 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-else class="error-donut-panel__state">
-      {{ isLoading ? '알람 집계를 불러오는 중입니다.' : errorMessage || '집계할 알람이 없습니다.' }}
+      {{ isLoading ? t('errorDonut.loading') : errorMessage || t('errorDonut.empty') }}
     </p>
   </DashboardDataPanel>
 </template>

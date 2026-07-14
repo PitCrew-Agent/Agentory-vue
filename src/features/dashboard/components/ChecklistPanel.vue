@@ -1,16 +1,20 @@
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 defineProps({
   items: {
     type: Array,
     required: true,
   },
 })
+
+const { t } = useI18n()
 </script>
 
 <template>
   <section class="checklist-panel" aria-labelledby="dashboard-checklist-title">
     <div class="checklist-panel__header">
-      <h2 id="dashboard-checklist-title">체크 리스트</h2>
+      <h2 id="dashboard-checklist-title">{{ t('factory.checklist') }}</h2>
     </div>
 
     <ul class="checklist-panel__list">
