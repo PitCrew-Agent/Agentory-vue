@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 
 import LineChart from '@/features/dashboard/components/LineChart.vue'
+import { i18n } from '@/features/i18n'
 
 const chart = {
   max: 12,
@@ -32,10 +33,12 @@ const rfPowerChart = {
 }
 
 function mountLineChart(chartData) {
+  i18n.global.locale.value = 'ko'
+
   return mount(LineChart, {
     props: { chart: chartData },
     global: {
-      plugins: [createPinia()],
+      plugins: [createPinia(), i18n],
       stubs: {
         ChartCanvas: {
           name: 'ChartCanvas',

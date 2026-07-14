@@ -1,5 +1,6 @@
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import refreshIcon from '@/assets/icons/dashboard/refresh.svg'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
@@ -52,29 +53,38 @@ const emit = defineEmits([
   'set-read-status',
   'start-response',
 ])
+const { t } = useI18n()
 const tablePanelRef = ref(null)
 const isBulkConfirmOpen = ref(false)
 const activeReadStatusMenuId = ref('')
 
-const notificationColumns = [
-  { key: 'occurredAt', label: '발생 시간', cellClass: 'dashboard-table-panel__cell--light' },
-  { key: 'code', label: '알림 코드' },
-  { key: 'message', label: '알림 내용' },
+const notificationColumns = computed(() => [
+  {
+    key: 'occurredAt',
+    label: t('notificationLog.columns.occurredAt'),
+    cellClass: 'dashboard-table-panel__cell--light',
+  },
+  { key: 'code', label: t('notificationLog.columns.code') },
+  { key: 'message', label: t('notificationLog.columns.message') },
   {
     key: 'readStatus',
-    label: '상태',
+    label: t('notificationLog.columns.readStatus'),
     cellClass: 'dashboard-table-panel__cell--center notification-log-panel__status-cell',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
   {
     key: 'response',
-    label: '대응',
+    label: t('notificationLog.columns.response'),
     cellClass: 'dashboard-table-panel__cell--center',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
-]
+])
 
-const readStatusOptions = [{ value: 'read', label: '읽음으로 표시' }]
+const readStatusOptions = computed(() => [{ value: 'read', label: t('notificationLog.markRead') }])
+
+function getReadStatusLabel(status) {
+  return t(`notificationLog.${status}`)
+}
 
 function getCodeTone(code) {
   const normalizedCode = String(code ?? '')
@@ -130,10 +140,10 @@ async function selectCalendarDate(date) {
   <div class="notification-log-panel">
     <DashboardTablePanel
       ref="tablePanelRef"
-      title="알림 이력"
+      :title="t('notificationLog.title')"
       data-test="notification-log-panel"
       row-test-prefix="notification-log-row"
-      action-label="일괄 읽음 처리"
+      :action-label="t('notificationLog.bulkAction')"
       :columns="notificationColumns"
       :groups="groups"
       grid-template-columns="minmax(150px, 180px) minmax(90px, 120px) minmax(240px, 1fr) minmax(106px, 122px) minmax(92px, 108px)"
@@ -141,7 +151,7 @@ async function selectCalendarDate(date) {
     >
       <template #title-actions>
         <DashboardCalendarPicker
-          aria-label="알림 이력 날짜 선택"
+          :aria-label="t('notificationLog.calendar')"
           data-test-prefix="notification"
           :dates="calendarDates"
           @select="selectCalendarDate"
@@ -154,8 +164,8 @@ async function selectCalendarDate(date) {
           :class="{ 'notification-log-panel__refresh--loading': isLoading }"
           type="button"
           :disabled="isLoading"
-          aria-label="알림 이력 최신화"
-          title="최신화"
+          :aria-label="isLoading ? t('notificationLog.refreshing') : t('notificationLog.refresh')"
+          :title="t('notificationLog.refresh')"
           data-test="notification-log-refresh"
           @click="emit('refresh')"
         >
@@ -183,13 +193,15 @@ async function selectCalendarDate(date) {
             :class="`notification-log-panel__status--${notificationReadStatusMap[row.readStatus].tone}`"
             type="button"
             :aria-expanded="row.readStatus === 'unread' && activeReadStatusMenuId === row.id"
-            :aria-label="`${notificationReadStatusMap[row.readStatus].label} 상태 선택`"
+            :aria-label="
+              t('notificationLog.statusSelect', { status: getReadStatusLabel(row.readStatus) })
+            "
             :disabled="row.readStatus === 'read'"
             :data-read-status="row.readStatus"
             :data-test="`notification-read-status-${row.id}`"
             @click="toggleReadStatusMenu(row.id)"
           >
-            {{ notificationReadStatusMap[row.readStatus].label }}
+            {{ getReadStatusLabel(row.readStatus) }}
           </button>
 
           <Transition name="notification-status-menu">
@@ -227,7 +239,11 @@ async function selectCalendarDate(date) {
           :data-test="`notification-response-${row.id}`"
           @click="emit('start-response', row)"
         >
-          {{ activeNotificationId === Number(row.id) ? '생성 중' : '대응 시작' }}
+          {{
+            activeNotificationId === Number(row.id)
+              ? t('notificationLog.responding')
+              : t('notificationLog.startResponse')
+          }}
         </button>
       </template>
 
@@ -239,11 +255,16 @@ async function selectCalendarDate(date) {
             data-test="notification-pagination-prev"
             @click="emit('previous-page')"
           >
-            이전
+            {{ t('common.previous') }}
           </button>
           <span>
-            {{ pagination.totalPages ? pagination.pageIndex : 0 }} /
-            {{ pagination.totalPages }}페이지 · 총 {{ pagination.totalItems }}건
+            {{
+              t('notificationLog.pageSummary', {
+                count: pagination.totalItems,
+                current: pagination.totalPages ? pagination.pageIndex : 0,
+                total: pagination.totalPages,
+              })
+            }}
           </span>
           <button
             type="button"
@@ -251,7 +272,7 @@ async function selectCalendarDate(date) {
             data-test="notification-pagination-next"
             @click="emit('next-page')"
           >
-            다음
+            {{ t('common.next') }}
           </button>
         </div>
       </template>
@@ -270,8 +291,8 @@ async function selectCalendarDate(date) {
       aria-labelledby="notification-bulk-confirm-title"
     >
       <section class="notification-log-panel__confirm">
-        <h2 id="notification-bulk-confirm-title">알림을 모두 읽음 처리할까요?</h2>
-        <p>현재 알림 이력의 읽지 않은 항목이 모두 읽음으로 변경됩니다.</p>
+        <h2 id="notification-bulk-confirm-title">{{ t('notificationLog.confirmBulkTitle') }}</h2>
+        <p>{{ t('notificationLog.confirmBulkDescription') }}</p>
 
         <div class="notification-log-panel__confirm-actions">
           <button
@@ -280,7 +301,7 @@ async function selectCalendarDate(date) {
             data-test="notification-bulk-confirm-cancel"
             @click="closeBulkConfirm"
           >
-            취소
+            {{ t('common.cancel') }}
           </button>
           <button
             class="notification-log-panel__confirm-button"
@@ -288,7 +309,7 @@ async function selectCalendarDate(date) {
             data-test="notification-bulk-confirm-submit"
             @click="confirmBulkRead"
           >
-            읽음 처리
+            {{ t('notificationLog.bulkAction') }}
           </button>
         </div>
       </section>

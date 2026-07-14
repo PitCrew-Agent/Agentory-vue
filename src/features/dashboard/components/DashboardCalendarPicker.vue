@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import calendarIcon from '@/assets/icons/dashboard/calendar.svg'
 
@@ -19,13 +20,18 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select'])
+const { locale, t, tm } = useI18n()
 const isOpen = ref(false)
 const currentMonthIndex = ref(0)
 
-const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
-  month: 'long',
-  year: 'numeric',
-})
+const monthFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'ko' ? 'ko-KR' : 'en-US', {
+      month: 'long',
+      year: 'numeric',
+    }),
+)
+const weekdayLabels = computed(() => tm('calendar.weekdays'))
 
 const availableDateSet = computed(() => new Set(props.dates))
 const sortedDates = computed(() => [...props.dates].sort())
@@ -35,7 +41,9 @@ const availableMonths = computed(() => {
   return [...monthSet].sort()
 })
 
-const currentMonth = computed(() => availableMonths.value[currentMonthIndex.value] ?? sortedDates.value[0]?.slice(0, 7))
+const currentMonth = computed(
+  () => availableMonths.value[currentMonthIndex.value] ?? sortedDates.value[0]?.slice(0, 7),
+)
 const currentMonthLabel = computed(() => {
   if (!currentMonth.value) {
     return ''
@@ -43,7 +51,7 @@ const currentMonthLabel = computed(() => {
 
   const [year, month] = currentMonth.value.split('-').map(Number)
 
-  return monthFormatter.format(new Date(year, month - 1, 1))
+  return monthFormatter.value.format(new Date(year, month - 1, 1))
 })
 
 const calendarCells = computed(() => {
@@ -89,7 +97,10 @@ function toggleCalendar() {
 }
 
 function moveMonth(delta) {
-  currentMonthIndex.value = Math.min(Math.max(currentMonthIndex.value + delta, 0), availableMonths.value.length - 1)
+  currentMonthIndex.value = Math.min(
+    Math.max(currentMonthIndex.value + delta, 0),
+    availableMonths.value.length - 1,
+  )
 }
 
 function selectDate(date) {
@@ -132,7 +143,7 @@ watch(
           <button
             class="dashboard-calendar-picker__month-button"
             type="button"
-            aria-label="이전 달"
+            :aria-label="t('calendar.previousMonth')"
             :disabled="currentMonthIndex === 0"
             :data-test="`${dataTestPrefix}-calendar-prev`"
             @click="moveMonth(-1)"
@@ -143,7 +154,7 @@ watch(
           <button
             class="dashboard-calendar-picker__month-button"
             type="button"
-            aria-label="다음 달"
+            :aria-label="t('calendar.nextMonth')"
             :disabled="currentMonthIndex >= availableMonths.length - 1"
             :data-test="`${dataTestPrefix}-calendar-next`"
             @click="moveMonth(1)"
@@ -153,13 +164,7 @@ watch(
         </header>
 
         <div class="dashboard-calendar-picker__weekdays" aria-hidden="true">
-          <span>일</span>
-          <span>월</span>
-          <span>화</span>
-          <span>수</span>
-          <span>목</span>
-          <span>금</span>
-          <span>토</span>
+          <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
         </div>
 
         <div class="dashboard-calendar-picker__grid">
@@ -174,7 +179,9 @@ watch(
               :class="{ 'dashboard-calendar-picker__day--available': cell.isAvailable }"
               type="button"
               :disabled="!cell.isAvailable"
-              :data-test="cell.isAvailable ? `${dataTestPrefix}-calendar-date-${cell.date}` : undefined"
+              :data-test="
+                cell.isAvailable ? `${dataTestPrefix}-calendar-date-${cell.date}` : undefined
+              "
               @click="selectDate(cell.date)"
             >
               {{ cell.day }}
@@ -214,8 +221,8 @@ watch(
   width: 28px;
   height: 28px;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg) brightness(96%)
-    contrast(88%);
+  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg)
+    brightness(96%) contrast(88%);
 }
 
 .dashboard-calendar-picker__toggle:hover {
@@ -313,12 +320,16 @@ watch(
 
 .dashboard-calendar-picker__day--available {
   color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-primary);
   cursor: pointer;
 }
 
 .dashboard-calendar-picker__day--available:hover {
-  filter: brightness(0.94);
+  background: color-mix(
+    in srgb,
+    var(--agentory-color-bg-primary),
+    var(--agentory-color-text-primary) 14%
+  );
 }
 
 .dashboard-calendar-picker-enter-active,

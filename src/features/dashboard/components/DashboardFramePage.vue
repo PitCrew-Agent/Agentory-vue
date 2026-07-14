@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
@@ -26,6 +27,7 @@ const props = defineProps({
 })
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
+const { t } = useI18n()
 const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
 const {
   activeNotificationId,
@@ -111,7 +113,10 @@ watch(
 </script>
 
 <template>
-  <main class="dashboard-frame-page" :class="{ 'dashboard-frame-page--sidebar-open': isSidebarOpen }">
+  <main
+    class="dashboard-frame-page"
+    :class="{ 'dashboard-frame-page--sidebar-open': isSidebarOpen }"
+  >
     <DashboardHeader />
     <DashboardSidebar
       :items="navigationItems"
@@ -129,9 +134,13 @@ watch(
       @respond="startIncidentResponse"
     />
 
-    <section class="dashboard-frame-page__content" :aria-busy="isContentLoading" :aria-label="props.contentLabel">
+    <section
+      class="dashboard-frame-page__content"
+      :aria-busy="isContentLoading"
+      :aria-label="props.contentLabel"
+    >
       <Transition name="dashboard-content-loader">
-        <DashboardContentLoader v-if="isContentLoading" label="화면을 불러오는 중" />
+        <DashboardContentLoader v-if="isContentLoading" :label="t('common.loading')" />
       </Transition>
 
       <div

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import ChartCanvas from '@/features/dashboard/components/ChartCanvas.vue'
 import { readChartToken } from '@/features/dashboard/utils/chartTheme'
@@ -13,6 +14,7 @@ const props = defineProps({
 })
 
 const uiStore = useUiStore()
+const { t } = useI18n()
 const chartRef = ref(null)
 const chartWidth = ref(0)
 const rangeStart = ref(0)
@@ -49,9 +51,7 @@ const targetVisiblePoints = computed(() =>
 
 const visiblePoints = computed(() => renderedPoints.value)
 
-const isLive = computed(
-  () => isFollowingLive.value && rangeStart.value === maxRangeStart.value,
-)
+const isLive = computed(() => isFollowingLive.value && rangeStart.value === maxRangeStart.value)
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -108,7 +108,7 @@ function createThresholdDataset({ color, label, showInLegend, value }) {
 }
 
 const chartData = computed(() => {
-  uiStore.currentTheme
+  void uiStore.currentTheme
 
   const primaryColor = readChartToken('--agentory-color-bg-primary', '#237ce2')
   const surfaceColor = readChartToken('--agentory-color-bg-app', '#f8f9f6')
@@ -122,7 +122,7 @@ const chartData = computed(() => {
     data: points.map((point) => ({ x: point.sourceIndex, y: point.value })),
     fill: false,
     kind: 'metric',
-    label: '실시간 측정값',
+    label: t('chart.liveValue'),
     order: 1,
     pointBackgroundColor: points.map((point) => {
       if (point.statusTone === 'warning') {
@@ -147,25 +147,25 @@ const chartData = computed(() => {
   const thresholdDatasets = [
     createThresholdDataset({
       color: dangerColor,
-      label: '위험 기준',
+      label: t('chart.dangerThreshold'),
       showInLegend: true,
       value: thresholds.usl,
     }),
     createThresholdDataset({
       color: dangerColor,
-      label: '위험 하한',
+      label: t('chart.dangerLower'),
       showInLegend: false,
       value: thresholds.lsl,
     }),
     createThresholdDataset({
       color: warningColor,
-      label: '주의 기준',
+      label: t('chart.warningThreshold'),
       showInLegend: true,
       value: thresholds.ucl,
     }),
     createThresholdDataset({
       color: warningColor,
-      label: '주의 하한',
+      label: t('chart.warningLower'),
       showInLegend: false,
       value: thresholds.lcl,
     }),
@@ -177,7 +177,7 @@ const chartData = computed(() => {
 })
 
 const chartOptions = computed(() => {
-  uiStore.currentTheme
+  void uiStore.currentTheme
 
   const fontFamily = readChartToken('--agentory-font-family-base', 'sans-serif')
   const gridColor = readChartToken('--agentory-color-chart-grid', 'rgba(125, 125, 125, 0.18)')
@@ -234,7 +234,7 @@ const chartOptions = computed(() => {
               return ''
             }
 
-            return [point.statusLabel, point.alarmCode].filter(Boolean).join(' · ')
+            return [t(`status.${point.statusTone}`), point.alarmCode].filter(Boolean).join(' · ')
           },
           label(context) {
             return `${formatValue(context.parsed.y)} ${props.chart.unit ?? ''}`.trim()
@@ -258,15 +258,18 @@ const chartOptions = computed(() => {
         type: 'linear',
         ticks: {
           callback(value) {
-            return targetVisiblePoints.value.reduce((nearestPoint, point) => {
-              if (!nearestPoint) {
-                return point
-              }
+            return (
+              targetVisiblePoints.value.reduce((nearestPoint, point) => {
+                if (!nearestPoint) {
+                  return point
+                }
 
-              return Math.abs(point.sourceIndex - value) < Math.abs(nearestPoint.sourceIndex - value)
-                ? point
-                : nearestPoint
-            }, null)?.time ?? ''
+                return Math.abs(point.sourceIndex - value) <
+                  Math.abs(nearestPoint.sourceIndex - value)
+                  ? point
+                  : nearestPoint
+              }, null)?.time ?? ''
+            )
           },
           color: mutedColor,
           font: { family: fontFamily, size: 11 },
@@ -408,14 +411,18 @@ watch(
 
     <div v-if="chart.points.length > 1" class="line-chart__footer">
       <label class="line-chart__stream-range">
-        <span class="sr-only">그래프 조회 시점</span>
+        <span class="sr-only">{{ t('chart.rangeLabel') }}</span>
         <input
           type="range"
           min="0"
           :max="maxRangeStart"
           :value="rangeStart"
           :disabled="maxRangeStart === 0"
-          :aria-valuetext="isLive ? '실시간' : `${targetVisiblePoints[0]?.time ?? ''}부터 조회`"
+          :aria-valuetext="
+            isLive
+              ? t('chart.realtime')
+              : t('chart.rangeFrom', { time: targetVisiblePoints[0]?.time ?? '' })
+          "
           @input="handleRangeInput"
         />
       </label>
@@ -425,7 +432,7 @@ watch(
         :class="{ 'line-chart__live--active': isLive }"
         @click="returnToLive"
       >
-        LIVE
+        {{ t('chart.live') }}
       </button>
     </div>
   </div>

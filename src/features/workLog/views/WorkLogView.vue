@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
 import WorkLogPanel from '@/features/workLog/components/WorkLogPanel.vue'
@@ -12,6 +13,7 @@ import {
 import { useIncidentPlanStore } from '@/features/incident/stores/incidentPlanStore'
 
 const incidentPlanStore = useIncidentPlanStore()
+const { t } = useI18n()
 const workLogGroupState = ref([])
 const isWorkLogLoading = ref(false)
 const isWorkLogSubmitting = ref(false)
@@ -42,7 +44,7 @@ async function loadWorkLogs() {
     workLogGroupState.value = await fetchWorkLogGroups()
   } catch {
     workLogGroupState.value = []
-    workLogErrorMessage.value = '작업 로그를 불러오지 못했습니다.'
+    workLogErrorMessage.value = t('workLog.errors.load')
   } finally {
     isWorkLogLoading.value = false
   }
@@ -65,10 +67,10 @@ async function createWorkLog(log, controls = {}) {
     try {
       workLogGroupState.value = await fetchWorkLogGroups()
     } catch {
-      workLogErrorMessage.value = '작업 로그는 저장됐지만 목록을 다시 불러오지 못했습니다.'
+      workLogErrorMessage.value = t('workLog.errors.refresh')
     }
   } catch {
-    workLogErrorMessage.value = '작업 로그를 저장하지 못했습니다.'
+    workLogErrorMessage.value = t('workLog.errors.create')
     controls.onError?.()
   } finally {
     isWorkLogSubmitting.value = false
@@ -90,10 +92,10 @@ async function updateWorkLog(log, controls = {}) {
     try {
       workLogGroupState.value = await fetchWorkLogGroups()
     } catch {
-      workLogErrorMessage.value = '작업 로그는 수정됐지만 목록을 다시 불러오지 못했습니다.'
+      workLogErrorMessage.value = t('workLog.errors.updateRefresh')
     }
   } catch {
-    workLogErrorMessage.value = '작업 로그를 수정하지 못했습니다.'
+    workLogErrorMessage.value = t('workLog.errors.update')
     controls.onError?.()
   } finally {
     isWorkLogSubmitting.value = false
@@ -115,10 +117,10 @@ async function deleteWorkLog(logId, controls = {}) {
     try {
       workLogGroupState.value = await fetchWorkLogGroups()
     } catch {
-      workLogErrorMessage.value = '작업 로그는 삭제됐지만 목록을 다시 불러오지 못했습니다.'
+      workLogErrorMessage.value = t('workLog.errors.deleteRefresh')
     }
   } catch {
-    workLogErrorMessage.value = '작업 로그를 삭제하지 못했습니다.'
+    workLogErrorMessage.value = t('workLog.errors.delete')
     controls.onError?.()
   } finally {
     isWorkLogSubmitting.value = false
@@ -137,7 +139,7 @@ onMounted(() => {
 <template>
   <DashboardFramePage
     active-navigation-id="workLog"
-    content-label="작업 로그 영역"
+    :content-label="t('workLog.contentLabel')"
     :is-loading="isWorkLogLoading"
   >
     <WorkLogPanel

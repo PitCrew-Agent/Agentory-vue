@@ -1,11 +1,5 @@
 import { fetchFactoryScene } from '@/features/dashboard/services/telemetryApi'
 
-const noteByStatusTone = {
-  danger: '긴급 점검 필요',
-  normal: '-',
-  warning: '주의 관찰',
-}
-
 function getMetricValue(equipment, metricId) {
   return equipment.metrics.find((metric) => metric.id === metricId)?.value ?? '-'
 }
@@ -18,7 +12,8 @@ function createEquipmentRow(equipment) {
     id: equipment.id,
     lineId: equipment.lineId,
     name: equipment.name,
-    note: noteByStatusTone[equipment.status.tone] ?? '-',
+    note: equipment.note ?? '',
+    noteKey: `equipmentList.notes.${equipment.status.tone}`,
     pressure: getMetricValue(equipment, 'pressure'),
     rfPower: getMetricValue(equipment, 'rfPower'),
     status: equipment.status.tone,

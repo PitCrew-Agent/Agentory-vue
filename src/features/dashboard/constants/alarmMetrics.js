@@ -1,8 +1,8 @@
 const METRIC_CATALOG = Object.freeze({
-  gasFlow: Object.freeze({ label: '가스 유량', order: 3 }),
-  pressure: Object.freeze({ label: '압력', order: 1 }),
-  rfPower: Object.freeze({ label: 'RF 파워', order: 2 }),
-  temperature: Object.freeze({ label: '온도', order: 0 }),
+  gasFlow: Object.freeze({ label: '가스 유량', labelKey: 'metrics.gasFlow', order: 3 }),
+  pressure: Object.freeze({ label: '압력', labelKey: 'metrics.pressure', order: 1 }),
+  rfPower: Object.freeze({ label: 'RF 파워', labelKey: 'metrics.rfPower', order: 2 }),
+  temperature: Object.freeze({ label: '온도', labelKey: 'metrics.temperature', order: 0 }),
 })
 
 // The telemetry API currently omits sensor fields, so this mirrors the backend alarm definition.
@@ -22,7 +22,7 @@ const ALARM_METRIC_IDS = Object.freeze({
 
 function createMetricItems(metricIds) {
   if (!metricIds.length) {
-    return [{ id: 'multiSensor', label: '복합 센서', order: 90 }]
+    return [{ id: 'multiSensor', label: '복합 센서', labelKey: 'metrics.multiSensor', order: 90 }]
   }
 
   return metricIds
@@ -36,7 +36,7 @@ export function getAlarmMetrics(alarmCode) {
     .toUpperCase()
 
   if (!Object.hasOwn(ALARM_METRIC_IDS, normalizedCode)) {
-    return [{ id: 'unclassified', label: '기타 센서', order: 99 }]
+    return [{ id: 'unclassified', label: '기타 센서', labelKey: 'metrics.unclassified', order: 99 }]
   }
 
   return createMetricItems(ALARM_METRIC_IDS[normalizedCode])

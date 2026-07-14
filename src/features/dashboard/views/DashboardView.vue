@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
 import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
@@ -36,6 +37,7 @@ import { useNotificationToast } from '@/features/notification/composables/useNot
 import { useIncidentResponse } from '@/features/incident/composables/useIncidentResponse'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
+const { t } = useI18n()
 const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
 const {
   activeNotificationId,
@@ -155,17 +157,48 @@ const widgetOrder = [
   'errorDonut',
 ]
 const widgetMeta = {
-  assistant: { id: 'assistant', label: 'Tory', minHeight: 260, minWidth: 190 },
-  detail: { id: 'detail', label: '상세 정보', minHeight: 260, minWidth: 220 },
+  assistant: {
+    id: 'assistant',
+    label: 'Tory',
+    labelKey: 'dashboard.widgets.assistant',
+    minHeight: 260,
+    minWidth: 190,
+  },
+  detail: {
+    id: 'detail',
+    label: '상세 정보',
+    labelKey: 'dashboard.widgets.detail',
+    minHeight: 260,
+    minWidth: 220,
+  },
   equipmentAnalysis: {
     id: 'equipmentAnalysis',
     label: '센서 기준 범위 분석',
+    labelKey: 'dashboard.widgets.equipmentAnalysis',
     minHeight: 260,
     minWidth: 240,
   },
-  errorDonut: { id: 'errorDonut', label: '에러 발생 도넛 차트', minHeight: 180, minWidth: 220 },
-  factory: { id: 'factory', label: '3D 공장 화면', minHeight: 240, minWidth: 340 },
-  metricChart: { id: 'metricChart', label: '그래프', minHeight: 150, minWidth: 220 },
+  errorDonut: {
+    id: 'errorDonut',
+    label: '에러 발생 도넛 차트',
+    labelKey: 'dashboard.widgets.errorDonut',
+    minHeight: 180,
+    minWidth: 220,
+  },
+  factory: {
+    id: 'factory',
+    label: '3D 공장 화면',
+    labelKey: 'dashboard.widgets.factory',
+    minHeight: 240,
+    minWidth: 340,
+  },
+  metricChart: {
+    id: 'metricChart',
+    label: '그래프',
+    labelKey: 'dashboard.widgets.metricChart',
+    minHeight: 150,
+    minWidth: 220,
+  },
 }
 const visibleWidgetMap = reactive({
   assistant: true,
@@ -194,18 +227,16 @@ const defaultLayoutGrid = {
 }
 
 const dockWidgets = computed(() =>
-  widgetOrder.filter((widgetId) => !visibleWidgetMap[widgetId]).map((widgetId) => widgetMeta[widgetId]),
+  widgetOrder
+    .filter((widgetId) => !visibleWidgetMap[widgetId])
+    .map((widgetId) => widgetMeta[widgetId]),
 )
 
 function createAssistantSessionId() {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (character) =>
-        (
-          Number(character) ^
-          (Math.random() * 16) >>
-            (Number(character) / 4)
-        ).toString(16),
+        (Number(character) ^ ((Math.random() * 16) >> (Number(character) / 4))).toString(16),
       )
 }
 
@@ -275,13 +306,16 @@ async function selectAssistantHistory(history) {
     assistantSessionId.value = detail.sessionId || sessionId
     assistantMessages.value = detail.messages.map(createAssistantHistoryMessage)
 
-    if (detail.equipmentId && factoryScene.equipmentList.some((equipment) => equipment.id === detail.equipmentId)) {
+    if (
+      detail.equipmentId &&
+      factoryScene.equipmentList.some((equipment) => equipment.id === detail.equipmentId)
+    ) {
       selectFactoryEquipment(detail.equipmentId)
     }
   } catch {
     if (requestId === assistantHistoryRequestId) {
       assistantMessages.value = [
-        createAssistantMessage('assistant', '대화 내용을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.', {
+        createAssistantMessage('assistant', t('assistant.loadConversationError'), {
           tone: 'error',
         }),
       ]
@@ -392,14 +426,14 @@ function addAssistantStreamEvent(messageId, streamEvent) {
 
 function getAssistantErrorMessage(error) {
   if (error?.status === 401) {
-    return '로그인 세션이 만료되었습니다. 다시 로그인해주세요.'
+    return t('assistant.sessionExpired')
   }
 
   if (error?.message && error.message !== 'Chat stream request failed') {
     return error.message
   }
 
-  return 'Agent 응답을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
+  return t('assistant.responseError')
 }
 
 function createEquipmentSuggestionSignature(equipment) {
@@ -467,7 +501,7 @@ async function sendAssistantMessage(message, options = {}) {
     assistantMessages.value = [
       ...assistantMessages.value,
       createAssistantMessage('user', nextMessage),
-      createAssistantMessage('assistant', '장비 정보를 불러온 뒤 다시 질문해주세요.', {
+      createAssistantMessage('assistant', t('assistant.noEquipment'), {
         tone: 'error',
       }),
     ]
@@ -479,13 +513,16 @@ async function sendAssistantMessage(message, options = {}) {
     streamEvents: [
       {
         id: `stream-start-${Date.now()}`,
-        label: 'Tory가 요청을 확인 중입니다',
+        label: t('assistant.verifyRequest'),
         type: 'start',
       },
     ],
   })
 
-  assistantMessages.value = [...assistantMessages.value, createAssistantMessage('user', nextMessage)]
+  assistantMessages.value = [
+    ...assistantMessages.value,
+    createAssistantMessage('user', nextMessage),
+  ]
   assistantMessages.value = [...assistantMessages.value, assistantMessage]
   assistantSuggestionRequestId += 1
   isQuickCommandsLoading.value = false
@@ -539,7 +576,7 @@ async function sendAssistantMessage(message, options = {}) {
       isStreaming: false,
       reasoningSteps: response.reasoningSteps,
       streamEvents: [],
-      text: nextAssistantMessage.text || response.answer || '답변을 찾지 못했습니다.',
+      text: nextAssistantMessage.text || response.answer || t('assistant.noAnswer'),
     }))
   } catch (error) {
     window.clearTimeout(assistantTypingTimer)
@@ -604,7 +641,10 @@ function applyFactoryScene(nextFactoryScene) {
   factoryScene.lineGroups = nextLineGroups
   factoryScene.statusSummary = nextFactoryScene.statusSummary
 
-  if (!selectedEquipmentId.value || !factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)) {
+  if (
+    !selectedEquipmentId.value ||
+    !factoryScene.equipmentList.some((equipment) => equipment.id === selectedEquipmentId.value)
+  ) {
     selectedEquipmentId.value = factoryScene.defaultEquipmentId
   }
 }
@@ -745,7 +785,11 @@ function getMinGridSize(id, metrics = getGridMetrics()) {
   }
 
   return {
-    cols: clamp(Math.ceil((meta.minWidth + widgetGapPx) / metrics.columnStride), 1, layoutGridColumns),
+    cols: clamp(
+      Math.ceil((meta.minWidth + widgetGapPx) / metrics.columnStride),
+      1,
+      layoutGridColumns,
+    ),
     rows: clamp(Math.ceil((meta.minHeight + widgetGapPx) / metrics.rowStride), 1, layoutGridRows),
   }
 }
@@ -1037,7 +1081,10 @@ function findAvailableLayout(id, layoutMap = widgetLayouts, visibleMap = visible
   for (const span of candidateSpans) {
     for (let row = 0; row <= layoutGridRows - span.rows; row += 1) {
       for (let col = 0; col <= layoutGridColumns - span.cols; col += 1) {
-        const candidateLayout = gridToPercentLayout({ col, cols: span.cols, row, rows: span.rows }, metrics)
+        const candidateLayout = gridToPercentLayout(
+          { col, cols: span.cols, row, rows: span.rows },
+          metrics,
+        )
 
         if (!hasLayoutCollision(id, candidateLayout, layoutMap, visibleMap)) {
           return candidateLayout
@@ -1223,7 +1270,8 @@ function createPushedGridLayouts(id, fixedGrid, metrics) {
       widgetId,
       widgetId === id
         ? fixedGrid
-        : (percentToGrid(widgetLayouts[widgetId], widgetId, metrics) ?? percentToGrid(getFallbackLayout(widgetId), widgetId, metrics)),
+        : (percentToGrid(widgetLayouts[widgetId], widgetId, metrics) ??
+          percentToGrid(getFallbackLayout(widgetId), widgetId, metrics)),
     ]),
   )
   const movingIds = visibleIds
@@ -1234,7 +1282,8 @@ function createPushedGridLayouts(id, fixedGrid, metrics) {
 
       return (
         firstCollides - secondCollides ||
-        getGridDistance(baseGrids[firstId], fixedGrid) - getGridDistance(baseGrids[secondId], fixedGrid)
+        getGridDistance(baseGrids[firstId], fixedGrid) -
+          getGridDistance(baseGrids[secondId], fixedGrid)
       )
     })
   let bestSolution = null
@@ -1284,7 +1333,9 @@ function resolveMoveLayout(id, nextLayout) {
   const visualLayout = normalizeLayout(nextLayout)
   const metrics = getGridMetrics()
   const fixedGrid = getMovePreviewGrid(visualLayout, id, metrics)
-  const resolvedLayout = fixedGrid ? gridToPercentLayout(fixedGrid, metrics) : snapLayoutToGrid(nextLayout, id)
+  const resolvedLayout = fixedGrid
+    ? gridToPercentLayout(fixedGrid, metrics)
+    : snapLayoutToGrid(nextLayout, id)
   const currentLayout = snapLayoutToGrid(widgetLayouts[id], id)
 
   if (!metrics || !fixedGrid) {
@@ -1306,7 +1357,10 @@ function resolveMoveLayout(id, nextLayout) {
   }
 
   const resolvedLayouts = Object.fromEntries(
-    Object.entries(resolvedGridMap).map(([widgetId, grid]) => [widgetId, gridToPercentLayout(grid, metrics)]),
+    Object.entries(resolvedGridMap).map(([widgetId, grid]) => [
+      widgetId,
+      gridToPercentLayout(grid, metrics),
+    ]),
   )
 
   return {
@@ -1401,7 +1455,11 @@ async function loadInitialDashboardContent() {
   isContentLoading.value = true
 
   if (!shouldSkipDashboardApi) {
-    await Promise.allSettled([loadFactoryScene(), startAlertToastStream(), loadAssistantHistoryItems()])
+    await Promise.allSettled([
+      loadFactoryScene(),
+      startAlertToastStream(),
+      loadAssistantHistoryItems(),
+    ])
     startRealtimePolling()
   }
 
@@ -1453,12 +1511,9 @@ watch(selectedEquipment, (equipment) => {
   }
 })
 
-watch(
-  selectedEquipmentId,
-  (equipmentId) => {
-    loadSelectedEquipmentTelemetry(equipmentId)
-  },
-)
+watch(selectedEquipmentId, (equipmentId) => {
+  loadSelectedEquipmentTelemetry(equipmentId)
+})
 </script>
 
 <template>
@@ -1481,9 +1536,9 @@ watch(
       @respond="startIncidentResponse"
     />
 
-    <section class="dashboard-content" aria-label="대시보드 편집 영역">
+    <section class="dashboard-content" :aria-label="t('dashboard.editArea')">
       <Transition name="dashboard-content-loader">
-        <DashboardContentLoader v-if="isContentLoading" label="대시보드 화면을 불러오는 중" />
+        <DashboardContentLoader v-if="isContentLoading" :label="t('dashboard.loading')" />
       </Transition>
 
       <div
@@ -1491,109 +1546,108 @@ watch(
         :class="{ 'dashboard-content__body--loading': isContentLoading }"
       >
         <div ref="layoutBoardRef" class="dashboard-layout-board" data-test="dashboard-layout-board">
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.factory"
-          id="factory"
-          :layout="getWidgetLayout('factory')"
-          :min-width="widgetMeta.factory.minWidth"
-          :min-height="widgetMeta.factory.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('factory')"
-          @update:layout="updateWidgetLayout('factory', $event)"
-        >
-          <FactoryViewport
-            :checklist-items="selectedChecklistItems"
-            :lines="factoryScene.lineGroups"
-            :selected-equipment-id="selectedEquipmentId"
-            @select-equipment="selectFactoryEquipment"
-          />
-        </DashboardEditableWidget>
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.factory"
+            id="factory"
+            :layout="getWidgetLayout('factory')"
+            :min-width="widgetMeta.factory.minWidth"
+            :min-height="widgetMeta.factory.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('factory')"
+            @update:layout="updateWidgetLayout('factory', $event)"
+          >
+            <FactoryViewport
+              :checklist-items="selectedChecklistItems"
+              :lines="factoryScene.lineGroups"
+              :selected-equipment-id="selectedEquipmentId"
+              @select-equipment="selectFactoryEquipment"
+            />
+          </DashboardEditableWidget>
 
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.detail"
-          id="detail"
-          :layout="getWidgetLayout('detail')"
-          :min-width="widgetMeta.detail.minWidth"
-          :min-height="widgetMeta.detail.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('detail')"
-          @update:layout="updateWidgetLayout('detail', $event)"
-        >
-          <EquipmentDetailPanel
-            :equipment="selectedEquipment"
-            :selected-metric-id="selectedMetricId"
-            @update:selected-metric-id="selectMetric"
-          />
-        </DashboardEditableWidget>
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.detail"
+            id="detail"
+            :layout="getWidgetLayout('detail')"
+            :min-width="widgetMeta.detail.minWidth"
+            :min-height="widgetMeta.detail.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('detail')"
+            @update:layout="updateWidgetLayout('detail', $event)"
+          >
+            <EquipmentDetailPanel
+              :equipment="selectedEquipment"
+              :selected-metric-id="selectedMetricId"
+              @update:selected-metric-id="selectMetric"
+            />
+          </DashboardEditableWidget>
 
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.metricChart"
-          id="metricChart"
-          :layout="getWidgetLayout('metricChart')"
-          :min-width="widgetMeta.metricChart.minWidth"
-          :min-height="widgetMeta.metricChart.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('metricChart')"
-          @update:layout="updateWidgetLayout('metricChart', $event)"
-        >
-          <EquipmentChartPanel :chart="selectedChart" />
-        </DashboardEditableWidget>
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.metricChart"
+            id="metricChart"
+            :layout="getWidgetLayout('metricChart')"
+            :min-width="widgetMeta.metricChart.minWidth"
+            :min-height="widgetMeta.metricChart.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('metricChart')"
+            @update:layout="updateWidgetLayout('metricChart', $event)"
+          >
+            <EquipmentChartPanel :chart="selectedChart" />
+          </DashboardEditableWidget>
 
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.assistant"
-          id="assistant"
-          :layout="getWidgetLayout('assistant')"
-          :min-width="widgetMeta.assistant.minWidth"
-          :min-height="widgetMeta.assistant.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('assistant')"
-          @update:layout="updateWidgetLayout('assistant', $event)"
-        >
-          <AssistantPanel
-            :history-items="assistantHistoryItems"
-            :is-history-loading="isAssistantHistoryLoading"
-            :is-loading="isAssistantLoading"
-            :is-quick-command-loading="isQuickCommandsLoading"
-            :messages="assistantMessages"
-            :quick-commands="quickCommands"
-            @delete-history="deleteAssistantHistory"
-            @select-history="selectAssistantHistory"
-            @send-message="sendAssistantMessage"
-          />
-        </DashboardEditableWidget>
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.assistant"
+            id="assistant"
+            :layout="getWidgetLayout('assistant')"
+            :min-width="widgetMeta.assistant.minWidth"
+            :min-height="widgetMeta.assistant.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('assistant')"
+            @update:layout="updateWidgetLayout('assistant', $event)"
+          >
+            <AssistantPanel
+              :history-items="assistantHistoryItems"
+              :is-history-loading="isAssistantHistoryLoading"
+              :is-loading="isAssistantLoading"
+              :is-quick-command-loading="isQuickCommandsLoading"
+              :messages="assistantMessages"
+              :quick-commands="quickCommands"
+              @delete-history="deleteAssistantHistory"
+              @select-history="selectAssistantHistory"
+              @send-message="sendAssistantMessage"
+            />
+          </DashboardEditableWidget>
 
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.equipmentAnalysis"
-          id="equipmentAnalysis"
-          :layout="getWidgetLayout('equipmentAnalysis')"
-          :min-width="widgetMeta.equipmentAnalysis.minWidth"
-          :min-height="widgetMeta.equipmentAnalysis.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('equipmentAnalysis')"
-          @update:layout="updateWidgetLayout('equipmentAnalysis', $event)"
-        >
-          <EquipmentAnalysisPanel :equipment-id="selectedEquipmentId" />
-        </DashboardEditableWidget>
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.equipmentAnalysis"
+            id="equipmentAnalysis"
+            :layout="getWidgetLayout('equipmentAnalysis')"
+            :min-width="widgetMeta.equipmentAnalysis.minWidth"
+            :min-height="widgetMeta.equipmentAnalysis.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('equipmentAnalysis')"
+            @update:layout="updateWidgetLayout('equipmentAnalysis', $event)"
+          >
+            <EquipmentAnalysisPanel :equipment-id="selectedEquipmentId" />
+          </DashboardEditableWidget>
 
-        <DashboardEditableWidget
-          v-if="visibleWidgetMap.errorDonut"
-          id="errorDonut"
-          :layout="getWidgetLayout('errorDonut')"
-          :min-width="widgetMeta.errorDonut.minWidth"
-          :min-height="widgetMeta.errorDonut.minHeight"
-          :resolve-layout="resolveLayoutChange"
-          @preview:layout="setPreviewLayouts"
-          @stash="stashWidget('errorDonut')"
-          @update:layout="updateWidgetLayout('errorDonut', $event)"
-        >
-          <ErrorDonutPanel :equipment-id="selectedEquipmentId" />
-        </DashboardEditableWidget>
-
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.errorDonut"
+            id="errorDonut"
+            :layout="getWidgetLayout('errorDonut')"
+            :min-width="widgetMeta.errorDonut.minWidth"
+            :min-height="widgetMeta.errorDonut.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('errorDonut')"
+            @update:layout="updateWidgetLayout('errorDonut', $event)"
+          >
+            <ErrorDonutPanel :equipment-id="selectedEquipmentId" />
+          </DashboardEditableWidget>
         </div>
       </div>
     </section>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import structureIcon from '@/assets/icons/dashboard/action-3d-object.png'
 import closeIcon from '@/assets/icons/dashboard/close.svg'
@@ -19,6 +20,8 @@ const props = defineProps({
   },
 })
 
+const { locale, t } = useI18n()
+
 const tablePanelRef = ref(null)
 const isLineMenuOpen = ref(false)
 const isStructureOpen = ref(false)
@@ -30,27 +33,74 @@ const selectedStructureEquipment = computed(() =>
     .find((equipment) => equipment.id === selectedStructureEquipmentId.value),
 )
 
-const selectedStructureChecklist = computed(
-  () => selectedStructureEquipment.value?.checklist ?? [],
+const selectedStructureChecklist = computed(() => selectedStructureEquipment.value?.checklist ?? [])
+
+function formatLineLabel(label) {
+  const source = String(label ?? '').trim()
+
+  return locale.value === 'en' ? source.replace(/라인/g, 'Line') : source
+}
+
+const displayedGroups = computed(() =>
+  props.groups.map((group) => ({
+    ...group,
+    date: formatLineLabel(group.date),
+  })),
 )
 
-const equipmentColumns = [
-  { key: 'equipmentId', label: '장비 ID', cellClass: 'dashboard-table-panel__cell--light' },
-  { key: 'name', label: '장비명', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'type', label: '유형', cellClass: 'dashboard-table-panel__cell--strong' },
+const equipmentColumns = computed(() => [
+  {
+    key: 'equipmentId',
+    label: t('equipmentList.columns.equipmentId'),
+    cellClass: 'dashboard-table-panel__cell--light',
+  },
+  {
+    key: 'name',
+    label: t('equipmentList.columns.name'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'type',
+    label: t('equipmentList.columns.type'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
   {
     key: 'status',
-    label: '상태',
+    label: t('equipmentList.columns.status'),
     cellClass: 'dashboard-table-panel__cell--center',
     headerClass: 'dashboard-table-panel__header-cell--center',
   },
-  { key: 'temperature', label: '온도', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'pressure', label: '압력', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'rfPower', label: 'RF 파워', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'gasFlow', label: '가스 유량', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'alarm', label: '알림', cellClass: 'dashboard-table-panel__cell--strong' },
-  { key: 'note', label: '비고', cellClass: 'dashboard-table-panel__cell--strong dashboard-table-panel__cell--fill' },
-]
+  {
+    key: 'temperature',
+    label: t('equipmentList.columns.temperature'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'pressure',
+    label: t('equipmentList.columns.pressure'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'rfPower',
+    label: t('equipmentList.columns.rfPower'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'gasFlow',
+    label: t('equipmentList.columns.gasFlow'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'alarm',
+    label: t('equipmentList.columns.alarm'),
+    cellClass: 'dashboard-table-panel__cell--strong',
+  },
+  {
+    key: 'note',
+    label: t('equipmentList.columns.note'),
+    cellClass: 'dashboard-table-panel__cell--strong dashboard-table-panel__cell--fill',
+  },
+])
 
 function scrollToLine(lineId) {
   tablePanelRef.value?.scrollToGroup(lineId)
@@ -71,14 +121,14 @@ function selectStructureEquipment(equipmentId) {
   <div class="equipment-list-panel">
     <DashboardTablePanel
       ref="tablePanelRef"
-      title="설비 목록"
+      :title="t('equipmentList.title')"
       data-test="equipment-list-panel"
       row-test-prefix="equipment-list-row"
-      action-label="3D 구조 확인"
+      :action-label="t('equipmentList.action')"
       :action-icon="structureIcon"
       :columns="equipmentColumns"
       column-gap="20px"
-      :groups="groups"
+      :groups="displayedGroups"
       grid-template-columns="92px 136px 124px 78px 72px 82px 82px 92px 88px minmax(220px, 1fr)"
       table-min-width="1290px"
       @action="openStructure"
@@ -93,13 +143,17 @@ function selectStructureEquipment(equipmentId) {
             @click="isLineMenuOpen = !isLineMenuOpen"
           >
             <img :src="listIcon" alt="" width="18" height="18" />
-            <span>라인 선택</span>
+            <span>{{ t('equipmentList.lineSelect') }}</span>
           </button>
 
           <Transition name="equipment-line-menu">
-            <div v-if="isLineMenuOpen" class="equipment-list-panel__line-menu" data-test="equipment-line-menu">
+            <div
+              v-if="isLineMenuOpen"
+              class="equipment-list-panel__line-menu"
+              data-test="equipment-line-menu"
+            >
               <button
-                v-for="group in groups"
+                v-for="group in displayedGroups"
                 :key="group.id"
                 class="equipment-list-panel__line-item"
                 type="button"
@@ -123,8 +177,12 @@ function selectStructureEquipment(equipmentId) {
             :class="`equipment-list-panel__status-dot--${equipmentStatusMap[row.status].tone}`"
             aria-hidden="true"
           ></span>
-          {{ equipmentStatusMap[row.status].label }}
+          {{ t(equipmentStatusMap[row.status].labelKey) }}
         </span>
+      </template>
+
+      <template #cell-note="{ row }">
+        {{ row.note || (row.noteKey ? t(row.noteKey) : '-') }}
       </template>
     </DashboardTablePanel>
 
@@ -135,13 +193,13 @@ function selectStructureEquipment(equipmentId) {
         data-test="equipment-structure-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="3D 구조 확인"
+        :aria-label="t('equipmentList.structure')"
       >
         <section class="equipment-list-panel__structure">
           <button
             class="equipment-list-panel__structure-close"
             type="button"
-            aria-label="3D 구조 확인 닫기"
+            :aria-label="t('equipmentList.closeStructure')"
             data-test="equipment-structure-close"
             @click="isStructureOpen = false"
           >
@@ -166,6 +224,10 @@ function selectStructureEquipment(equipmentId) {
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.equipment-list-panel :deep(.dashboard-table-panel__date-line) {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 24%);
 }
 
 .equipment-list-panel__line-picker {
@@ -195,8 +257,8 @@ function selectStructureEquipment(equipmentId) {
   width: 18px;
   height: 18px;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg) brightness(96%)
-    contrast(88%);
+  filter: brightness(0) saturate(100%) invert(48%) sepia(4%) saturate(14%) hue-rotate(33deg)
+    brightness(96%) contrast(88%);
 }
 
 .equipment-list-panel__line-button:hover {

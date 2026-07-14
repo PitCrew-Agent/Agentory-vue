@@ -45,7 +45,9 @@ const toggleY = ref(32)
 const isDockOpen = ref(false)
 const hasDockWidgets = computed(() => props.dockWidgets.length > 0)
 const activeItemIndex = computed(() => props.items.findIndex((item) => item.active))
-const visualActiveIndex = ref(sidebarActiveIndex.value >= 0 ? sidebarActiveIndex.value : activeItemIndex.value)
+const visualActiveIndex = ref(
+  sidebarActiveIndex.value >= 0 ? sidebarActiveIndex.value : activeItemIndex.value,
+)
 
 watch(
   activeItemIndex,
@@ -97,7 +99,11 @@ function getItemLabel(item) {
       :aria-label="t('navigation.label')"
       :style="{ '--sidebar-active-index': visualActiveIndex }"
     >
-      <span v-if="visualActiveIndex >= 0" class="dashboard-sidebar__active-indicator" aria-hidden="true"></span>
+      <span
+        v-if="visualActiveIndex >= 0"
+        class="dashboard-sidebar__active-indicator"
+        aria-hidden="true"
+      ></span>
 
       <template v-for="item in props.items" :key="item.id">
         <RouterLink
@@ -107,7 +113,13 @@ function getItemLabel(item) {
           :to="item.to"
           :aria-current="item.active ? 'page' : undefined"
         >
-          <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
+          <img
+            class="dashboard-sidebar__icon"
+            :src="iconMap[item.icon]"
+            alt=""
+            width="36"
+            height="36"
+          />
           <span class="dashboard-sidebar__label">{{ getItemLabel(item) }}</span>
         </RouterLink>
 
@@ -118,7 +130,13 @@ function getItemLabel(item) {
           type="button"
           :aria-current="item.active ? 'page' : undefined"
         >
-          <img class="dashboard-sidebar__icon" :src="iconMap[item.icon]" alt="" width="36" height="36" />
+          <img
+            class="dashboard-sidebar__icon"
+            :src="iconMap[item.icon]"
+            alt=""
+            width="36"
+            height="36"
+          />
           <span class="dashboard-sidebar__label">{{ getItemLabel(item) }}</span>
         </button>
       </template>
@@ -132,14 +150,24 @@ function getItemLabel(item) {
         data-test="dashboard-widget-dock-toggle"
         @click="isDockOpen = !isDockOpen"
       >
-        <img class="dashboard-sidebar__icon" :src="widgetStorageIcon" alt="" width="36" height="36" />
+        <img
+          class="dashboard-sidebar__icon"
+          :src="widgetStorageIcon"
+          alt=""
+          width="36"
+          height="36"
+        />
         <span class="dashboard-sidebar__label">{{ t('sidebar.widgetStorage') }}</span>
         <small v-if="dockWidgets.length > 0" class="dashboard-sidebar__storage-count">
           {{ dockWidgets.length }}
         </small>
       </button>
 
-      <div v-if="isDockOpen" class="dashboard-sidebar__dock-panel" data-test="dashboard-widget-dock-panel">
+      <div
+        v-if="isDockOpen"
+        class="dashboard-sidebar__dock-panel"
+        data-test="dashboard-widget-dock-panel"
+      >
         <div class="dashboard-sidebar__dock-header">
           <strong>{{ t('sidebar.widgetStorage') }}</strong>
           <span>{{ dockWidgets.length }}</span>
@@ -154,7 +182,7 @@ function getItemLabel(item) {
             :data-test="`dock-restore-${widget.id}`"
             @click="restoreWidget(widget.id)"
           >
-            <span>{{ widget.label }}</span>
+            <span>{{ widget.labelKey ? t(widget.labelKey) : widget.label }}</span>
             <small>{{ t('sidebar.restore') }}</small>
           </button>
         </div>

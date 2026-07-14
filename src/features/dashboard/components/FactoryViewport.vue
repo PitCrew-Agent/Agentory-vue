@@ -1,15 +1,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-import { equipmentStatusMap, equipmentStatusOrder } from '@/constants/equipmentStatus'
+import { equipmentStatusOrder } from '@/constants/equipmentStatus'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
-
-const statusSummaryOrder = equipmentStatusOrder.map((statusId) => ({
-  id: statusId,
-  label: equipmentStatusMap[statusId].label,
-}))
 
 const props = defineProps({
   checklistItems: {
@@ -27,6 +23,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select-equipment'])
+const { locale, t } = useI18n()
+const statusSummaryOrder = equipmentStatusOrder.map((statusId) => ({ id: statusId }))
 
 const canvasRef = ref(null)
 const viewportRef = ref(null)
@@ -44,9 +42,18 @@ const selectedLine = computed(
 
 const activeEquipmentList = computed(() => selectedLine.value?.equipment ?? [])
 
+function formatLineLabel(label) {
+  const source = String(label ?? '').trim()
+
+  return locale.value === 'en' ? source.replace(/라인/g, 'Line') : source
+}
+
 const selectedLineSummary = computed(() =>
   selectedLine.value
-    ? `${selectedLine.value.label} ${activeEquipmentList.value.length}대 설비`
+    ? t('factory.lineSummary', {
+        count: activeEquipmentList.value.length,
+        line: formatLineLabel(selectedLine.value.label),
+      })
     : '',
 )
 
@@ -55,6 +62,7 @@ const activeStatusSummary = computed(() =>
     ...status,
     count: activeEquipmentList.value.filter((equipment) => equipment.status.tone === status.id)
       .length,
+    label: t(`status.${status.id}`),
   })),
 )
 
@@ -1270,13 +1278,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="viewportRef" class="factory-viewport" aria-label="3D 공장 화면">
+  <section ref="viewportRef" class="factory-viewport" :aria-label="t('factory.title')">
     <canvas ref="canvasRef" class="factory-viewport__canvas" data-test="factory-3d-canvas"></canvas>
 
     <div class="factory-viewport__left-controls">
       <ul
         class="factory-viewport__status-stack"
-        :aria-label="`${selectedLine?.label ?? '라인'} 설비 상태 요약`"
+        :aria-label="
+          t('factory.lineStatusSummary', {
+            line: formatLineLabel(selectedLine?.label ?? t('factory.line')),
+          })
+        "
       >
         <li
           v-for="item in activeStatusSummary"
@@ -1292,9 +1304,9 @@ onBeforeUnmount(() => {
         </li>
       </ul>
 
-      <div class="factory-viewport__camera-tools" aria-label="카메라 제어">
-        <span>카메라 시점 선택</span>
-        <button type="button" @click="focusLineOverview">라인 전체</button>
+      <div class="factory-viewport__camera-tools" :aria-label="t('factory.cameraControl')">
+        <span>{{ t('factory.cameraView') }}</span>
+        <button type="button" @click="focusLineOverview">{{ t('factory.lineOverview') }}</button>
       </div>
     </div>
 
@@ -1313,8 +1325,8 @@ onBeforeUnmount(() => {
             :class="{ 'factory-viewport__line-option--active': selectedLine?.id === line.id }"
             @click="selectLine(line.id)"
           >
-            <strong>{{ line.label }}</strong>
-            <span>{{ line.equipment.length }}대 설비</span>
+            <strong>{{ formatLineLabel(line.label) }}</strong>
+            <span>{{ t('factory.equipmentCount', { count: line.equipment.length }) }}</span>
           </button>
         </div>
       </Transition>
@@ -1336,7 +1348,7 @@ onBeforeUnmount(() => {
         class="factory-viewport__scene-loader"
         compact
         data-test="factory-line-loader"
-        label="라인 설비를 불러오는 중"
+        :label="t('factory.loading')"
       />
     </Transition>
 
@@ -1346,12 +1358,14 @@ onBeforeUnmount(() => {
         class="factory-viewport__checklist"
         data-test="factory-alert-checklist"
         :class="`factory-viewport__checklist--${selectedEquipment.status.tone}`"
-        :aria-label="`${selectedEquipment.name} 대응 체크리스트`"
+        :aria-label="t('factory.checklistLabel', { name: selectedEquipment.name })"
       >
         <header class="factory-viewport__checklist-header">
           <div class="factory-viewport__checklist-meta">
-            <span class="factory-viewport__checklist-status">{{ selectedEquipment.status.label }}</span>
-            <span>대응 체크리스트</span>
+            <span class="factory-viewport__checklist-status">
+              {{ t(`status.${selectedEquipment.status.tone}`) }}
+            </span>
+            <span>{{ t('factory.checklist') }}</span>
           </div>
           <strong>{{ selectedEquipment.name }}</strong>
         </header>
@@ -1396,14 +1410,14 @@ onBeforeUnmount(() => {
         <strong>{{ label.equipment.name }}</strong>
         <Transition name="factory-label-status" mode="out-in">
           <small :key="`${label.equipment.id}-${label.equipment.status.tone}`">
-            {{ label.equipment.status.label }}
+            {{ t(`status.${label.equipment.status.tone}`) }}
           </small>
         </Transition>
       </button>
     </div>
 
     <p v-if="!canRenderScene" class="factory-viewport__fallback">
-      3D 렌더링을 사용할 수 없는 환경입니다.
+      {{ t('factory.fallback') }}
     </p>
   </section>
 </template>
