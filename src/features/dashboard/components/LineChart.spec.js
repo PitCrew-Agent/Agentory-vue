@@ -23,20 +23,18 @@ const chart = {
 const rfPowerChart = {
   max: 3.05,
   min: 2.45,
-  points: [
-    { statusTone: 'normal', time: '12:00', timestamp: '2026-07-10T12:00:00', value: 2.75 },
-  ],
+  points: [{ statusTone: 'normal', time: '12:00', timestamp: '2026-07-10T12:00:00', value: 2.75 }],
   precision: 3,
   thresholds: { lcl: 2.71, lsl: 2.45, ucl: 2.87, usl: 3.05 },
   title: 'RF Power(kW)',
   unit: 'kW',
 }
 
-function mountLineChart(chartData) {
+function mountLineChart(chartData, props = {}) {
   i18n.global.locale.value = 'ko'
 
   return mount(LineChart, {
-    props: { chart: chartData },
+    props: { chart: chartData, ...props },
     global: {
       plugins: [createPinia(), i18n],
       stubs: {
@@ -63,8 +61,10 @@ describe('LineChart', () => {
   it('provides Chart.js threshold datasets and streaming controls', () => {
     const wrapper = mountLineChart(chart)
     const datasets = wrapper.findComponent({ name: 'ChartCanvas' }).props('data').datasets
+    const options = wrapper.findComponent({ name: 'ChartCanvas' }).props('options')
 
     expect(datasets.filter((dataset) => dataset.kind === 'threshold')).toHaveLength(4)
+    expect(options.scales.x.ticks.count).toBe(6)
     expect(wrapper.find('input[type="range"]').exists()).toBe(true)
     expect(wrapper.find('.line-chart__live').text()).toBe('LIVE')
   })
@@ -75,5 +75,13 @@ describe('LineChart', () => {
 
     expect(options.scales.y.min).toBe(2.45)
     expect(options.scales.y.max).toBe(3.05)
+  })
+
+  it('requests the recent live range when the LIVE button is pressed', async () => {
+    const wrapper = mountLineChart(chart, { isLiveRange: false })
+
+    await wrapper.find('.line-chart__live').trigger('click')
+
+    expect(wrapper.emitted('return-live')).toHaveLength(1)
   })
 })

@@ -27,6 +27,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  openConversationRequest: {
+    type: Number,
+    default: 0,
+  },
   quickCommands: {
     type: Array,
     default: () => [],
@@ -35,7 +39,7 @@ const props = defineProps({
 
 const emit = defineEmits(['delete-history', 'select-history', 'send-message'])
 const { locale, t } = useI18n()
-const activePanelView = ref('history')
+const activePanelView = ref(props.isLoading ? 'chat' : 'history')
 const inputMessage = ref('')
 const inputRef = ref(null)
 const messageListRef = ref(null)
@@ -586,6 +590,16 @@ function handleInputKeydown(event) {
 }
 
 watch(() => [messageScrollSignature.value, props.isLoading], scrollToBottom)
+
+watch(
+  () => props.openConversationRequest,
+  (requestId, previousRequestId) => {
+    if (requestId && requestId !== previousRequestId) {
+      closeHistoryView()
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () =>

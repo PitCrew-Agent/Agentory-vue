@@ -1,13 +1,16 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import bellIcon from '@/assets/icons/dashboard/nav-bell.svg'
+import notificationMarkReadIcon from '@/assets/icons/dashboard/notification-mark-read.svg'
+import notificationOpenPageIcon from '@/assets/icons/dashboard/notification-open-page.svg'
 import dangerStatusIcon from '@/assets/icons/dashboard/status-danger.svg'
 import normalStatusIcon from '@/assets/icons/dashboard/status-normal.svg'
 import warningStatusIcon from '@/assets/icons/dashboard/status-warning.svg'
 import logoImage from '@/assets/images/agentory-logo.png'
+import { requestDashboardEquipmentFocus } from '@/features/dashboard/composables/useDashboardEquipmentFocus'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 import AppPreferenceControls from '@/features/i18n/components/AppPreferenceControls.vue'
@@ -33,11 +36,15 @@ const isNotificationOpen = ref(false)
 const isProfileOpen = ref(false)
 const notificationRef = ref(null)
 const profileRef = ref(null)
+const readingNotificationIds = reactive(new Set())
 const shouldSkipHeaderApi = import.meta.env.MODE === 'test'
+const notificationReadMotionMs = 520
 const hasUnreadNotifications = computed(() => unreadNotifications.value.length > 0)
 const currentUser = computed(() => authStore.currentUser)
 const currentUserName = computed(() => authStore.currentUserName)
-const currentUserInitial = computed(() => currentUserName.value.trim().charAt(0).toUpperCase() || 'A')
+const currentUserInitial = computed(
+  () => currentUserName.value.trim().charAt(0).toUpperCase() || 'A',
+)
 const userRoleLabelKeyMap = {
   admin: 'header.roles.admin',
   engineer: 'header.roles.engineer',
@@ -52,13 +59,17 @@ const userStatusLabelKeyMap = {
   suspended: 'header.statuses.suspended',
 }
 const currentUserRoleLabel = computed(() => {
-  const role = String(currentUser.value.role ?? '').trim().toLowerCase()
+  const role = String(currentUser.value.role ?? '')
+    .trim()
+    .toLowerCase()
   const labelKey = userRoleLabelKeyMap[role]
 
   return labelKey ? t(labelKey) : role ? role.replaceAll('_', ' ') : '-'
 })
 const currentUserStatusLabel = computed(() => {
-  const status = String(currentUser.value.status ?? '').trim().toLowerCase()
+  const status = String(currentUser.value.status ?? '')
+    .trim()
+    .toLowerCase()
   const labelKey = userStatusLabelKeyMap[status]
 
   return labelKey ? t(labelKey) : status ? t('header.statuses.unknown') : '-'
@@ -76,6 +87,38 @@ function toggleNotificationPanel() {
 function toggleProfilePanel() {
   isProfileOpen.value = !isProfileOpen.value
   isNotificationOpen.value = false
+}
+
+function openNotificationHistory() {
+  isNotificationOpen.value = false
+  router.push({ name: 'NotificationLog' })
+}
+
+async function focusNotificationEquipment(notification) {
+  requestDashboardEquipmentFocus(notification)
+  isNotificationOpen.value = false
+  await router.push({ name: 'Dashboard' })
+}
+
+function waitForNotificationReadMotion() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, notificationReadMotionMs)
+  })
+}
+
+async function handleNotificationRead(notificationId) {
+  if (readingNotificationIds.has(notificationId)) {
+    return
+  }
+
+  readingNotificationIds.add(notificationId)
+
+  try {
+    await waitForNotificationReadMotion()
+    await markNotificationRead(notificationId)
+  } finally {
+    readingNotificationIds.delete(notificationId)
+  }
 }
 
 function closeHeaderPopoversOnOutsidePointer(event) {
@@ -121,7 +164,11 @@ onBeforeUnmount(() => {
   <header class="dashboard-header">
     <img class="dashboard-header__logo" :src="logoImage" alt="Agentory" width="266" height="49" />
 
-    <ul v-if="summary.length" class="dashboard-header__summary" :aria-label="t('header.equipmentSummary')">
+    <ul
+      v-if="summary.length"
+      class="dashboard-header__summary"
+      :aria-label="t('header.equipmentSummary')"
+    >
       <li
         v-for="item in summary"
         :key="item.id"
@@ -184,22 +231,48 @@ onBeforeUnmount(() => {
               class="dashboard-header__notification-item"
               :class="`dashboard-header__notification-item--${notification.tone}`"
             >
-              <div class="dashboard-header__notification-copy">
+              <button
+                type="button"
+                class="dashboard-header__notification-copy"
+                :aria-label="`${notification.code} ${notification.message}`"
+                :data-test="`dashboard-header-notification-focus-${notification.id}`"
+                @click="focusNotificationEquipment(notification)"
+              >
                 <div class="dashboard-header__notification-code">
                   <span class="dashboard-header__notification-status-dot" aria-hidden="true"></span>
                   <strong>{{ notification.code }}</strong>
                 </div>
                 <span>{{ notification.message }}</span>
                 <time>{{ notification.occurredAt }}</time>
-              </div>
-              <button
-                class="dashboard-header__notification-read"
-                type="button"
-                :data-test="`dashboard-header-notification-read-${notification.id}`"
-                @click="markNotificationRead(notification.id)"
-              >
-                {{ t('header.markRead') }}
               </button>
+              <div class="dashboard-header__notification-actions">
+                <button
+                  class="dashboard-header__notification-read"
+                  :class="{
+                    'dashboard-header__notification-read--active': readingNotificationIds.has(
+                      notification.id,
+                    ),
+                  }"
+                  type="button"
+                  :aria-label="t('header.markRead')"
+                  :title="t('header.markRead')"
+                  :disabled="readingNotificationIds.has(notification.id)"
+                  :data-test="`dashboard-header-notification-read-${notification.id}`"
+                  @click.stop="handleNotificationRead(notification.id)"
+                >
+                  <img :src="notificationMarkReadIcon" alt="" width="17" height="17" />
+                </button>
+                <button
+                  class="dashboard-header__notification-history"
+                  type="button"
+                  :aria-label="t('header.notificationHistory')"
+                  :title="t('header.notificationHistory')"
+                  :data-test="`dashboard-header-notification-history-${notification.id}`"
+                  @click.stop="openNotificationHistory"
+                >
+                  <img :src="notificationOpenPageIcon" alt="" width="17" height="17" />
+                </button>
+              </div>
             </li>
           </ul>
 
@@ -437,13 +510,12 @@ onBeforeUnmount(() => {
   gap: var(--agentory-spacing-12);
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 14%),
-      color-mix(in srgb, var(--agentory-color-bg-app), transparent 34%) 52%,
-      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
-    );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 14%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 34%) 52%,
+    color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 82%)
+  );
   border: 0;
   border-radius: var(--agentory-radius-16);
   box-shadow:
@@ -497,7 +569,8 @@ onBeforeUnmount(() => {
   padding: var(--agentory-spacing-10) var(--agentory-spacing-12);
   background: transparent;
   border-radius: var(--agentory-radius-8);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 72%);
+  box-shadow: inset 0 1px 0
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 72%);
 }
 
 .dashboard-header__notification-item--warning {
@@ -512,9 +585,23 @@ onBeforeUnmount(() => {
 
 .dashboard-header__notification-copy {
   display: flex;
+  width: 100%;
   min-width: 0;
+  padding: 0;
   flex-direction: column;
   gap: var(--agentory-spacing-4);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-6);
+  font-family: var(--agentory-font-family-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dashboard-header__notification-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%);
+  outline-offset: 3px;
 }
 
 .dashboard-header__notification-code {
@@ -558,15 +645,72 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-header__notification-read {
-  min-height: 28px;
-  padding: var(--agentory-spacing-4) var(--agentory-spacing-10);
-  color: var(--agentory-color-text-inverse);
-  background: var(--agentory-color-bg-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 36%);
   border: 0;
   border-radius: var(--agentory-radius-pill);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-medium);
   cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.dashboard-header__notification-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-6);
+}
+
+.dashboard-header__notification-history {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 36%);
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.dashboard-header__notification-read:hover,
+.dashboard-header__notification-read:focus-visible,
+.dashboard-header__notification-history:hover,
+.dashboard-header__notification-history:focus-visible {
+  color: var(--agentory-color-bg-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%);
+  outline: none;
+}
+
+.dashboard-header__notification-read:disabled {
+  cursor: wait;
+}
+
+.dashboard-header__notification-read--active {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
+}
+
+.dashboard-header__notification-read--active img {
+  animation: dashboard-notification-read 520ms var(--agentory-ease-elastic) both;
+}
+
+.dashboard-header__notification-read img,
+.dashboard-header__notification-history img {
+  width: 17px;
+  height: 17px;
+  filter: var(--agentory-filter-header-action);
+  object-fit: contain;
 }
 
 .dashboard-header__notification-empty {
@@ -574,6 +718,24 @@ onBeforeUnmount(() => {
   background: var(--agentory-color-bg-surface);
   border-radius: var(--agentory-radius-8);
   text-align: center;
+}
+
+@keyframes dashboard-notification-read {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+
+  32% {
+    transform: translateY(-2px) rotate(-8deg) scale(1.08);
+  }
+
+  68% {
+    transform: translateY(1px) rotate(5deg) scale(0.94);
+  }
+
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
 }
 
 .dashboard-header__profile-card {
@@ -587,13 +749,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--agentory-spacing-16);
   color: var(--agentory-color-text-primary);
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 12%),
-      color-mix(in srgb, var(--agentory-color-bg-app), transparent 30%) 54%,
-      color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 80%)
-    );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 12%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 30%) 54%,
+    color-mix(in srgb, var(--agentory-color-bg-primary-glass), transparent 80%)
+  );
   border: 0;
   border-radius: var(--agentory-radius-16);
   box-shadow:
@@ -737,6 +898,12 @@ onBeforeUnmount(() => {
 
   .dashboard-header__profile-card {
     width: min(310px, calc(100vw - var(--agentory-spacing-40)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-header__notification-read--active img {
+    animation: none;
   }
 }
 </style>

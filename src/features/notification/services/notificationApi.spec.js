@@ -19,4 +19,17 @@ describe('notificationApi', () => {
 
     expect(notification.tone).toBe('danger')
   })
+
+  it('알림 센서 변수를 정규화 결과에 유지한다', () => {
+    const notification = normalizeNotification({
+      alarm_code: 'WRN-702',
+      equipment_id: 'EQP-A01',
+      id: 2,
+      is_read: false,
+      metric: 'pressure',
+      occurred_at: '2026-07-15T12:00:00Z',
+    })
+
+    expect(notification.metric).toBe('pressure')
+  })
 })

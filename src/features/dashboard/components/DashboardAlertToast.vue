@@ -24,7 +24,7 @@ defineProps({
   },
 })
 
-defineEmits(['respond'])
+defineEmits(['pause', 'respond', 'resume'])
 
 const { t } = useI18n()
 </script>
@@ -37,6 +37,8 @@ const { t } = useI18n()
       :class="`dashboard-alert-toast--${toast.tone}`"
       role="status"
       aria-live="polite"
+      @mouseenter="$emit('pause')"
+      @mouseleave="$emit('resume')"
     >
       <span class="dashboard-alert-toast__dot" aria-hidden="true"></span>
       <div class="dashboard-alert-toast__copy">
@@ -74,13 +76,20 @@ const { t } = useI18n()
   min-height: 54px;
   padding: var(--agentory-spacing-10) var(--agentory-spacing-16);
   color: var(--agentory-color-text-primary);
-  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 12%);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 78%);
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 82%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 42%) 48%,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 58%)
+  );
+  border: 0;
   border-radius: var(--agentory-radius-16);
   box-shadow:
-    var(--agentory-shadow-panel-soft),
-    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 2%);
-  backdrop-filter: var(--agentory-blur-glass-strong);
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 28%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-text-primary), transparent 94%),
+    var(--agentory-shadow-panel-strong);
+  backdrop-filter: blur(22px) saturate(165%) contrast(118%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%) contrast(118%);
   transform: translate(-50%, -50%);
   transition: left 260ms ease;
 }

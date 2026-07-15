@@ -11,6 +11,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  startAt: {
+    type: String,
+    default: '',
+  },
 })
 
 const { t } = useI18n()
@@ -119,7 +123,9 @@ async function loadSeries() {
   errorMessage.value = ''
 
   try {
-    const nextSeries = await fetchEquipmentSensorSeries(props.equipmentId)
+    const nextSeries = await fetchEquipmentSensorSeries(props.equipmentId, {
+      start: props.startAt,
+    })
 
     if (currentRequestId === requestId) {
       series.value = nextSeries
@@ -137,7 +143,7 @@ async function loadSeries() {
 }
 
 watch(
-  () => props.equipmentId,
+  () => [props.equipmentId, props.startAt],
   () => {
     loadSeries()
     window.clearInterval(refreshTimer)
@@ -349,9 +355,43 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   width: 100%;
-  height: 10px;
+  height: 12px;
   overflow: visible;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 34%),
+    color-mix(in srgb, var(--agentory-color-bg-app), transparent 68%)
+  );
   border-radius: var(--agentory-radius-pill);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 24%),
+    inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-text-primary), transparent 88%),
+    0 4px 12px color-mix(in srgb, var(--agentory-color-text-primary), transparent 92%);
+  backdrop-filter: var(--agentory-blur-glass-strong);
+  -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
+  isolation: isolate;
+}
+
+.equipment-analysis-panel__track::after {
+  position: absolute;
+  z-index: 1;
+  inset: 1px 2px auto;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 42%),
+    transparent
+  );
+  border-radius: var(--agentory-radius-pill);
+  content: '';
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.equipment-analysis-panel__track > span {
+  position: relative;
+  z-index: 0;
 }
 
 .equipment-analysis-panel__track > span:first-child {
@@ -363,30 +403,49 @@ onBeforeUnmount(() => {
 }
 
 .equipment-analysis-panel__segment--normal {
-  background: color-mix(in srgb, var(--agentory-color-status-normal-text), transparent 70%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--agentory-color-status-normal-text), transparent 54%),
+    color-mix(in srgb, var(--agentory-color-status-normal-text), transparent 78%)
+  );
 }
 
 .equipment-analysis-panel__segment--warning {
-  background: color-mix(in srgb, var(--agentory-color-status-warning), transparent 62%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--agentory-color-status-warning), transparent 46%),
+    color-mix(in srgb, var(--agentory-color-status-warning), transparent 72%)
+  );
 }
 
 .equipment-analysis-panel__segment--danger {
-  background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 68%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 52%),
+    color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 76%)
+  );
 }
 
 .equipment-analysis-panel__recent-range {
   position: absolute;
   z-index: 2;
-  top: 2px;
+  top: 3px;
   height: 6px;
-  background: var(--agentory-color-bg-primary-glass);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--agentory-color-border-inverse), transparent 36%),
+    var(--agentory-color-bg-primary-glass)
+  );
   border-radius: var(--agentory-radius-pill);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 26%),
+    0 2px 8px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 72%);
 }
 
 .equipment-analysis-panel__current-marker {
   position: absolute;
   z-index: 3;
-  top: -4px;
+  top: -3px;
   width: 3px;
   height: 18px;
   border-radius: var(--agentory-radius-pill);

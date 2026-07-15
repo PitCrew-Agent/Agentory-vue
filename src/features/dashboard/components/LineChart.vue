@@ -11,8 +11,13 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  isLiveRange: {
+    type: Boolean,
+    default: true,
+  },
 })
 
+const emit = defineEmits(['return-live'])
 const uiStore = useUiStore()
 const { t } = useI18n()
 const chartRef = ref(null)
@@ -51,7 +56,9 @@ const targetVisiblePoints = computed(() =>
 
 const visiblePoints = computed(() => renderedPoints.value)
 
-const isLive = computed(() => isFollowingLive.value && rangeStart.value === maxRangeStart.value)
+const isLive = computed(
+  () => props.isLiveRange && isFollowingLive.value && rangeStart.value === maxRangeStart.value,
+)
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -252,11 +259,17 @@ const chartOptions = computed(() => {
     scales: {
       x: {
         border: { display: false },
-        grid: { color: gridColor },
+        grid: {
+          color: gridColor,
+          display: true,
+          drawTicks: false,
+          lineWidth: 1,
+        },
         max: targetVisiblePoints.value.at(-1)?.sourceIndex ?? 1,
         min: targetVisiblePoints.value[0]?.sourceIndex ?? 0,
         type: 'linear',
         ticks: {
+          autoSkip: false,
           callback(value) {
             return (
               targetVisiblePoints.value.reduce((nearestPoint, point) => {
@@ -272,9 +285,9 @@ const chartOptions = computed(() => {
             )
           },
           color: mutedColor,
+          count: 6,
           font: { family: fontFamily, size: 11 },
           maxRotation: 0,
-          maxTicksLimit: 7,
           padding: 6,
         },
       },
@@ -307,6 +320,7 @@ function handleRangeInput(event) {
 function returnToLive() {
   isFollowingLive.value = true
   rangeStart.value = maxRangeStart.value
+  emit('return-live')
 }
 
 onMounted(() => {

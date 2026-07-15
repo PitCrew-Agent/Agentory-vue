@@ -38,6 +38,8 @@ const shapeAliases = {
   transferrobot: 'transferRobot',
 }
 
+const DEFAULT_SERIES_WINDOW_MINUTES = 10
+
 const bayLayout = {
   north: {
     rotationY: 0,
@@ -146,6 +148,35 @@ function formatUpdatedAt(value) {
     date: formatDatePart(value),
     time: formatTimePart(value),
   }
+}
+
+function formatInspectionAt(value) {
+  const normalizedValue = compactText(value)
+
+  if (!normalizedValue) {
+    return '-'
+  }
+
+  const date = normalizedValue.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? formatDatePart(normalizedValue)
+  const time = normalizedValue.match(/[T\s](\d{2}:\d{2})/)?.[1]
+
+  return time ? `${date} ${time}` : date
+}
+
+function normalizeSeriesStart(value) {
+  const normalizedValue = compactText(value)
+
+  if (!normalizedValue) {
+    return ''
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)
+    ? `${normalizedValue}T00:00:00`
+    : normalizedValue
+}
+
+function createRecentSeriesStart(minutes = DEFAULT_SERIES_WINDOW_MINUTES) {
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString()
 }
 
 function formatMetricValue(value, precision) {
@@ -402,6 +433,7 @@ function createBaseEquipment(statusItem, line, equipmentIndex) {
     equipmentCode: equipmentId,
     id: equipmentId,
     inspectedAt: '-',
+    inspectionStartedAt: '',
     lineId: line.id,
     lineLabel: line.label,
     metrics: createMetrics(),
@@ -432,13 +464,16 @@ function applyEquipmentDetail(equipment, detail = {}) {
     equipment.alarmMetricIds ?? [],
   )
   const status = detail.status ? normalizeEquipmentStatus(detail.status) : equipment.status
+  const inspectionStartedAt =
+    compactText(detail.last_inspection_at) || equipment.inspectionStartedAt
 
   return {
     ...equipment,
     alarmMetricIds,
     alarmCode,
     checklist: normalizeChecklist(detail.checklist ?? equipment.checklist, equipment.id),
-    inspectedAt: formatDatePart(detail.last_inspection_at) || equipment.inspectedAt,
+    inspectedAt: formatInspectionAt(inspectionStartedAt),
+    inspectionStartedAt,
     metrics: createMetrics(detail),
     name: equipment.name || equipment.id,
     owner: managerName,
@@ -489,6 +524,7 @@ export function createEmptyEquipment() {
     checklist: [],
     id: '',
     inspectedAt: '-',
+    inspectionStartedAt: '',
     metrics: createMetrics(),
     name: '-',
     owner: '-',
@@ -506,8 +542,16 @@ async function fetchEquipmentDetail(equipmentId) {
   return http.get(`/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}`)
 }
 
-async function fetchEquipmentSeries(equipmentId) {
-  return http.get(`/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/series`)
+async function fetchEquipmentSeries(equipmentId, start, end) {
+  const normalizedStart = normalizeSeriesStart(start)
+  const normalizedEnd = normalizeSeriesStart(end)
+
+  return http.get(`/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/series`, {
+    params: {
+      ...(normalizedEnd ? { end: normalizedEnd } : {}),
+      ...(normalizedStart ? { start: normalizedStart } : {}),
+    },
+  })
 }
 
 export async function fetchEquipmentSuggestions(equipmentId) {
@@ -563,11 +607,17 @@ export async function fetchFactoryScene() {
   }
 }
 
-export async function fetchEquipmentTelemetry(equipmentId, baseEquipment = createEmptyEquipment()) {
-  const [detail, series] = await Promise.all([
-    fetchEquipmentDetail(equipmentId),
-    fetchEquipmentSeries(equipmentId),
-  ])
+export async function fetchEquipmentTelemetry(
+  equipmentId,
+  baseEquipment = createEmptyEquipment(),
+  options = {},
+) {
+  const detail = await fetchEquipmentDetail(equipmentId)
+  const series = await fetchEquipmentSeries(
+    equipmentId,
+    options.start || createRecentSeriesStart(),
+    options.end,
+  )
   const nextEquipment = applyEquipmentDetail(baseEquipment, detail)
 
   return applyEquipmentSeries(nextEquipment, series, detail)

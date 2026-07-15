@@ -5,6 +5,7 @@ import gasFlowIcon from '@/assets/icons/dashboard/metric-gas-flow.svg'
 import pressureIcon from '@/assets/icons/dashboard/metric-pressure.png'
 import rfPowerIcon from '@/assets/icons/dashboard/metric-rf-power.svg'
 import temperatureIcon from '@/assets/icons/dashboard/metric-temperature.png'
+import RollingMetricValue from '@/features/dashboard/components/RollingMetricValue.vue'
 
 defineProps({
   equipment: {
@@ -13,7 +14,7 @@ defineProps({
   },
   selectedMetricId: {
     type: String,
-    default: 'temperature',
+    default: 'gasFlow',
   },
 })
 
@@ -105,19 +106,20 @@ function getMetricStatusLabel(metric) {
           :aria-pressed="selectedMetricId === metric.id"
           @click="selectMetric(metric.id)"
         >
-          <span class="detail-panel__metric-icon">
+          <span
+            class="detail-panel__metric-icon"
+            :class="`detail-panel__metric-icon--${metric.id}`"
+          >
             <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
           </span>
           <div class="detail-panel__metric-copy">
             <span class="detail-panel__metric-label">{{
               t(metric.labelKey ?? `metrics.${metric.id}`)
             }}</span>
-            <Transition name="detail-value-flow" mode="out-in">
-              <strong :key="`${metric.id}-${metric.value}-${metric.unit}`">
-                {{ metric.value }}
-                <small v-if="metric.unit">{{ metric.unit }}</small>
-              </strong>
-            </Transition>
+            <strong>
+              <RollingMetricValue :value="metric.value" />
+              <small v-if="metric.unit">{{ metric.unit }}</small>
+            </strong>
           </div>
           <span
             v-if="isAlertMetric(metric)"
@@ -135,6 +137,14 @@ function getMetricStatusLabel(metric) {
 
 <style scoped>
 .detail-panel {
+  --detail-fluid-header: clamp(15px, min(3.4cqw, 4.2cqh), 30px);
+  --detail-fluid-title: clamp(16px, min(4.2cqw, 6cqh), 40px);
+  --detail-fluid-body: clamp(11px, min(3cqw, 3.8cqh), 28px);
+  --detail-fluid-value: clamp(16px, min(6cqw, 8.6cqh), 56px);
+  --detail-fluid-unit: clamp(10px, min(2.8cqw, 3.6cqh), 26px);
+  --detail-fluid-icon-box: clamp(26px, min(7.2cqw, 10cqh), 72px);
+  --detail-fluid-icon: clamp(15px, min(4.4cqw, 6cqh), 44px);
+
   display: flex;
   flex-direction: column;
   gap: var(--agentory-spacing-14);
@@ -160,7 +170,7 @@ function getMetricStatusLabel(metric) {
 .detail-panel__section-header h2 {
   margin: 0;
   color: var(--agentory-color-bg-primary);
-  font-size: var(--agentory-font-size-body-lg);
+  font-size: var(--detail-fluid-header);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-body-lg);
 }
@@ -176,7 +186,7 @@ function getMetricStatusLabel(metric) {
   min-width: 0;
   overflow: hidden;
   color: var(--agentory-color-text-primary);
-  font-size: clamp(var(--agentory-font-size-body-lg), 6cqw, var(--agentory-font-size-h2));
+  font-size: var(--detail-fluid-title);
   font-weight: var(--agentory-font-weight-bold);
   line-height: var(--agentory-line-height-h2);
   text-overflow: ellipsis;
@@ -194,14 +204,14 @@ function getMetricStatusLabel(metric) {
 .detail-panel__alarm-code {
   display: inline-flex;
   align-items: center;
-  max-width: min(112px, 34cqw);
-  min-height: 25px;
+  max-width: min(180px, 34cqw);
+  min-height: clamp(24px, min(6.4cqw, 7cqh), 56px);
   padding: var(--agentory-spacing-4) var(--agentory-spacing-10);
   overflow: hidden;
   color: var(--agentory-color-status-danger-text);
   background: color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 88%);
   border-radius: var(--agentory-radius-pill);
-  font-size: var(--agentory-font-size-body-sm);
+  font-size: var(--detail-fluid-body);
   font-weight: var(--agentory-font-weight-bold);
   line-height: var(--agentory-line-height-body-sm);
   text-overflow: ellipsis;
@@ -240,12 +250,12 @@ function getMetricStatusLabel(metric) {
 
 .detail-panel__info-item {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: clamp(68px, 17cqw, 160px) minmax(0, 1fr);
   align-items: center;
   gap: var(--agentory-spacing-6);
   min-width: 0;
   color: var(--agentory-color-text-primary);
-  font-size: clamp(var(--agentory-font-size-caption), 3.8cqw, var(--agentory-font-size-body));
+  font-size: var(--detail-fluid-body);
   line-height: 1.35;
 }
 
@@ -274,7 +284,7 @@ function getMetricStatusLabel(metric) {
 .detail-panel__metric {
   position: relative;
   display: grid;
-  grid-template-columns: clamp(26px, 8cqw, 36px) minmax(0, 1fr);
+  grid-template-columns: var(--detail-fluid-icon-box) minmax(0, 1fr);
   align-items: center;
   align-content: center;
   gap: var(--agentory-spacing-8);
@@ -335,16 +345,34 @@ function getMetricStatusLabel(metric) {
   align-items: center;
   align-self: start;
   justify-content: center;
-  width: clamp(26px, 8cqw, 36px);
-  height: clamp(26px, 8cqw, 36px);
+  width: var(--detail-fluid-icon-box);
+  height: var(--detail-fluid-icon-box);
   background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 10%);
   border-radius: var(--agentory-radius-8);
 }
 
 .detail-panel__metric-icon img {
-  width: clamp(15px, 4.8cqw, 21px);
-  height: clamp(15px, 4.8cqw, 21px);
+  width: var(--detail-fluid-icon);
+  height: var(--detail-fluid-icon);
   object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.detail-panel__metric-icon--gasFlow img {
+  animation: detail-metric-flow 2.4s ease-in-out infinite;
+}
+
+.detail-panel__metric-icon--pressure img {
+  animation: detail-metric-pressure 2s ease-in-out infinite;
+}
+
+.detail-panel__metric-icon--rfPower img {
+  animation: detail-metric-power 2.2s ease-in-out infinite;
+}
+
+.detail-panel__metric-icon--temperature img {
+  animation: detail-metric-temperature 2.6s ease-in-out infinite;
 }
 
 .detail-panel__metric-copy {
@@ -356,7 +384,7 @@ function getMetricStatusLabel(metric) {
 
 .detail-panel__metric-label {
   overflow: hidden;
-  font-size: clamp(var(--agentory-font-size-caption), 3.8cqw, var(--agentory-font-size-body));
+  font-size: var(--detail-fluid-body);
   font-weight: var(--agentory-font-weight-regular);
   line-height: var(--agentory-line-height-body);
   text-overflow: ellipsis;
@@ -369,7 +397,7 @@ function getMetricStatusLabel(metric) {
   gap: var(--agentory-spacing-6);
   min-width: 0;
   overflow: hidden;
-  font-size: clamp(14px, 6.8cqw, 28px);
+  font-size: var(--detail-fluid-value);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -395,31 +423,71 @@ function getMetricStatusLabel(metric) {
 }
 
 .detail-status-flow-enter-active,
-.detail-status-flow-leave-active,
-.detail-value-flow-enter-active,
-.detail-value-flow-leave-active {
+.detail-status-flow-leave-active {
   transition:
     opacity 260ms var(--agentory-ease-soft),
     transform 360ms var(--agentory-ease-elastic);
 }
 
-.detail-status-flow-enter-from,
-.detail-value-flow-enter-from {
+.detail-status-flow-enter-from {
   opacity: 0;
   transform: translateY(8px);
 }
 
-.detail-status-flow-leave-to,
-.detail-value-flow-leave-to {
+.detail-status-flow-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+@keyframes detail-metric-flow {
+  0%,
+  100% {
+    transform: translate3d(0, 1px, 0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translate3d(0, -2px, 0) rotate(2deg);
+  }
+}
+
+@keyframes detail-metric-pressure {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes detail-metric-power {
+  0%,
+  100% {
+    transform: rotate(-4deg) scale(0.98);
+  }
+
+  45% {
+    transform: rotate(4deg) scale(1.06);
+  }
+}
+
+@keyframes detail-metric-temperature {
+  0%,
+  100% {
+    transform: translateY(1px);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 .detail-panel__metric small {
   min-width: 0;
   padding-top: var(--agentory-spacing-2);
   overflow: hidden;
-  font-size: clamp(var(--agentory-font-size-caption), 3.6cqw, var(--agentory-font-size-body));
+  font-size: var(--detail-fluid-unit);
   font-weight: var(--agentory-font-weight-extra-light);
   line-height: var(--agentory-line-height-body);
   text-overflow: ellipsis;
@@ -434,43 +502,42 @@ function getMetricStatusLabel(metric) {
 }
 
 @container (max-width: 320px) {
+  .detail-panel {
+    --detail-fluid-title: clamp(15px, min(4cqw, 5cqh), 22px);
+    --detail-fluid-body: clamp(10px, min(3.4cqw, 4cqh), 14px);
+    --detail-fluid-value: clamp(14px, min(5.6cqw, 8cqh), 28px);
+    --detail-fluid-unit: clamp(9px, min(3cqw, 3.6cqh), 13px);
+    --detail-fluid-icon-box: clamp(22px, min(7cqw, 9cqh), 36px);
+    --detail-fluid-icon: clamp(14px, min(4.4cqw, 5.8cqh), 22px);
+  }
+
   .detail-panel__info-item {
-    font-size: 10px;
     line-height: 1.25;
   }
 
   .detail-panel__metric {
-    grid-template-columns: 22px minmax(0, 1fr);
     gap: var(--agentory-spacing-4);
     padding: var(--agentory-spacing-4) var(--agentory-spacing-6);
   }
 
-  .detail-panel__metric-icon {
-    width: 22px;
-    height: 22px;
-  }
-
-  .detail-panel__metric-icon img {
-    width: 14px;
-    height: 14px;
-  }
-
   .detail-panel__metric-label,
   .detail-panel__metric small {
-    font-size: 10px;
     line-height: 1.25;
   }
 
   .detail-panel__metric strong {
     gap: var(--agentory-spacing-2);
-    font-size: 14px;
   }
 }
 
 @container (max-height: 330px) {
-  .detail-panel__title-row h3 {
-    font-size: var(--agentory-font-size-body-lg);
-    line-height: var(--agentory-line-height-body-lg);
+  .detail-panel {
+    --detail-fluid-title: clamp(15px, min(4cqw, 5cqh), 24px);
+    --detail-fluid-body: clamp(10px, min(2.9cqw, 3.8cqh), 16px);
+    --detail-fluid-value: clamp(14px, min(5.6cqw, 8cqh), 32px);
+    --detail-fluid-unit: clamp(9px, min(2.7cqw, 3.5cqh), 15px);
+    --detail-fluid-icon-box: clamp(23px, min(6.8cqw, 9cqh), 42px);
+    --detail-fluid-icon: clamp(14px, min(4.2cqw, 5.6cqh), 25px);
   }
 
   .detail-panel__body,
@@ -480,23 +547,8 @@ function getMetricStatusLabel(metric) {
   }
 
   .detail-panel__metric {
-    grid-template-columns: 26px minmax(0, 1fr);
     gap: var(--agentory-spacing-6);
     padding: var(--agentory-spacing-4) var(--agentory-spacing-8);
-  }
-
-  .detail-panel__metric-icon {
-    width: 24px;
-    height: 24px;
-  }
-
-  .detail-panel__metric-icon img {
-    width: 15px;
-    height: 15px;
-  }
-
-  .detail-panel__metric strong {
-    font-size: 18px;
   }
 
   .detail-panel__metric-alert {
@@ -504,6 +556,12 @@ function getMetricStatusLabel(metric) {
     right: var(--agentory-spacing-6);
     width: 7px;
     height: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-panel__metric-icon img {
+    animation: none;
   }
 }
 </style>
