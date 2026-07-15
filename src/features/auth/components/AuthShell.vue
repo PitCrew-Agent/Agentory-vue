@@ -113,6 +113,7 @@ defineProps({
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-22);
+  box-shadow: var(--agentory-shadow-auth-panel);
 }
 
 .auth-layout-frame__preferences {
