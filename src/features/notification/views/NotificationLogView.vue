@@ -32,6 +32,15 @@ async function refreshNotifications() {
   await loadNotifications({ reset: true, unreadOnly: false })
 }
 
+async function startNotificationResponse(notification) {
+  const readRequest = setNotificationReadStatus(notification.id, 'read')
+  const responseRequest = startIncidentResponse(notification, { markAsRead: false })
+
+  await readRequest
+
+  return responseRequest
+}
+
 onMounted(() => {
   refreshNotifications()
 })
@@ -57,7 +66,7 @@ onMounted(() => {
       @refresh="refreshNotifications"
       @select-date="goToNotificationDate"
       @set-read-status="setNotificationReadStatus"
-      @start-response="startIncidentResponse"
+      @start-response="startNotificationResponse"
     />
   </DashboardFramePage>
 </template>

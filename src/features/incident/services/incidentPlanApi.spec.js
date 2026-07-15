@@ -34,8 +34,8 @@ describe('incidentPlanApi', () => {
       summary: '압력 위험 기준 초과',
       warnings: [],
       work_log_draft: {
-        content: '압력 센서와 진공 배관을 점검합니다.',
         ended_at: null,
+        plan: '압력 센서와 진공 배관을 점검합니다.',
         source_notification_id: 27,
         started_at: '2026-07-13T10:02:00+09:00',
         status: '진행중',
@@ -53,6 +53,7 @@ describe('incidentPlanApi', () => {
       equipmentId: 'EQP-A05',
       notificationId: 27,
       workLogDraft: {
+        plan: '압력 센서와 진공 배관을 점검합니다.',
         sourceNotificationId: 27,
         status: 'progress',
         workType: '긴급수리',
