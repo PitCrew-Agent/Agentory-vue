@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  fetchEquipmentAlarmSummary,
+  fetchEquipmentAlarmSensorSummary,
+  fetchEquipmentRepairHistory,
   fetchEquipmentSensorSeries,
 } from '@/features/dashboard/services/equipmentInsightApi'
 import { http } from '@/services/api/http'
@@ -28,10 +29,10 @@ describe('equipmentInsightApi', () => {
       },
     ])
 
-    const series = await fetchEquipmentSensorSeries('EQP-A05')
+    const series = await fetchEquipmentSensorSeries('EQP-A05', { start: '2026-07-13' })
 
     expect(http.get).toHaveBeenCalledWith('/api/v1/telemetry/equipment/EQP-A05/series', {
-      params: {},
+      params: { start: '2026-07-13T00:00:00' },
     })
     expect(series[0]).toMatchObject({
       gasFlow: 606,
@@ -40,27 +41,59 @@ describe('equipmentInsightApi', () => {
     })
   })
 
-  it('알람 코드별 집계를 상태와 함께 정규화한다', async () => {
+  it('센서별 알람 집계를 도넛 차트 데이터로 정규화한다', async () => {
     http.get.mockResolvedValue([
       {
-        alarm_code: 'ERR-402',
         count: 12,
         first_seen: '2026-07-13T08:00:00Z',
         last_seen: '2026-07-13T09:00:00Z',
-        severity: '위험',
+        metric: 'rf_power',
       },
     ])
 
-    const summary = await fetchEquipmentAlarmSummary('EQP-A05')
+    const summary = await fetchEquipmentAlarmSensorSummary('EQP-A05')
 
+    expect(http.get).toHaveBeenCalledWith('/api/v1/telemetry/equipment/EQP-A05/alarms/sensors', {
+      params: {},
+    })
     expect(summary[0]).toMatchObject({
-      alarmCode: 'ERR-402',
       count: 12,
-      metrics: [
-        { id: 'temperature', label: '온도', order: 0 },
-        { id: 'pressure', label: '압력', order: 1 },
+      metricId: 'rfPower',
+      metricLabelKey: 'metrics.rfPower',
+    })
+  })
+
+  it('설비별 수리 이력 커서 페이지를 정규화한다', async () => {
+    http.get.mockResolvedValue({
+      has_more: true,
+      items: [
+        {
+          alarm_code_before: 'ERR-402',
+          equipment_id: 'EQP-A05',
+          id: 42,
+          note: '냉각 라인 교체',
+          repaired_at: '2026-07-13T10:15:00+09:00',
+          repaired_by: 7,
+          repaired_by_name: '김억산',
+        },
       ],
-      statusTone: 'danger',
+      next_cursor: 'next-page',
+    })
+
+    const page = await fetchEquipmentRepairHistory('EQP-A05', { before: 'cursor', limit: 5 })
+
+    expect(http.get).toHaveBeenCalledWith('/api/v1/admin/equipment/EQP-A05/repairs', {
+      params: { before: 'cursor', limit: 5 },
+    })
+    expect(page).toMatchObject({
+      hasMore: true,
+      items: [
+        {
+          alarmCode: 'ERR-402',
+          repairedByName: '김억산',
+        },
+      ],
+      nextCursor: 'next-page',
     })
   })
 })
