@@ -4,13 +4,24 @@ import { useI18n } from 'vue-i18n'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
+import cameraLockIcon from '@/assets/icons/dashboard/camera-lock.svg'
+import cameraUnlockIcon from '@/assets/icons/dashboard/camera-unlock.svg'
+import chevronDownIcon from '@/assets/icons/dashboard/chevron-down.svg'
 import { equipmentStatusOrder } from '@/constants/equipmentStatus'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 
 const props = defineProps({
+  alertFocusRequest: {
+    type: Object,
+    default: null,
+  },
   checklistItems: {
     type: Array,
     default: () => [],
+  },
+  isEquipmentSwitching: {
+    type: Boolean,
+    default: false,
   },
   lines: {
     type: Array,
@@ -27,12 +38,17 @@ const { locale, t } = useI18n()
 const statusSummaryOrder = equipmentStatusOrder.map((statusId) => ({ id: statusId }))
 
 const canvasRef = ref(null)
+const cameraControlRef = ref(null)
 const viewportRef = ref(null)
+const activeCameraViewId = ref('overview')
 const canRenderScene = ref(true)
 const currentSelectedEquipmentId = ref(props.selectedEquipmentId || '')
+const isCameraMenuOpen = ref(false)
+const isCameraViewLocked = ref(false)
 const isLineSelectorOpen = ref(false)
 const isAlertChecklistOpen = ref(false)
 const isLineSceneLoading = ref(false)
+const lineSelectorRef = ref(null)
 const selectedLineId = ref(props.lines[0]?.id ?? '')
 const labelItems = ref([])
 
@@ -75,6 +91,11 @@ const equipmentById = computed(() => {
 })
 
 const selectedEquipment = computed(() => equipmentById.value[currentSelectedEquipmentId.value])
+const currentCameraViewLabel = computed(() =>
+  activeCameraViewId.value === 'overview'
+    ? t('factory.lineOverview')
+    : (selectedEquipment.value?.name ?? t('factory.cameraView')),
+)
 
 const hasSelectedEquipmentChecklist = computed(() => {
   const equipmentId = selectedEquipment.value?.id
@@ -114,8 +135,8 @@ let lineSceneLoadingTimer = 0
 let overviewAlertFocusTimer = 0
 let hasCompletedInitialOverview = false
 let hasFocusedEquipmentByInteraction = false
-let hasManualFocusOverride = false
 let isLineOverviewFocused = true
+let lastHandledAlertFocusKey = ''
 let shouldFocusLineOverview = false
 let statusSnapshotLineId = ''
 
@@ -666,6 +687,7 @@ function setFocusForEquipment(equipment, immediate = false) {
     .add(sideOffset)
 
   isLineOverviewFocused = false
+  activeCameraViewId.value = equipment.id
   targetFocus = { camera: cameraTarget, target }
 
   if (immediate) {
@@ -681,19 +703,10 @@ function clearOverviewAlertFocusTimer() {
   overviewAlertFocusTimer = 0
 }
 
-function markManualFocusOverride() {
-  hasManualFocusOverride = true
-  clearOverviewAlertFocusTimer()
-}
-
-function resumeAutomaticAlertFocus() {
-  hasManualFocusOverride = false
-}
-
 function scheduleOverviewAlertFocus() {
   clearOverviewAlertFocusTimer()
 
-  if (hasManualFocusOverride || !isLineOverviewFocused) {
+  if (isCameraViewLocked.value || !isLineOverviewFocused) {
     return
   }
 
@@ -769,6 +782,7 @@ function setLineOverviewFocus(immediate = false) {
   const overviewState = getLineOverviewCameraState()
 
   isLineOverviewFocused = true
+  activeCameraViewId.value = 'overview'
   isAlertChecklistOpen.value = false
   targetFocus = overviewState
   scheduleOverviewAlertFocus()
@@ -782,8 +796,31 @@ function setLineOverviewFocus(immediate = false) {
 }
 
 function focusLineOverview() {
-  resumeAutomaticAlertFocus()
+  isCameraMenuOpen.value = false
   setLineOverviewFocus()
+}
+
+function selectCameraEquipment(equipmentId) {
+  isCameraMenuOpen.value = false
+  selectEquipment(equipmentId, { manual: true })
+}
+
+function toggleCameraMenu() {
+  isCameraMenuOpen.value = !isCameraMenuOpen.value
+  isLineSelectorOpen.value = false
+}
+
+function toggleCameraViewLock() {
+  isCameraViewLocked.value = !isCameraViewLocked.value
+
+  if (isCameraViewLocked.value) {
+    clearOverviewAlertFocusTimer()
+    return
+  }
+
+  if (isLineOverviewFocused) {
+    scheduleOverviewAlertFocus()
+  }
 }
 
 function showLineSceneLoading() {
@@ -801,11 +838,7 @@ function selectEquipment(equipmentId, options = {}) {
     return
   }
 
-  if (options.manual) {
-    markManualFocusOverride()
-  } else {
-    clearOverviewAlertFocusTimer()
-  }
+  clearOverviewAlertFocusTimer()
 
   currentSelectedEquipmentId.value = equipmentId
   selectedLineId.value = equipment.lineId
@@ -829,7 +862,6 @@ function selectLine(lineId) {
     showLineSceneLoading()
   }
 
-  markManualFocusOverride()
   shouldFocusLineOverview = true
   selectedLineId.value = lineId
   isAlertChecklistOpen.value = false
@@ -845,6 +877,7 @@ function selectLine(lineId) {
 
 function toggleLineSelector() {
   isLineSelectorOpen.value = !isLineSelectorOpen.value
+  isCameraMenuOpen.value = false
 }
 
 function rememberActiveEquipmentStatuses() {
@@ -896,7 +929,7 @@ function focusChangedAlertEquipment() {
 
   rememberActiveEquipmentStatuses()
 
-  if (hasManualFocusOverride) {
+  if (isCameraViewLocked.value) {
     return
   }
 
@@ -927,6 +960,35 @@ function focusChangedAlertEquipment() {
   selectEquipment(alertEquipment.id, { autoFocus: true })
 }
 
+function handleAlertFocusRequest() {
+  const request = props.alertFocusRequest
+  const equipment = equipmentById.value[request?.equipmentId]
+  const requestKey = String(request?.key ?? '')
+
+  if (
+    !requestKey ||
+    requestKey === lastHandledAlertFocusKey ||
+    !equipment ||
+    !hasCompletedInitialOverview ||
+    !camera ||
+    !controls
+  ) {
+    return
+  }
+
+  lastHandledAlertFocusKey = requestKey
+
+  if (
+    (!request.force && isCameraViewLocked.value) ||
+    (!request.force && equipment.lineId !== selectedLineId.value)
+  ) {
+    return
+  }
+
+  clearOverviewAlertFocusTimer()
+  selectEquipment(equipment.id, { autoFocus: true })
+}
+
 function syncLineWithEquipment(equipmentId) {
   const equipment = equipmentById.value[equipmentId]
 
@@ -953,8 +1015,17 @@ function handlePointerDown(event) {
 }
 
 function handleCameraInteractionStart() {
-  markManualFocusOverride()
   targetFocus = null
+}
+
+function closeCameraMenusOnOutsidePointer(event) {
+  if (!cameraControlRef.value?.contains(event.target)) {
+    isCameraMenuOpen.value = false
+  }
+
+  if (!lineSelectorRef.value?.contains(event.target)) {
+    isLineSelectorOpen.value = false
+  }
 }
 
 function handlePointerUp(event) {
@@ -1158,6 +1229,7 @@ function setupScene() {
   resizeScene()
   setLineOverviewFocus(true)
   hasCompletedInitialOverview = true
+  handleAlertFocusRequest()
   animateScene()
 }
 
@@ -1198,6 +1270,15 @@ watch(
     }
     nextTick(() => setFocusForEquipment(equipmentById.value[equipmentId]))
   },
+)
+
+watch(
+  () => [
+    props.alertFocusRequest?.key,
+    props.alertFocusRequest?.equipmentId,
+    equipmentById.value[props.alertFocusRequest?.equipmentId]?.id,
+  ],
+  handleAlertFocusRequest,
 )
 
 watch(
@@ -1268,11 +1349,13 @@ watch(
 )
 
 onMounted(() => {
+  document.addEventListener('pointerdown', closeCameraMenusOnOutsidePointer)
   syncLineWithEquipment(currentSelectedEquipmentId.value)
   setupScene()
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeCameraMenusOnOutsidePointer)
   disposeScene()
 })
 </script>
@@ -1280,6 +1363,23 @@ onBeforeUnmount(() => {
 <template>
   <section ref="viewportRef" class="factory-viewport" :aria-label="t('factory.title')">
     <canvas ref="canvasRef" class="factory-viewport__canvas" data-test="factory-3d-canvas"></canvas>
+
+    <Transition name="factory-equipment-switch">
+      <div
+        v-if="isEquipmentSwitching"
+        class="factory-viewport__equipment-switch"
+        data-test="factory-equipment-switch-loader"
+        role="status"
+        :aria-label="t('factory.equipmentLoading')"
+      >
+        <span class="factory-viewport__focus-lock" aria-hidden="true">
+          <i></i>
+          <i></i>
+          <i></i>
+          <i></i>
+        </span>
+      </div>
+    </Transition>
 
     <div class="factory-viewport__left-controls">
       <ul
@@ -1304,13 +1404,71 @@ onBeforeUnmount(() => {
         </li>
       </ul>
 
-      <div class="factory-viewport__camera-tools" :aria-label="t('factory.cameraControl')">
-        <span>{{ t('factory.cameraView') }}</span>
-        <button type="button" @click="focusLineOverview">{{ t('factory.lineOverview') }}</button>
+      <div
+        ref="cameraControlRef"
+        class="factory-viewport__camera-tools"
+        :aria-label="t('factory.cameraControl')"
+      >
+        <span class="factory-viewport__camera-label">{{ t('factory.cameraView') }}</span>
+
+        <div class="factory-viewport__camera-select">
+          <button
+            type="button"
+            class="factory-viewport__camera-trigger"
+            :aria-expanded="isCameraMenuOpen"
+            @click="toggleCameraMenu"
+          >
+            <span>{{ currentCameraViewLabel }}</span>
+            <img :src="chevronDownIcon" alt="" width="16" height="16" />
+          </button>
+
+          <Transition name="factory-camera-menu">
+            <div v-if="isCameraMenuOpen" class="factory-viewport__camera-menu">
+              <button
+                type="button"
+                :class="{
+                  'factory-viewport__camera-option--active': activeCameraViewId === 'overview',
+                }"
+                @click="focusLineOverview"
+              >
+                {{ t('factory.lineOverview') }}
+              </button>
+              <button
+                v-for="equipment in activeEquipmentList"
+                :key="equipment.id"
+                type="button"
+                :class="{
+                  'factory-viewport__camera-option--active': activeCameraViewId === equipment.id,
+                }"
+                @click="selectCameraEquipment(equipment.id)"
+              >
+                <span>{{ equipment.name }}</span>
+                <small>{{ t(`status.${equipment.status.tone}`) }}</small>
+              </button>
+            </div>
+          </Transition>
+        </div>
+
+        <button
+          type="button"
+          class="factory-viewport__camera-lock"
+          :class="{ 'factory-viewport__camera-lock--active': isCameraViewLocked }"
+          :aria-label="isCameraViewLocked ? t('factory.cameraUnlock') : t('factory.cameraLock')"
+          :aria-pressed="isCameraViewLocked"
+          :title="isCameraViewLocked ? t('factory.cameraUnlock') : t('factory.cameraLock')"
+          @click="toggleCameraViewLock"
+        >
+          <img
+            :src="isCameraViewLocked ? cameraLockIcon : cameraUnlockIcon"
+            alt=""
+            width="18"
+            height="18"
+          />
+        </button>
       </div>
     </div>
 
-    <div class="factory-viewport__line-selector">
+    <div ref="lineSelectorRef" class="factory-viewport__line-selector">
       <Transition name="factory-line-menu">
         <div
           v-if="isLineSelectorOpen"
@@ -1457,6 +1615,130 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
+.factory-viewport__equipment-switch {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.factory-viewport__focus-lock {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  animation: factory-focus-lock 620ms var(--agentory-ease-elastic) both;
+}
+
+.factory-viewport__focus-lock::before,
+.factory-viewport__focus-lock::after {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  border-radius: var(--agentory-radius-pill);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.factory-viewport__focus-lock::before {
+  width: 28px;
+  height: 28px;
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 72%);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 38%);
+  animation: factory-focus-pulse 620ms var(--agentory-ease-soft) both;
+}
+
+.factory-viewport__focus-lock::after {
+  width: 6px;
+  height: 6px;
+  background: var(--agentory-color-bg-primary);
+}
+
+.factory-viewport__focus-lock i {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: var(--agentory-color-bg-primary);
+  border-style: solid;
+}
+
+.factory-viewport__focus-lock i:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-width: 2px 0 0 2px;
+  border-radius: var(--agentory-radius-8) 0 0;
+}
+
+.factory-viewport__focus-lock i:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-width: 2px 2px 0 0;
+  border-radius: 0 var(--agentory-radius-8) 0 0;
+}
+
+.factory-viewport__focus-lock i:nth-child(3) {
+  right: 0;
+  bottom: 0;
+  border-width: 0 2px 2px 0;
+  border-radius: 0 0 var(--agentory-radius-8);
+}
+
+.factory-viewport__focus-lock i:nth-child(4) {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 2px 2px;
+  border-radius: 0 0 0 var(--agentory-radius-8);
+}
+
+.factory-equipment-switch-enter-active,
+.factory-equipment-switch-leave-active {
+  transition: opacity 140ms var(--agentory-ease-soft);
+}
+
+.factory-equipment-switch-enter-from,
+.factory-equipment-switch-leave-to {
+  opacity: 0;
+}
+
+@keyframes factory-focus-lock {
+  0% {
+    opacity: 0;
+    transform: scale(1.65);
+  }
+
+  42% {
+    opacity: 1;
+    transform: scale(0.92);
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes factory-focus-pulse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.16);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+}
+
 .factory-viewport__line-trigger:focus-visible,
 .factory-viewport__line-option:focus-visible,
 .factory-viewport__camera-tools button:focus-visible,
@@ -1569,9 +1851,10 @@ onBeforeUnmount(() => {
 }
 
 .factory-viewport__camera-tools {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--agentory-spacing-6);
+  gap: var(--agentory-spacing-4);
   padding: var(--agentory-spacing-4);
   background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
@@ -1583,7 +1866,7 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-.factory-viewport__camera-tools span {
+.factory-viewport__camera-label {
   padding-inline: var(--agentory-spacing-6);
   color: var(--agentory-color-text-muted);
   font-size: var(--agentory-font-size-body-sm);
@@ -1592,18 +1875,140 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.factory-viewport__camera-tools button {
+.factory-viewport__camera-select {
+  position: relative;
+}
+
+.factory-viewport__camera-trigger,
+.factory-viewport__camera-lock,
+.factory-viewport__camera-menu button {
+  font-family: var(--agentory-font-family-base);
+  cursor: pointer;
+}
+
+.factory-viewport__camera-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-4);
   min-height: 26px;
-  padding: var(--agentory-spacing-4) var(--agentory-spacing-10);
+  max-width: min(154px, 34cqw);
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-6) var(--agentory-spacing-4)
+    var(--agentory-spacing-10);
   color: var(--agentory-color-text-primary);
   background: transparent;
   border: 0;
   border-radius: var(--agentory-radius-pill);
-  font-family: var(--agentory-font-family-base);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-body-sm);
-  cursor: pointer;
+}
+
+.factory-viewport__camera-trigger span {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factory-viewport__camera-trigger img,
+.factory-viewport__camera-lock img {
+  flex: 0 0 auto;
+  filter: var(--agentory-filter-header-action);
+  object-fit: contain;
+}
+
+.factory-viewport__camera-trigger[aria-expanded='true'] img {
+  transform: rotate(180deg);
+}
+
+.factory-viewport__camera-lock {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  color: var(--agentory-color-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-pill);
+}
+
+.factory-viewport__camera-lock--active {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%);
+}
+
+.factory-viewport__camera-lock--active img {
+  filter: var(--agentory-filter-header-action);
+}
+
+.factory-viewport__camera-menu {
+  position: absolute;
+  z-index: 8;
+  bottom: calc(100% + var(--agentory-spacing-8));
+  left: 0;
+  display: flex;
+  width: max-content;
+  max-width: min(220px, 48cqw);
+  max-height: min(270px, 58cqh);
+  padding: var(--agentory-spacing-4);
+  flex-direction: column;
+  gap: var(--agentory-spacing-2);
+  overflow: auto;
+  background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
+  border: 0;
+  border-radius: var(--agentory-radius-10);
+  box-shadow: var(--factory-glass-shadow);
+  backdrop-filter: var(--factory-glass-filter);
+  -webkit-backdrop-filter: var(--factory-glass-filter);
+}
+
+.factory-viewport__camera-menu button {
+  display: grid;
+  grid-template-columns: minmax(76px, auto) auto;
+  align-items: center;
+  gap: var(--agentory-spacing-10);
+  min-height: 30px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-8);
+  color: var(--agentory-color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-6);
+  font-size: var(--agentory-font-size-body-sm);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.factory-viewport__camera-menu button:first-child {
+  display: block;
+}
+
+.factory-viewport__camera-menu button small {
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+}
+
+.factory-viewport__camera-menu .factory-viewport__camera-option--active {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary-glass);
+}
+
+.factory-viewport__camera-option--active small {
+  color: inherit;
+}
+
+.factory-camera-menu-enter-active,
+.factory-camera-menu-leave-active {
+  transition:
+    opacity 160ms var(--agentory-ease-soft),
+    transform 200ms var(--agentory-ease-elastic);
+}
+
+.factory-camera-menu-enter-from,
+.factory-camera-menu-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
 }
 
 .factory-viewport__line-selector {
@@ -1641,11 +2046,12 @@ onBeforeUnmount(() => {
 
 .factory-viewport__line-menu {
   display: flex;
-  width: min(220px, 52cqw);
+  width: max-content;
+  max-width: min(220px, 52cqw);
   max-height: min(260px, 62cqh);
-  padding: var(--agentory-spacing-6);
+  padding: var(--agentory-spacing-4);
   flex-direction: column;
-  gap: var(--agentory-spacing-5);
+  gap: var(--agentory-spacing-2);
   overflow: auto;
   background: linear-gradient(135deg, var(--factory-glass-bg-start), var(--factory-glass-bg-end));
   border: 0;
@@ -1672,11 +2078,11 @@ onBeforeUnmount(() => {
 
 .factory-viewport__line-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(72px, auto) auto;
   align-items: center;
   gap: var(--agentory-spacing-8);
-  min-height: 34px;
-  padding: var(--agentory-spacing-6) var(--agentory-spacing-10);
+  min-height: 30px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-8);
   color: var(--agentory-color-text-primary);
   background: transparent;
   border: 0;
@@ -1950,6 +2356,13 @@ onBeforeUnmount(() => {
   font-weight: var(--agentory-font-weight-medium);
   line-height: 1.2;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .factory-viewport__focus-lock,
+  .factory-viewport__focus-lock::before {
+    animation: none;
+  }
 }
 
 .factory-viewport__label--danger small {

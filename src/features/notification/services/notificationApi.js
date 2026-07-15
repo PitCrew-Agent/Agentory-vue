@@ -72,6 +72,7 @@ export function normalizeNotification(item) {
       item.line ??
       '',
     message: item.message,
+    metric: item.metric ?? '',
     occurredAt: formatDateTime(occurredAt),
     occurredDate: formatDate(occurredAt),
     readStatus: normalizeNotificationReadStatus(item.is_read ?? item.isRead),

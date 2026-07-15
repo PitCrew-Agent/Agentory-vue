@@ -2,6 +2,8 @@ import { ref } from 'vue'
 
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
+const ALERT_TOAST_DURATION = 4200
+
 function getNotificationToastTone(notification) {
   const source = `${notification.code ?? ''} ${notification.message ?? ''}`.toLowerCase()
 
@@ -13,8 +15,11 @@ function getNotificationToastTone(notification) {
 }
 
 export function useNotificationToast() {
-  const { loadNotifications, primeNotificationStreamCursor, startNotificationStream } = useNotificationCenter()
+  const { loadNotifications, primeNotificationStreamCursor, startNotificationStream } =
+    useNotificationCenter()
   const alertToast = ref(null)
+  let alertToastExpiresAt = 0
+  let alertToastRemaining = ALERT_TOAST_DURATION
   let alertToastTimer = 0
   let stopNotificationStream
 
@@ -34,15 +39,51 @@ export function useNotificationToast() {
       tone: getNotificationToastTone(notification),
     }
 
-    if (typeof window !== 'undefined') {
-      alertToastTimer = window.setTimeout(() => {
-        alertToast.value = null
-        alertToastTimer = 0
-      }, 4200)
-    }
+    scheduleAlertToastDismiss(ALERT_TOAST_DURATION)
   }
 
-  async function startAlertToastStream({ loadInitial = true } = {}) {
+  function dismissAlertToast() {
+    clearAlertToastTimer()
+    alertToast.value = null
+    alertToastExpiresAt = 0
+    alertToastRemaining = ALERT_TOAST_DURATION
+  }
+
+  function scheduleAlertToastDismiss(duration) {
+    clearAlertToastTimer()
+    alertToastRemaining = duration
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    alertToastExpiresAt = Date.now() + duration
+    alertToastTimer = window.setTimeout(dismissAlertToast, duration)
+  }
+
+  function pauseAlertToast() {
+    if (!alertToast.value || !alertToastTimer) {
+      return
+    }
+
+    alertToastRemaining = Math.max(0, alertToastExpiresAt - Date.now())
+    clearAlertToastTimer()
+  }
+
+  function resumeAlertToast() {
+    if (!alertToast.value || alertToastTimer) {
+      return
+    }
+
+    if (alertToastRemaining <= 0) {
+      dismissAlertToast()
+      return
+    }
+
+    scheduleAlertToastDismiss(alertToastRemaining)
+  }
+
+  async function startAlertToastStream({ loadInitial = true, onNotification } = {}) {
     if (loadInitial) {
       await loadNotifications({ unreadOnly: true })
       await primeNotificationStreamCursor()
@@ -50,19 +91,23 @@ export function useNotificationToast() {
 
     stopNotificationStream?.()
     stopNotificationStream = startNotificationStream({
-      onNotification: showAlertToast,
+      onNotification(notification) {
+        showAlertToast(notification)
+        onNotification?.(notification)
+      },
     })
   }
 
   function stopAlertToastStream() {
-    clearAlertToastTimer()
+    dismissAlertToast()
     stopNotificationStream?.()
     stopNotificationStream = undefined
-    alertToast.value = null
   }
 
   return {
     alertToast,
+    pauseAlertToast,
+    resumeAlertToast,
     showAlertToast,
     startAlertToastStream,
     stopAlertToastStream,

@@ -28,7 +28,13 @@ const props = defineProps({
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { t } = useI18n()
-const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
+const {
+  alertToast,
+  pauseAlertToast,
+  resumeAlertToast,
+  startAlertToastStream,
+  stopAlertToastStream,
+} = useNotificationToast()
 const {
   activeNotificationId,
   incidentErrorMessage,
@@ -131,7 +137,9 @@ watch(
       :response-error="incidentErrorMessage"
       :response-error-notification-id="incidentErrorNotificationId"
       :toast="alertToast"
+      @pause="pauseAlertToast"
       @respond="startIncidentResponse"
+      @resume="resumeAlertToast"
     />
 
     <section

@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { fetchCurrentAuthUser, logoutAuthSession } from '@/features/auth/services/authApi'
+import { useAssistantStore } from '@/stores/assistantStore'
 
 function createEmptyUser() {
   return {
@@ -72,6 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logoutCurrentUser() {
+    useAssistantStore().reset()
     clearCurrentUser()
     isAuthenticated.value = false
     isLoaded.value = true
