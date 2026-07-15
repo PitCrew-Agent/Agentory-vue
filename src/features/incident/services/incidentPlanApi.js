@@ -28,8 +28,8 @@ function normalizeCitation(item = {}) {
 
 function normalizeWorkLogDraft(draft = {}) {
   return {
-    content: String(draft.content ?? '').trim(),
     endedAt: draft.ended_at ?? null,
+    plan: String(draft.plan ?? '').trim(),
     sourceNotificationId: draft.source_notification_id ?? null,
     startedAt: draft.started_at ?? '',
     status: normalizeWorkLogStatus(draft.status),

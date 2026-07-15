@@ -20,6 +20,9 @@ const isWorkLogSubmitting = ref(false)
 const workLogErrorMessage = ref('')
 const shouldSkipWorkLogApi = import.meta.env.MODE === 'test'
 const pendingIncidentPlan = computed(() => incidentPlanStore.pendingPlan)
+const incidentPlanErrorMessage = computed(() => incidentPlanStore.errorMessage)
+const isIncidentPlanLoading = computed(() => incidentPlanStore.isCreating)
+const isPageLoading = computed(() => isWorkLogLoading.value && !isIncidentPlanLoading.value)
 
 function insertWorkLog(log) {
   let targetGroup = workLogGroupState.value.find((group) => group.id === log.date)
@@ -140,12 +143,13 @@ onMounted(() => {
   <DashboardFramePage
     active-navigation-id="workLog"
     :content-label="t('workLog.contentLabel')"
-    :is-loading="isWorkLogLoading"
+    :is-loading="isPageLoading"
   >
     <WorkLogPanel
-      :error-message="workLogErrorMessage"
+      :error-message="workLogErrorMessage || incidentPlanErrorMessage"
       :groups="workLogGroupState"
       :incident-plan="pendingIncidentPlan"
+      :is-incident-plan-loading="isIncidentPlanLoading"
       :is-loading="isWorkLogLoading"
       :is-submitting="isWorkLogSubmitting"
       @create-log="createWorkLog"

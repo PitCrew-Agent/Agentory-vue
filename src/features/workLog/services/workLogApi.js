@@ -17,7 +17,12 @@ function formatTime(value) {
   const date = new Date(value)
 
   if (Number.isNaN(date.getTime())) {
-    return String(value ?? '').split('T').at(-1)?.slice(0, 5) ?? ''
+    return (
+      String(value ?? '')
+        .split('T')
+        .at(-1)
+        ?.slice(0, 5) ?? ''
+    )
   }
 
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
@@ -27,23 +32,56 @@ function toLocalDateTime(date, time) {
   return `${date}T${time || '00:00'}:00`
 }
 
+function getWorkPlan(log) {
+  return String(log.workPlan ?? log.task ?? '').trim()
+}
+
+function getWorkCompletion(log) {
+  return String(log.workRecord ?? '').trim()
+}
+
+function isCompletionStatus(status) {
+  return normalizeWorkLogStatus(status) === 'complete'
+}
+
 function createWorkLogPayload(log) {
+  const status = isCompletionStatus(log.status) ? 'progress' : log.status
+
   return {
-    content: log.task.trim(),
     ended_at: log.endedDate ? toLocalDateTime(log.endedDate, log.endedTime) : null,
+    plan: getWorkPlan(log),
     source_notification_id: log.sourceNotificationId ?? null,
     started_at: toLocalDateTime(log.date, log.time),
-    status: toWorkLogStatusLabel(log.status),
+    status: toWorkLogStatusLabel(status),
     work_type: log.workType || '기타',
   }
 }
 
 function createWorkLogUpdatePayload(log) {
-  const payload = createWorkLogPayload(log)
+  const payload = {
+    ended_at: log.endedDate ? toLocalDateTime(log.endedDate, log.endedTime) : null,
+    plan: getWorkPlan(log),
+    started_at: toLocalDateTime(log.date, log.time),
+    work_type: log.workType || '기타',
+  }
 
-  delete payload.source_notification_id
+  if (!isCompletionStatus(log.status) && !isCompletionStatus(log.originalStatus)) {
+    payload.status = toWorkLogStatusLabel(log.status)
+  }
 
   return payload
+}
+
+async function completeWorkLogRequest(logId, completion) {
+  const normalizedCompletion = String(completion ?? '').trim()
+
+  if (!normalizedCompletion) {
+    throw new Error('Work log completion is required')
+  }
+
+  return http.post(`/api/v1/work-logs/${encodeURIComponent(logId)}/complete`, {
+    completion: normalizedCompletion,
+  })
 }
 
 function normalizeWorkLogItems(items) {
@@ -53,9 +91,12 @@ function normalizeWorkLogItems(items) {
 function normalizeWorkLog(item) {
   const date = formatDate(item.started_at)
   const endedDate = item.ended_at ? formatDate(item.ended_at) : ''
+  const workPlan = String(item.plan ?? '').trim()
+  const workRecord = String(item.completion ?? '').trim()
 
   return {
     alarmCode: item.alarm_code ?? '',
+    completedAt: item.completed_at ?? null,
     date,
     endedDate,
     endedTime: item.ended_at ? formatTime(item.ended_at) : '',
@@ -66,8 +107,10 @@ function normalizeWorkLog(item) {
     operator: item.worker_name,
     sourceNotificationId: item.source_notification_id ?? null,
     status: normalizeWorkLogStatus(item.status),
-    task: item.content,
+    task: workRecord || workPlan,
     time: formatTime(item.started_at),
+    workPlan,
+    workRecord,
     workType: item.work_type ?? '기타',
   }
 }
@@ -101,6 +144,12 @@ export async function fetchWorkLogGroups() {
 export async function createWorkLogRequest(log) {
   const createdLog = await http.post('/api/v1/work-logs', createWorkLogPayload(log))
 
+  if (isCompletionStatus(log.status)) {
+    const completedLog = await completeWorkLogRequest(createdLog.id, getWorkCompletion(log))
+
+    return normalizeWorkLog(completedLog)
+  }
+
   return normalizeWorkLog(createdLog)
 }
 
@@ -109,6 +158,12 @@ export async function updateWorkLogRequest(log) {
     `/api/v1/work-logs/${encodeURIComponent(log.id)}`,
     createWorkLogUpdatePayload(log),
   )
+
+  if (isCompletionStatus(log.status) && !isCompletionStatus(log.originalStatus)) {
+    const completedLog = await completeWorkLogRequest(updatedLog.id, getWorkCompletion(log))
+
+    return normalizeWorkLog(completedLog)
+  }
 
   return normalizeWorkLog(updatedLog)
 }
