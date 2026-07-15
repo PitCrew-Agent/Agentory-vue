@@ -504,7 +504,7 @@ export function deleteChatSession(sessionId) {
   return http.remove(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}`)
 }
 
-export async function streamChatQuery({ equipmentId = '', message, onEvent, sessionId }) {
+export async function streamChatQuery({ equipmentId = '', message, onEvent, sessionId, signal }) {
   const response = await fetch(buildApiUrl('/api/v1/chat/stream'), {
     body: JSON.stringify({
       equipment_id: equipmentId || null,
@@ -518,6 +518,7 @@ export async function streamChatQuery({ equipmentId = '', message, onEvent, sess
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    signal,
   })
 
   if (!response.ok) {

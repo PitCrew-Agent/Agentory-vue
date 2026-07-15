@@ -1,8 +1,15 @@
 <script setup>
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { RouterView, useRoute, useRouter } from 'vue-router'
+
+import AssistantCompletionToast from '@/features/dashboard/components/AssistantCompletionToast.vue'
+import { useAssistantStore } from '@/stores/assistantStore'
 
 const route = useRoute()
+const router = useRouter()
+const assistantStore = useAssistantStore()
+const { completionToast } = storeToRefs(assistantStore)
 const isRouteLoading = ref(false)
 const dashboardRouteNames = new Set(['Dashboard', 'WorkLog', 'EquipmentList', 'NotificationLog'])
 const authRouteNames = new Set(['Login'])
@@ -26,6 +33,15 @@ function getRouteViewKey(routeTarget) {
   }
 
   return routeTarget.name ?? routeTarget.fullPath
+}
+
+async function openCompletedAssistantConversation() {
+  assistantStore.requestConversationOpen()
+  assistantStore.dismissCompletionToast()
+
+  if (route.name !== 'Dashboard') {
+    await router.push({ name: 'Dashboard' })
+  }
 }
 
 watch(
@@ -52,6 +68,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-route-shell" :class="{ 'app-route-shell--loading': isRouteLoading }">
+    <AssistantCompletionToast
+      :toast="completionToast"
+      @open="openCompletedAssistantConversation"
+      @pause="assistantStore.pauseCompletionToast"
+      @resume="assistantStore.resumeCompletionToast"
+    />
+
     <Transition name="route-loader">
       <div
         v-if="isRouteLoading && !shouldSkipRouteLoading()"
