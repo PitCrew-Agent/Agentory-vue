@@ -359,6 +359,10 @@ onBeforeUnmount(() => {
   z-index: 20;
 }
 
+.dashboard-widget:focus-within {
+  z-index: 12;
+}
+
 .dashboard-widget--active {
   pointer-events: none;
   transition:

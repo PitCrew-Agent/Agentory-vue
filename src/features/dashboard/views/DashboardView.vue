@@ -1,7 +1,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
+import { equipmentStatusMap } from '@/constants/equipmentStatus'
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
 import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
@@ -13,8 +15,13 @@ import EquipmentChartPanel from '@/features/dashboard/components/EquipmentChartP
 import EquipmentDetailPanel from '@/features/dashboard/components/EquipmentDetailPanel.vue'
 import ErrorDonutPanel from '@/features/dashboard/components/ErrorDonutPanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
+import RepairHistoryPanel from '@/features/dashboard/components/RepairHistoryPanel.vue'
 import { dashboardNavigation } from '@/features/dashboard/constants/dashboardNavigation'
-import { createEmptyMetricChart } from '@/features/dashboard/constants/equipmentMetrics'
+import { useDashboardEquipmentFocus } from '@/features/dashboard/composables/useDashboardEquipmentFocus'
+import {
+  createEmptyMetricChart,
+  metricConfigs,
+} from '@/features/dashboard/constants/equipmentMetrics'
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 import {
   deleteChatSession,
@@ -35,10 +42,25 @@ import {
 } from '@/features/dashboard/utils/dashboardLayoutStorage'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
 import { useIncidentResponse } from '@/features/incident/composables/useIncidentResponse'
+import { useAssistantStore } from '@/stores/assistantStore'
 
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { t } = useI18n()
-const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
+const assistantStore = useAssistantStore()
+const {
+  isLoading: isAssistantLoading,
+  messages: assistantMessages,
+  openConversationRequest: assistantOpenConversationRequest,
+  sessionId: assistantSessionId,
+} = storeToRefs(assistantStore)
+const {
+  alertToast,
+  pauseAlertToast,
+  resumeAlertToast,
+  startAlertToastStream,
+  stopAlertToastStream,
+} = useNotificationToast()
+const { consumeEquipmentFocusRequest, equipmentFocusRequest } = useDashboardEquipmentFocus()
 const {
   activeNotificationId,
   incidentErrorMessage,
@@ -49,9 +71,6 @@ const {
 const layoutBoardRef = ref(null)
 const hasCustomLayout = ref(false)
 const assistantHistoryItems = ref([])
-const assistantMessages = ref([])
-const assistantSessionId = ref(createAssistantSessionId())
-const isAssistantLoading = ref(false)
 const isAssistantHistoryLoading = ref(false)
 const isQuickCommandsLoading = ref(false)
 const quickCommands = ref([])
@@ -64,24 +83,29 @@ const factoryScene = reactive({
   statusSummary: initialFactoryScene.statusSummary,
 })
 const selectedEquipmentId = ref(factoryScene.defaultEquipmentId)
-const selectedMetricId = ref('temperature')
+const selectedMetricId = ref('gasFlow')
 const isMetricSelectionLockedByUser = ref(false)
+const metricChartRange = reactive({
+  end: '',
+  minutes: 10,
+  mode: 'live',
+  start: '',
+})
+const isEquipmentSwitching = ref(false)
+const realtimeRevision = ref(0)
+const alertFocusRequest = ref(null)
 const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
 let layoutResizeObserver
 let contentLoadingFrame = 0
-let factorySceneInterval = 0
-let factorySceneRequestId = 0
-let selectedTelemetryInterval = 0
-let selectedTelemetryRequestId = 0
+let realtimeSnapshotInterval = 0
+let realtimeSnapshotRequestId = 0
+let equipmentSwitchRequestId = 0
 let assistantHistoryRequestId = 0
 let assistantSuggestionRequestId = 0
-let assistantSuggestionSignature = ''
-let assistantTypingMessageId = ''
-let assistantTypingQueue = ''
-let assistantTypingTimer = 0
 let lastMetricSyncEquipmentId = ''
+let isDashboardInitializing = false
 const isContentLoading = ref(true)
 
 const selectedEquipment = computed(
@@ -96,7 +120,7 @@ const selectedChecklistItems = computed(() => selectedEquipment.value.checklist 
 const selectedChart = computed(
   () =>
     selectedEquipment.value.charts?.[selectedMetricId.value] ??
-    selectedEquipment.value.charts?.temperature ??
+    selectedEquipment.value.charts?.gasFlow ??
     createEmptyMetricChart(selectedMetricId.value),
 )
 
@@ -115,11 +139,11 @@ function getEquipmentFocusMetricId(equipment) {
     return selectedMetricId.value
   }
 
-  if (charts.temperature) {
-    return 'temperature'
+  if (charts.gasFlow) {
+    return 'gasFlow'
   }
 
-  return Object.keys(charts)[0] ?? 'temperature'
+  return Object.keys(charts)[0] ?? 'gasFlow'
 }
 
 function syncSelectedMetricWithEquipment(equipment) {
@@ -155,6 +179,7 @@ const widgetOrder = [
   'assistant',
   'equipmentAnalysis',
   'errorDonut',
+  'repairHistory',
 ]
 const widgetMeta = {
   assistant: {
@@ -185,6 +210,13 @@ const widgetMeta = {
     minHeight: 180,
     minWidth: 220,
   },
+  repairHistory: {
+    id: 'repairHistory',
+    label: '수리 이력',
+    labelKey: 'dashboard.widgets.repairHistory',
+    minHeight: 220,
+    minWidth: 220,
+  },
   factory: {
     id: 'factory',
     label: '3D 공장 화면',
@@ -207,6 +239,7 @@ const visibleWidgetMap = reactive({
   errorDonut: false,
   factory: true,
   metricChart: true,
+  repairHistory: false,
 })
 const widgetLayouts = reactive({
   assistant: { x: 75, y: 0, w: 25, h: 100 },
@@ -215,6 +248,7 @@ const widgetLayouts = reactive({
   errorDonut: { x: 25, y: 0, w: 25, h: 50 },
   factory: { x: 0, y: 0, w: 50, h: 100 },
   metricChart: { x: 50, y: 50, w: 25, h: 50 },
+  repairHistory: { x: 50, y: 0, w: 25, h: 50 },
 })
 const previewLayouts = reactive({})
 const defaultLayoutGrid = {
@@ -224,6 +258,7 @@ const defaultLayoutGrid = {
   errorDonut: { col: 1, cols: 1, row: 0, rows: 1 },
   factory: { col: 0, cols: 2, row: 0, rows: 2 },
   metricChart: { col: 2, cols: 1, row: 1, rows: 1 },
+  repairHistory: { col: 2, cols: 1, row: 0, rows: 1 },
 }
 
 const dockWidgets = computed(() =>
@@ -231,14 +266,6 @@ const dockWidgets = computed(() =>
     .filter((widgetId) => !visibleWidgetMap[widgetId])
     .map((widgetId) => widgetMeta[widgetId]),
 )
-
-function createAssistantSessionId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (character) =>
-        (Number(character) ^ ((Math.random() * 16) >> (Number(character) / 4))).toString(16),
-      )
-}
 
 function createAssistantMessage(role, text, extra = {}) {
   return {
@@ -343,8 +370,7 @@ async function deleteAssistantHistory(history) {
     )
 
     if (assistantSessionId.value === sessionId) {
-      assistantSessionId.value = createAssistantSessionId()
-      assistantMessages.value = []
+      assistantStore.startNewSession()
     }
   } catch {
     return
@@ -354,55 +380,15 @@ async function deleteAssistantHistory(history) {
 }
 
 function updateAssistantMessage(messageId, updater) {
-  assistantMessages.value = assistantMessages.value.map((message) =>
-    message.id === messageId ? updater(message) : message,
-  )
+  assistantStore.updateMessage(messageId, updater)
 }
 
 function appendAssistantText(messageId, text) {
-  if (!text) {
-    return
-  }
-
-  if (assistantTypingMessageId !== messageId) {
-    window.clearTimeout(assistantTypingTimer)
-    assistantTypingMessageId = messageId
-    assistantTypingQueue = ''
-    assistantTypingTimer = 0
-  }
-
-  assistantTypingQueue += text
-
-  if (!assistantTypingTimer) {
-    flushAssistantTypingQueue()
-  }
+  assistantStore.appendStreamingText(messageId, text)
 }
 
 function flushAssistantTypingQueue(options = {}) {
-  window.clearTimeout(assistantTypingTimer)
-  assistantTypingTimer = 0
-
-  if (!assistantTypingQueue || !assistantTypingMessageId) {
-    return
-  }
-
-  const characterCount = options.immediate
-    ? assistantTypingQueue.length
-    : Math.min(
-        assistantTypingQueue.length,
-        assistantTypingQueue.length > 240 ? 32 : assistantTypingQueue.length > 80 ? 18 : 8,
-      )
-  const nextText = assistantTypingQueue.slice(0, characterCount)
-
-  assistantTypingQueue = assistantTypingQueue.slice(characterCount)
-  updateAssistantMessage(assistantTypingMessageId, (message) => ({
-    ...message,
-    text: `${message.text ?? ''}${nextText}`,
-  }))
-
-  if (assistantTypingQueue) {
-    assistantTypingTimer = window.setTimeout(flushAssistantTypingQueue, 18)
-  }
+  assistantStore.flushTypingQueue(options)
 }
 
 function addAssistantStreamEvent(messageId, streamEvent) {
@@ -434,14 +420,6 @@ function getAssistantErrorMessage(error) {
   }
 
   return t('assistant.responseError')
-}
-
-function createEquipmentSuggestionSignature(equipment) {
-  if (!equipment?.id) {
-    return ''
-  }
-
-  return equipment.id
 }
 
 function createAssistantRequestMessage(message) {
@@ -491,8 +469,7 @@ async function sendAssistantMessage(message, options = {}) {
   }
 
   if (options.startNewSession) {
-    assistantSessionId.value = createAssistantSessionId()
-    assistantMessages.value = []
+    assistantStore.startNewSession()
   }
 
   const requestEquipmentId = selectedEquipment.value.id || selectedEquipmentId.value
@@ -526,14 +503,19 @@ async function sendAssistantMessage(message, options = {}) {
   assistantMessages.value = [...assistantMessages.value, assistantMessage]
   assistantSuggestionRequestId += 1
   isQuickCommandsLoading.value = false
-  isAssistantLoading.value = true
+  const assistantRequest = assistantStore.beginRequest()
   let hasReceivedDelta = false
+  let didCompleteAssistantResponse = false
 
   try {
     const response = await streamChatQuery({
       equipmentId: requestEquipmentId,
       message: createAssistantRequestMessage(nextMessage),
       onEvent: (streamEvent) => {
+        if (!assistantStore.isRequestActive(assistantRequest.id)) {
+          return
+        }
+
         if (streamEvent.kind === 'delta') {
           hasReceivedDelta = true
           appendAssistantText(assistantMessage.id, streamEvent.text)
@@ -562,7 +544,12 @@ async function sendAssistantMessage(message, options = {}) {
         }
       },
       sessionId: assistantSessionId.value,
+      signal: assistantRequest.signal,
     })
+
+    if (!assistantStore.isRequestActive(assistantRequest.id)) {
+      return
+    }
 
     if (response.answer && !hasReceivedDelta) {
       appendAssistantText(assistantMessage.id, response.answer)
@@ -578,20 +565,39 @@ async function sendAssistantMessage(message, options = {}) {
       streamEvents: [],
       text: nextAssistantMessage.text || response.answer || t('assistant.noAnswer'),
     }))
+    didCompleteAssistantResponse = true
+    assistantStore.showCompletionToast({ equipmentId: requestEquipmentId })
   } catch (error) {
-    window.clearTimeout(assistantTypingTimer)
-    assistantTypingMessageId = ''
-    assistantTypingQueue = ''
+    if (!assistantStore.isRequestActive(assistantRequest.id)) {
+      return
+    }
+
+    assistantStore.clearTypingQueue()
     updateAssistantMessage(assistantMessage.id, () =>
       createAssistantMessage('assistant', getAssistantErrorMessage(error), {
         tone: 'error',
       }),
     )
     quickCommands.value = []
+
+    if (error?.status !== 401) {
+      assistantStore.showCompletionToast({
+        equipmentId: requestEquipmentId,
+        status: 'error',
+      })
+    }
   } finally {
-    isAssistantLoading.value = false
+    const shouldFinalizeRequest = assistantStore.completeRequest(assistantRequest.id)
+
+    if (!shouldFinalizeRequest) {
+      return
+    }
+
     loadAssistantHistoryItems()
-    loadAssistantSuggestions(selectedEquipment.value)
+
+    if (didCompleteAssistantResponse) {
+      loadAssistantSuggestions(selectedEquipment.value)
+    }
   }
 }
 
@@ -604,6 +610,60 @@ function selectFactoryEquipment(equipmentId) {
 
   selectedEquipmentId.value = equipmentId
   syncSelectedMetricWithEquipment(nextEquipment)
+}
+
+function getNotificationMetricId(metric) {
+  const normalizedMetric = String(metric ?? '')
+    .trim()
+    .toLowerCase()
+
+  return (
+    Object.entries(metricConfigs).find(
+      ([metricId, config]) =>
+        metricId.toLowerCase() === normalizedMetric || config.apiKey === normalizedMetric,
+    )?.[0] ?? ''
+  )
+}
+
+function applyRealtimeNotification(notification) {
+  const equipmentId = notification?.equipmentId ?? notification?.equipmentCode
+  const equipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
+
+  if (!equipment || !['warning', 'danger'].includes(notification?.tone)) {
+    return
+  }
+
+  const metricId = getNotificationMetricId(notification.metric)
+  const nextAlarmMetricIds = metricId
+    ? [metricId, ...(equipment.alarmMetricIds ?? []).filter((item) => item !== metricId)]
+    : (equipment.alarmMetricIds ?? [])
+  const updatedEquipment = {
+    ...equipment,
+    alarmCode: notification.code || equipment.alarmCode,
+    alarmMetricIds: nextAlarmMetricIds,
+    status: equipmentStatusMap[notification.tone],
+  }
+
+  realtimeSnapshotRequestId += 1
+  updateEquipmentTelemetry(updatedEquipment)
+  alertFocusRequest.value = {
+    equipmentId,
+    key: `${notification.id ?? Date.now()}:${equipmentId}:${notification.metric ?? ''}`,
+  }
+}
+
+function applyRequestedEquipmentFocus(request) {
+  const equipmentId = request?.equipmentId ?? request?.equipmentCode
+
+  if (!equipmentId) {
+    return
+  }
+
+  alertFocusRequest.value = {
+    equipmentId,
+    force: true,
+    key: request.key || `header-notification:${Date.now()}:${equipmentId}`,
+  }
 }
 
 function hasChartPoints(equipment) {
@@ -649,28 +709,6 @@ function applyFactoryScene(nextFactoryScene) {
   }
 }
 
-async function loadFactoryScene() {
-  const requestId = ++factorySceneRequestId
-
-  try {
-    const nextFactoryScene = await fetchFactoryScene()
-
-    if (requestId !== factorySceneRequestId) {
-      return
-    }
-
-    applyFactoryScene(nextFactoryScene)
-
-    if (selectedEquipmentId.value) {
-      await loadSelectedEquipmentTelemetry(selectedEquipmentId.value)
-    }
-  } catch {
-    if (!factoryScene.equipmentList.length) {
-      applyFactoryScene(createEmptyFactoryScene())
-    }
-  }
-}
-
 function updateEquipmentTelemetry(updatedEquipment) {
   if (!updatedEquipment?.id) {
     return
@@ -687,32 +725,118 @@ function updateEquipmentTelemetry(updatedEquipment) {
   }))
 }
 
-async function loadSelectedEquipmentTelemetry(equipmentId) {
+function getMetricChartQuery() {
+  if (metricChartRange.mode === 'custom') {
+    return {
+      end: metricChartRange.end,
+      start: metricChartRange.start,
+    }
+  }
+
+  const end = new Date()
+  const start = new Date(end.getTime() - metricChartRange.minutes * 60 * 1000)
+
+  return {
+    end: end.toISOString(),
+    start: start.toISOString(),
+  }
+}
+
+async function loadRealtimeSnapshot({ includeFactoryScene = true } = {}) {
+  const equipmentId = selectedEquipmentId.value
+
+  if (!equipmentId && !includeFactoryScene) {
+    return
+  }
+
+  const requestId = ++realtimeSnapshotRequestId
+  const baseEquipment = selectedEquipment.value
+
+  const [sceneResult, telemetryResult] = await Promise.allSettled([
+    includeFactoryScene ? fetchFactoryScene() : Promise.resolve(null),
+    equipmentId
+      ? fetchEquipmentTelemetry(equipmentId, baseEquipment, getMetricChartQuery())
+      : Promise.resolve(null),
+  ])
+
+  if (requestId !== realtimeSnapshotRequestId) {
+    return
+  }
+
+  if (sceneResult.status === 'fulfilled' && sceneResult.value) {
+    applyFactoryScene(sceneResult.value)
+  } else if (!factoryScene.equipmentList.length) {
+    applyFactoryScene(createEmptyFactoryScene())
+  }
+
+  if (equipmentId && selectedEquipmentId.value === equipmentId) {
+    if (telemetryResult.status === 'fulfilled' && telemetryResult.value) {
+      updateEquipmentTelemetry(telemetryResult.value)
+    }
+  }
+
+  realtimeRevision.value += 1
+}
+
+async function loadInitialRealtimeSnapshot() {
+  isDashboardInitializing = true
+
+  try {
+    const nextFactoryScene = await fetchFactoryScene()
+
+    applyFactoryScene(nextFactoryScene)
+    await Promise.all([
+      loadRealtimeSnapshot({ includeFactoryScene: false }),
+      loadAssistantSuggestions(selectedEquipment.value),
+    ])
+  } catch {
+    if (!factoryScene.equipmentList.length) {
+      applyFactoryScene(createEmptyFactoryScene())
+    }
+  } finally {
+    isDashboardInitializing = false
+    isQuickCommandsLoading.value = false
+  }
+}
+
+async function loadSelectedEquipmentSnapshot(equipmentId) {
   if (!equipmentId) {
     return
   }
 
-  const requestId = ++selectedTelemetryRequestId
+  const requestId = ++equipmentSwitchRequestId
+
+  isEquipmentSwitching.value = true
+  loadAssistantSuggestions(selectedEquipment.value)
 
   try {
-    const updatedEquipment = await fetchEquipmentTelemetry(equipmentId, selectedEquipment.value)
-
-    if (requestId === selectedTelemetryRequestId) {
-      updateEquipmentTelemetry(updatedEquipment)
+    await Promise.all([
+      loadRealtimeSnapshot({ includeFactoryScene: false }),
+      new Promise((resolve) => window.setTimeout(resolve, 520)),
+    ])
+  } finally {
+    if (requestId === equipmentSwitchRequestId) {
+      isEquipmentSwitching.value = false
     }
-  } catch {
-    // 인증 또는 네트워크 오류 시 기존 실데이터를 유지하고 임시 데이터로 대체하지 않는다.
   }
 }
 
+async function applyMetricChartRange(range) {
+  metricChartRange.mode = range.mode === 'custom' ? 'custom' : 'live'
+  metricChartRange.minutes = Number(range.minutes) || 10
+  metricChartRange.start = range.start || ''
+  metricChartRange.end = range.end || ''
+
+  await loadRealtimeSnapshot({ includeFactoryScene: false })
+}
+
+async function returnMetricChartToLive() {
+  await applyMetricChartRange({ mode: 'live', minutes: 10 })
+}
+
 function startRealtimePolling() {
-  window.clearInterval(factorySceneInterval)
-  window.clearInterval(selectedTelemetryInterval)
-  factorySceneInterval = window.setInterval(loadFactoryScene, 15000)
-  selectedTelemetryInterval = window.setInterval(
-    () => loadSelectedEquipmentTelemetry(selectedEquipmentId.value),
-    5000,
-  )
+  window.clearInterval(realtimeSnapshotInterval)
+  realtimeSnapshotInterval = window.setInterval(loadRealtimeSnapshot, 5000)
 }
 
 function clamp(value, min, max) {
@@ -1456,8 +1580,8 @@ async function loadInitialDashboardContent() {
 
   if (!shouldSkipDashboardApi) {
     await Promise.allSettled([
-      loadFactoryScene(),
-      startAlertToastStream(),
+      loadInitialRealtimeSnapshot(),
+      startAlertToastStream({ onNotification: applyRealtimeNotification }),
       loadAssistantHistoryItems(),
     ])
     startRealtimePolling()
@@ -1492,28 +1616,33 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.clearTimeout(assistantTypingTimer)
   cancelContentLoadingFrame()
-  window.clearInterval(factorySceneInterval)
-  window.clearInterval(selectedTelemetryInterval)
+  window.clearInterval(realtimeSnapshotInterval)
   stopAlertToastStream()
   layoutResizeObserver?.disconnect()
 })
 
 watch(selectedEquipment, (equipment) => {
   syncSelectedMetricWithEquipment(equipment)
-
-  const nextSuggestionSignature = createEquipmentSuggestionSignature(equipment)
-
-  if (nextSuggestionSignature !== assistantSuggestionSignature) {
-    assistantSuggestionSignature = nextSuggestionSignature
-    loadAssistantSuggestions(equipment)
-  }
 })
 
 watch(selectedEquipmentId, (equipmentId) => {
-  loadSelectedEquipmentTelemetry(equipmentId)
+  if (!isDashboardInitializing) {
+    loadSelectedEquipmentSnapshot(equipmentId)
+  }
 })
+
+watch(
+  equipmentFocusRequest,
+  () => {
+    const request = consumeEquipmentFocusRequest()
+
+    if (request) {
+      applyRequestedEquipmentFocus(request)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -1533,7 +1662,9 @@ watch(selectedEquipmentId, (equipmentId) => {
       :response-error="incidentErrorMessage"
       :response-error-notification-id="incidentErrorNotificationId"
       :toast="alertToast"
+      @pause="pauseAlertToast"
       @respond="startIncidentResponse"
+      @resume="resumeAlertToast"
     />
 
     <section class="dashboard-content" :aria-label="t('dashboard.editArea')">
@@ -1558,7 +1689,9 @@ watch(selectedEquipmentId, (equipmentId) => {
             @update:layout="updateWidgetLayout('factory', $event)"
           >
             <FactoryViewport
+              :alert-focus-request="alertFocusRequest"
               :checklist-items="selectedChecklistItems"
+              :is-equipment-switching="isEquipmentSwitching"
               :lines="factoryScene.lineGroups"
               :selected-equipment-id="selectedEquipmentId"
               @select-equipment="selectFactoryEquipment"
@@ -1594,7 +1727,15 @@ watch(selectedEquipmentId, (equipmentId) => {
             @stash="stashWidget('metricChart')"
             @update:layout="updateWidgetLayout('metricChart', $event)"
           >
-            <EquipmentChartPanel :chart="selectedChart" />
+            <EquipmentChartPanel
+              :chart="selectedChart"
+              :metrics="selectedEquipment.metrics"
+              :range="metricChartRange"
+              :selected-metric-id="selectedMetricId"
+              @request-range="applyMetricChartRange"
+              @return-live="returnMetricChartToLive"
+              @update:selected-metric-id="selectMetric"
+            />
           </DashboardEditableWidget>
 
           <DashboardEditableWidget
@@ -1614,6 +1755,7 @@ watch(selectedEquipmentId, (equipmentId) => {
               :is-loading="isAssistantLoading"
               :is-quick-command-loading="isQuickCommandsLoading"
               :messages="assistantMessages"
+              :open-conversation-request="assistantOpenConversationRequest"
               :quick-commands="quickCommands"
               @delete-history="deleteAssistantHistory"
               @select-history="selectAssistantHistory"
@@ -1632,7 +1774,10 @@ watch(selectedEquipmentId, (equipmentId) => {
             @stash="stashWidget('equipmentAnalysis')"
             @update:layout="updateWidgetLayout('equipmentAnalysis', $event)"
           >
-            <EquipmentAnalysisPanel :equipment-id="selectedEquipmentId" />
+            <EquipmentAnalysisPanel
+              :equipment-id="selectedEquipmentId"
+              :start-at="selectedEquipment.inspectionStartedAt"
+            />
           </DashboardEditableWidget>
 
           <DashboardEditableWidget
@@ -1646,7 +1791,28 @@ watch(selectedEquipmentId, (equipmentId) => {
             @stash="stashWidget('errorDonut')"
             @update:layout="updateWidgetLayout('errorDonut', $event)"
           >
-            <ErrorDonutPanel :equipment-id="selectedEquipmentId" />
+            <ErrorDonutPanel
+              :equipment-id="selectedEquipmentId"
+              :refresh-key="realtimeRevision"
+              :start-at="selectedEquipment.inspectionStartedAt"
+            />
+          </DashboardEditableWidget>
+
+          <DashboardEditableWidget
+            v-if="visibleWidgetMap.repairHistory"
+            id="repairHistory"
+            :layout="getWidgetLayout('repairHistory')"
+            :min-width="widgetMeta.repairHistory.minWidth"
+            :min-height="widgetMeta.repairHistory.minHeight"
+            :resolve-layout="resolveLayoutChange"
+            @preview:layout="setPreviewLayouts"
+            @stash="stashWidget('repairHistory')"
+            @update:layout="updateWidgetLayout('repairHistory', $event)"
+          >
+            <RepairHistoryPanel
+              :equipment-id="selectedEquipmentId"
+              :refresh-key="realtimeRevision"
+            />
           </DashboardEditableWidget>
         </div>
       </div>
