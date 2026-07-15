@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import closeIcon from '@/assets/icons/dashboard/close.svg'
+import planDocumentIcon from '@/assets/icons/dashboard/nav-note.svg'
 import pencilIcon from '@/assets/icons/dashboard/action-pencil.png'
 import trashIcon from '@/assets/icons/dashboard/action-trash.svg'
 import { workLogStatusMap } from '@/constants/workLogStatus'
@@ -23,6 +24,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  isIncidentPlanLoading: {
+    type: Boolean,
+    default: false,
+  },
   isLoading: {
     type: Boolean,
     default: false,
@@ -41,17 +46,19 @@ const isDeleteConfirmOpen = ref(false)
 const isLogModalOpen = ref(false)
 const logModalMode = ref('create')
 const selectedDeleteLog = ref(null)
-const activeIncidentPlan = ref(null)
+const selectedPlanLog = ref(null)
 const createLogForm = reactive({
   date: '',
   endedDate: '',
   endedTime: '',
   id: null,
   operator: authStore.currentUser.name,
+  originalStatus: '',
   sourceNotificationId: null,
   status: 'waiting',
-  task: '',
   time: '',
+  workPlan: '',
+  workRecord: '',
   workType: '기타',
 })
 
@@ -68,9 +75,12 @@ const workLogColumns = computed(() => [
   },
   { key: 'workType', label: t('workLog.columns.workType') },
   {
-    key: 'task',
-    label: t('workLog.columns.task'),
-    cellClass: 'dashboard-table-panel__cell--strong',
+    key: 'workPlan',
+    label: t('workLog.columns.plan'),
+  },
+  {
+    key: 'workRecord',
+    label: t('workLog.columns.record'),
   },
   {
     key: 'status',
@@ -89,7 +99,10 @@ const workLogColumns = computed(() => [
 const tableGroups = computed(() =>
   props.groups.map((group) => ({
     ...group,
-    rows: group.logs,
+    rows: group.logs.map((log) => ({
+      ...log,
+      workPlanPreview: log.workPlan || log.task || '',
+    })),
   })),
 )
 
@@ -124,6 +137,9 @@ function getWorkTypeLabel(value) {
 
 const operatorName = computed(() => authStore.currentUserName || t('workLog.defaultOperator'))
 const isEditMode = computed(() => logModalMode.value === 'edit')
+const isExistingCompletedLog = computed(
+  () => isEditMode.value && createLogForm.originalStatus === 'complete',
+)
 const logModalTitle = computed(() =>
   isEditMode.value ? t('workLog.editTitle') : t('workLog.createTitle'),
 )
@@ -172,16 +188,17 @@ function splitDateTime(value) {
 }
 
 function openCreateModal() {
-  activeIncidentPlan.value = null
   createLogForm.date = getToday()
   createLogForm.endedDate = ''
   createLogForm.endedTime = ''
   createLogForm.id = null
   createLogForm.operator = operatorName.value
+  createLogForm.originalStatus = ''
   createLogForm.sourceNotificationId = null
   createLogForm.status = 'waiting'
-  createLogForm.task = ''
   createLogForm.time = getCurrentTime()
+  createLogForm.workPlan = ''
+  createLogForm.workRecord = ''
   createLogForm.workType = '기타'
   logModalMode.value = 'create'
   isLogModalOpen.value = true
@@ -192,16 +209,17 @@ function openIncidentDraft(plan) {
   const startedAt = splitDateTime(draft.startedAt)
   const endedAt = splitDateTime(draft.endedAt)
 
-  activeIncidentPlan.value = plan
   createLogForm.date = startedAt.date || getToday()
   createLogForm.endedDate = endedAt.date
   createLogForm.endedTime = endedAt.time
   createLogForm.id = null
   createLogForm.operator = operatorName.value
+  createLogForm.originalStatus = ''
   createLogForm.sourceNotificationId = draft.sourceNotificationId ?? plan.notificationId
   createLogForm.status = draft.status || 'waiting'
-  createLogForm.task = draft.content || plan.summary
   createLogForm.time = startedAt.time || getCurrentTime()
+  createLogForm.workPlan = draft.plan || plan.summary
+  createLogForm.workRecord = ''
   createLogForm.workType = draft.workType || '긴급수리'
   logModalMode.value = 'create'
   isLogModalOpen.value = true
@@ -209,16 +227,17 @@ function openIncidentDraft(plan) {
 }
 
 function openEditModal(log) {
-  activeIncidentPlan.value = null
   createLogForm.date = log.date
   createLogForm.endedDate = log.endedDate || ''
   createLogForm.endedTime = log.endedTime || ''
   createLogForm.id = log.id
   createLogForm.operator = log.operator || operatorName.value
+  createLogForm.originalStatus = log.status
   createLogForm.sourceNotificationId = log.sourceNotificationId ?? null
   createLogForm.status = log.status
-  createLogForm.task = log.task
   createLogForm.time = log.time
+  createLogForm.workPlan = log.workPlan || log.task
+  createLogForm.workRecord = log.workRecord || ''
   createLogForm.workType = log.workType || '기타'
   logModalMode.value = 'edit'
   isLogModalOpen.value = true
@@ -226,7 +245,18 @@ function openEditModal(log) {
 
 function closeLogModal() {
   isLogModalOpen.value = false
-  activeIncidentPlan.value = null
+}
+
+function openPlanPreview(log) {
+  if (!log.workPlanPreview) {
+    return
+  }
+
+  selectedPlanLog.value = log
+}
+
+function closePlanPreview() {
+  selectedPlanLog.value = null
 }
 
 function submitLogForm() {
@@ -244,10 +274,16 @@ function submitLogForm() {
       endedTime: createLogForm.endedTime,
       id: createLogForm.id ?? `log-${getToday().replaceAll('-', '')}-${Date.now()}`,
       operator: createLogForm.operator,
+      originalStatus: createLogForm.originalStatus,
       sourceNotificationId: createLogForm.sourceNotificationId,
       status: createLogForm.status,
-      task: createLogForm.task.trim() || t('workLog.defaultTask'),
+      task:
+        createLogForm.workRecord.trim() ||
+        createLogForm.workPlan.trim() ||
+        t('workLog.defaultTask'),
       time: createLogForm.time,
+      workPlan: createLogForm.workPlan.trim() || t('workLog.defaultTask'),
+      workRecord: createLogForm.workRecord.trim(),
       workType: createLogForm.workType,
     },
     {
@@ -289,6 +325,16 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => props.isIncidentPlanLoading,
+  (isLoading) => {
+    if (isLoading && !isLogModalOpen.value) {
+      openCreateModal()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -302,7 +348,7 @@ watch(
       :action-icon="pencilIcon"
       :columns="workLogColumns"
       :groups="tableGroups"
-      grid-template-columns="minmax(82px, 104px) minmax(92px, 118px) minmax(84px, 108px) minmax(220px, 1fr) minmax(78px, 90px) minmax(70px, 84px)"
+      grid-template-columns="minmax(82px, 100px) minmax(88px, 110px) minmax(80px, 100px) minmax(150px, 0.8fr) minmax(210px, 1.2fr) minmax(74px, 86px) minmax(68px, 82px)"
       @action="openCreateModal"
     >
       <template #title-actions>
@@ -323,12 +369,38 @@ watch(
         </span>
       </template>
 
-      <template #cell-task="{ row }">
-        <div class="work-log-panel__task-cell">
-          <strong>{{ row.task }}</strong>
-          <span v-if="row.equipmentId || row.alarmCode">
-            {{ [row.equipmentId, row.alarmCode].filter(Boolean).join(' · ') }}
+      <template #cell-workPlan="{ row }">
+        <button
+          v-if="row.workPlanPreview"
+          class="work-log-panel__plan-trigger"
+          type="button"
+          @click="openPlanPreview(row)"
+        >
+          <span class="work-log-panel__plan-document-icon" aria-hidden="true">
+            <img :src="planDocumentIcon" alt="" width="18" height="18" />
           </span>
+          <span class="work-log-panel__plan-copy">
+            <strong>{{ t('workLog.planView') }}</strong>
+            <small>
+              <span class="work-log-panel__plan-status-dot" aria-hidden="true"></span>
+              {{ t('workLog.planPrepared') }}
+            </small>
+          </span>
+        </button>
+        <span v-else class="work-log-panel__plan-empty">{{ t('workLog.planEmpty') }}</span>
+      </template>
+
+      <template #cell-workRecord="{ row }">
+        <div
+          class="work-log-panel__record-cell"
+          :class="{ 'work-log-panel__record-cell--empty': !row.workRecord }"
+        >
+          <p>{{ row.workRecord || t('workLog.recordPending') }}</p>
+          <div v-if="row.equipmentId || row.alarmCode" class="work-log-panel__record-meta">
+            <span v-if="row.equipmentId">{{ row.equipmentId }}</span>
+            <i v-if="row.equipmentId && row.alarmCode" aria-hidden="true"></i>
+            <span v-if="row.alarmCode">{{ row.alarmCode }}</span>
+          </div>
         </div>
       </template>
 
@@ -382,58 +454,23 @@ watch(
       >
         <form
           class="work-log-panel__modal"
-          :class="{ 'work-log-panel__modal--incident': activeIncidentPlan }"
+          :class="{ 'work-log-panel__modal--loading': isIncidentPlanLoading }"
           @submit.prevent="submitLogForm"
         >
           <header class="work-log-panel__modal-header">
             <div>
-              <h2 id="work-log-create-title">
-                {{ activeIncidentPlan ? t('workLog.incidentTitle') : logModalTitle }}
-              </h2>
+              <h2 id="work-log-create-title">{{ logModalTitle }}</h2>
             </div>
             <button
               class="work-log-panel__modal-close"
               type="button"
               :aria-label="t('workLog.modalClose')"
-              :disabled="isSubmitting"
+              :disabled="isSubmitting || isIncidentPlanLoading"
               @click="closeLogModal"
             >
               <img :src="closeIcon" alt="" width="20" height="20" />
             </button>
           </header>
-
-          <section v-if="activeIncidentPlan" class="work-log-panel__incident-plan">
-            <header>
-              <div>
-                <strong>{{ activeIncidentPlan.equipmentId }}</strong>
-                <span>{{ activeIncidentPlan.alarmCode }}</span>
-              </div>
-              <time>{{ activeIncidentPlan.occurredAt?.replace('T', ' ').slice(0, 16) }}</time>
-            </header>
-            <p>{{ activeIncidentPlan.summary }}</p>
-            <div v-if="activeIncidentPlan.deviations.length" class="work-log-panel__deviations">
-              <div v-for="deviation in activeIncidentPlan.deviations" :key="deviation.metric">
-                <span>{{ deviation.label }}</span>
-                <strong>{{ deviation.incident }} {{ deviation.unit }}</strong>
-                <small v-if="deviation.delta !== null">
-                  {{
-                    t('workLog.variance', {
-                      value: `${deviation.delta > 0 ? '+' : ''}${deviation.delta}`,
-                    })
-                  }}
-                </small>
-              </div>
-            </div>
-            <div v-if="activeIncidentPlan.citations.length" class="work-log-panel__citations">
-              <span>{{ t('workLog.citations') }}</span>
-              <strong v-for="citation in activeIncidentPlan.citations" :key="citation.docId">
-                {{ citation.docId }}
-              </strong>
-            </div>
-            <p v-if="activeIncidentPlan.warnings.length" class="work-log-panel__incident-warning">
-              {{ activeIncidentPlan.warnings.join(' · ') }}
-            </p>
-          </section>
 
           <div class="work-log-panel__modal-toolbar">
             <label class="work-log-panel__field work-log-panel__field--type">
@@ -461,7 +498,9 @@ watch(
                   }"
                   type="button"
                   :data-test="`work-log-form-status-${option.value}`"
-                  :disabled="isSubmitting"
+                  :disabled="
+                    isSubmitting || (isExistingCompletedLog && option.value !== 'complete')
+                  "
                   @click="createLogForm.status = option.value"
                 >
                   {{ option.label }}
@@ -516,15 +555,36 @@ watch(
               </section>
             </aside>
 
-            <label class="work-log-panel__field work-log-panel__field--content">
-              <span>{{ t('workLog.fields.content') }}</span>
-              <textarea
-                v-model="createLogForm.task"
-                data-test="work-log-form-task"
-                :placeholder="t('workLog.placeholder')"
-                :disabled="isSubmitting"
-              ></textarea>
-            </label>
+            <div class="work-log-panel__content-workspace">
+              <label class="work-log-panel__field work-log-panel__field--content">
+                <span>{{ t('workLog.fields.plan') }}</span>
+                <textarea
+                  v-model="createLogForm.workPlan"
+                  data-test="work-log-form-plan"
+                  :placeholder="t('workLog.planPlaceholder')"
+                  :disabled="isSubmitting"
+                  required
+                ></textarea>
+              </label>
+
+              <label class="work-log-panel__field work-log-panel__field--content">
+                <span>
+                  {{ t('workLog.fields.record') }}
+                  <small v-if="createLogForm.status !== 'complete'">
+                    {{ t('workLog.recordStatusHint') }}
+                  </small>
+                </span>
+                <textarea
+                  v-model="createLogForm.workRecord"
+                  data-test="work-log-form-record"
+                  :placeholder="t('workLog.recordPlaceholder')"
+                  :disabled="
+                    isSubmitting || createLogForm.status !== 'complete' || isExistingCompletedLog
+                  "
+                  :required="createLogForm.status === 'complete' && !isExistingCompletedLog"
+                ></textarea>
+              </label>
+            </div>
           </div>
 
           <p
@@ -539,7 +599,7 @@ watch(
             <button
               class="work-log-panel__cancel"
               type="button"
-              :disabled="isSubmitting"
+              :disabled="isSubmitting || isIncidentPlanLoading"
               @click="closeLogModal"
             >
               {{ t('common.cancel') }}
@@ -548,12 +608,71 @@ watch(
               class="work-log-panel__submit"
               type="submit"
               data-test="work-log-form-submit"
-              :disabled="isSubmitting"
+              :disabled="isSubmitting || isIncidentPlanLoading"
             >
               {{ logSubmitLabel }}
             </button>
           </footer>
+
+          <Transition name="incident-plan-loading">
+            <div
+              v-if="isIncidentPlanLoading"
+              class="work-log-panel__incident-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <div class="work-log-panel__incident-workflow" aria-hidden="true">
+                <span class="work-log-panel__incident-sheet">
+                  <i class="work-log-panel__incident-sheet-title"></i>
+                  <span v-for="step in 3" :key="step" class="work-log-panel__incident-sheet-row">
+                    <i></i>
+                    <b></b>
+                  </span>
+                  <img :src="pencilIcon" alt="" width="24" height="24" />
+                </span>
+                <span class="work-log-panel__incident-progress"><i></i></span>
+              </div>
+              <strong>{{ t('workLog.incidentPlanLoading') }}</strong>
+              <small>{{ t('workLog.incidentPlanLoadingDescription') }}</small>
+            </div>
+          </Transition>
         </form>
+      </div>
+    </Transition>
+
+    <Transition name="work-log-modal">
+      <div
+        v-if="selectedPlanLog"
+        class="work-log-panel__overlay"
+        data-test="work-log-plan-preview"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="work-log-plan-preview-title"
+        @click.self="closePlanPreview"
+      >
+        <section class="work-log-panel__plan-preview">
+          <header class="work-log-panel__modal-header">
+            <div>
+              <h2 id="work-log-plan-preview-title">{{ t('workLog.planPreviewTitle') }}</h2>
+              <p>
+                {{ selectedPlanLog.date }} {{ selectedPlanLog.time }} ·
+                {{ selectedPlanLog.operator }}
+              </p>
+            </div>
+            <button
+              class="work-log-panel__modal-close"
+              type="button"
+              :aria-label="t('workLog.planPreviewClose')"
+              @click="closePlanPreview"
+            >
+              <img :src="closeIcon" alt="" width="20" height="20" />
+            </button>
+          </header>
+
+          <p class="work-log-panel__plan-preview-content">
+            {{ selectedPlanLog.workPlanPreview }}
+          </p>
+        </section>
       </div>
     </Transition>
 
@@ -585,7 +704,13 @@ watch(
 
           <div class="work-log-panel__delete-summary">
             <span>{{ selectedDeleteLog?.date }} {{ selectedDeleteLog?.time }}</span>
-            <strong>{{ selectedDeleteLog?.task }}</strong>
+            <strong>
+              {{
+                selectedDeleteLog?.workRecord ||
+                selectedDeleteLog?.workPlan ||
+                selectedDeleteLog?.task
+              }}
+            </strong>
           </div>
 
           <div class="work-log-panel__confirm-actions">
@@ -641,25 +766,171 @@ watch(
   color: var(--agentory-color-status-danger-text);
 }
 
-.work-log-panel__task-cell {
+.work-log-panel__record-cell {
+  position: relative;
   display: flex;
   min-width: 0;
+  padding-left: var(--agentory-spacing-12);
+  flex-direction: column;
+  gap: var(--agentory-spacing-4);
+}
+
+.work-log-panel__record-cell::before {
+  position: absolute;
+  top: var(--agentory-spacing-2);
+  bottom: var(--agentory-spacing-2);
+  left: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--agentory-color-text-muted), transparent 72%);
+  border-radius: var(--agentory-radius-pill);
+  content: '';
+}
+
+.work-log-panel__record-cell p {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--agentory-color-text-primary);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.work-log-panel__record-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--agentory-spacing-6);
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-caption);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-caption);
+}
+
+.work-log-panel__record-meta i {
+  width: 3px;
+  height: 3px;
+  background: currentcolor;
+  border-radius: var(--agentory-radius-pill);
+  opacity: 0.7;
+}
+
+.work-log-panel__record-cell--empty {
+  color: var(--agentory-color-text-muted);
+}
+
+.work-log-panel__record-cell--empty::before {
+  opacity: 0.5;
+}
+
+.work-log-panel__record-cell--empty p {
+  color: var(--agentory-color-text-muted);
+}
+
+.work-log-panel__plan-trigger {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 176px;
+  padding: var(--agentory-spacing-4) var(--agentory-spacing-6);
+  align-items: center;
+  gap: var(--agentory-spacing-8);
+  color: var(--agentory-color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-8);
+  font-family: var(--agentory-font-family-base);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms var(--agentory-ease-soft);
+}
+
+.work-log-panel__plan-document-icon {
+  display: grid;
+  width: var(--agentory-spacing-30);
+  height: var(--agentory-spacing-30);
+  place-items: center;
+  flex: 0 0 var(--agentory-spacing-30);
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 58%);
+  border-radius: var(--agentory-radius-8);
+  transition:
+    background-color 160ms var(--agentory-ease-soft),
+    transform 160ms var(--agentory-ease-soft);
+}
+
+.work-log-panel__plan-document-icon img {
+  width: 18px;
+  height: 18px;
+  filter: var(--agentory-filter-header-action);
+  object-fit: contain;
+  opacity: 0.62;
+  transition: opacity 160ms var(--agentory-ease-soft);
+}
+
+.work-log-panel__plan-copy {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
   flex-direction: column;
   gap: var(--agentory-spacing-2);
 }
 
-.work-log-panel__task-cell strong {
-  overflow: hidden;
-  font-size: var(--agentory-font-size-body);
+.work-log-panel__plan-trigger strong {
+  font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-semi-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: var(--agentory-line-height-body-sm);
+  transition: color 160ms var(--agentory-ease-soft);
 }
 
-.work-log-panel__task-cell span {
+.work-log-panel__plan-trigger small,
+.work-log-panel__plan-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--agentory-spacing-5);
   color: var(--agentory-color-text-muted);
   font-size: var(--agentory-font-size-caption);
   font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-caption);
+}
+
+.work-log-panel__plan-status-dot {
+  width: var(--agentory-spacing-5);
+  height: var(--agentory-spacing-5);
+  background: color-mix(
+    in srgb,
+    var(--agentory-color-status-normal-text),
+    var(--agentory-color-text-muted) 44%
+  );
+  border-radius: var(--agentory-radius-pill);
+}
+
+.work-log-panel__plan-trigger:hover,
+.work-log-panel__plan-trigger:focus-visible {
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 74%);
+}
+
+.work-log-panel__plan-trigger:hover strong,
+.work-log-panel__plan-trigger:focus-visible strong {
+  color: var(--agentory-color-bg-primary);
+}
+
+.work-log-panel__plan-trigger:hover .work-log-panel__plan-document-icon,
+.work-log-panel__plan-trigger:focus-visible .work-log-panel__plan-document-icon {
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%);
+  transform: translateY(-1px);
+}
+
+.work-log-panel__plan-trigger:hover .work-log-panel__plan-document-icon img,
+.work-log-panel__plan-trigger:focus-visible .work-log-panel__plan-document-icon img {
+  opacity: 0.92;
+}
+
+.work-log-panel__plan-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%);
+  outline-offset: 3px;
 }
 
 :global(.work-log-panel__actions-cell) {
@@ -747,8 +1018,10 @@ watch(
 }
 
 .work-log-panel__modal {
+  position: relative;
   display: flex;
-  width: min(100%, 1040px);
+  width: min(100%, 1320px);
+  height: min(94%, 820px);
   max-height: calc(100% - var(--agentory-spacing-8));
   padding: var(--agentory-spacing-30);
   flex-direction: column;
@@ -760,6 +1033,10 @@ watch(
   box-shadow: var(--agentory-shadow-panel-soft);
   scrollbar-color: color-mix(in srgb, var(--agentory-color-text-muted), transparent 34%) transparent;
   scrollbar-width: thin;
+}
+
+.work-log-panel__modal--loading {
+  overflow: hidden;
 }
 
 .work-log-panel__modal::-webkit-scrollbar {
@@ -790,8 +1067,219 @@ watch(
   height: 0;
 }
 
-.work-log-panel__modal--incident {
-  width: min(100%, 1120px);
+.work-log-panel__incident-loading {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--agentory-spacing-30);
+  flex-direction: column;
+  gap: var(--agentory-spacing-10);
+  color: var(--agentory-color-text-primary);
+  background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 16%);
+  text-align: center;
+  backdrop-filter: var(--agentory-blur-glass-strong);
+  -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
+}
+
+.work-log-panel__incident-loading strong {
+  margin-top: var(--agentory-spacing-6);
+  font-size: var(--agentory-font-size-body-lg);
+  font-weight: var(--agentory-font-weight-semi-bold);
+}
+
+.work-log-panel__incident-loading small {
+  max-width: 360px;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  line-height: var(--agentory-line-height-body-sm);
+}
+
+.work-log-panel__incident-workflow {
+  display: flex;
+  width: 184px;
+  align-items: center;
+  flex-direction: column;
+  gap: var(--agentory-spacing-12);
+}
+
+.work-log-panel__incident-sheet {
+  position: relative;
+  display: flex;
+  width: 152px;
+  min-height: 116px;
+  padding: var(--agentory-spacing-20) var(--agentory-spacing-16);
+  flex-direction: column;
+  gap: var(--agentory-spacing-12);
+  background: var(--agentory-color-bg-app);
+  border: 1px solid var(--agentory-color-table-divider);
+  border-radius: var(--agentory-radius-12);
+  box-shadow: var(--agentory-shadow-panel-soft);
+}
+
+.work-log-panel__incident-sheet-title {
+  width: 58%;
+  height: 7px;
+  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 34%);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.work-log-panel__incident-sheet-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--agentory-spacing-8);
+}
+
+.work-log-panel__incident-sheet-row > i {
+  width: 12px;
+  height: 12px;
+  background: var(--agentory-color-bg-surface);
+  border-radius: var(--agentory-radius-pill);
+  animation: incident-plan-step 2.4s var(--agentory-ease-soft) infinite;
+}
+
+.work-log-panel__incident-sheet-row > b {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  background: var(--agentory-color-bg-surface);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.work-log-panel__incident-sheet-row > b::after {
+  position: absolute;
+  inset: 0;
+  background: var(--agentory-color-bg-primary);
+  border-radius: inherit;
+  content: '';
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: incident-plan-write 2.4s var(--agentory-ease-soft) infinite;
+}
+
+.work-log-panel__incident-sheet-row:nth-of-type(2) > i,
+.work-log-panel__incident-sheet-row:nth-of-type(2) > b::after {
+  animation-delay: 400ms;
+}
+
+.work-log-panel__incident-sheet-row:nth-of-type(3) > i,
+.work-log-panel__incident-sheet-row:nth-of-type(3) > b::after {
+  animation-delay: 800ms;
+}
+
+.work-log-panel__incident-sheet > img {
+  position: absolute;
+  right: -9px;
+  top: 40px;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  animation: incident-plan-pencil 2.4s var(--agentory-ease-soft) infinite;
+}
+
+.work-log-panel__incident-progress {
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--agentory-color-bg-muted), transparent 58%);
+  border-radius: var(--agentory-radius-pill);
+}
+
+.work-log-panel__incident-progress > i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--agentory-color-bg-primary);
+  border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: incident-plan-progress 2.4s var(--agentory-ease-soft) infinite;
+}
+
+.incident-plan-loading-enter-active,
+.incident-plan-loading-leave-active {
+  transition: opacity 220ms var(--agentory-ease-soft);
+}
+
+.incident-plan-loading-enter-from,
+.incident-plan-loading-leave-to {
+  opacity: 0;
+}
+
+@keyframes incident-plan-write {
+  0%,
+  18% {
+    transform: scaleX(0);
+  }
+
+  42%,
+  86% {
+    transform: scaleX(1);
+  }
+
+  100% {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes incident-plan-step {
+  0%,
+  24% {
+    background: var(--agentory-color-bg-surface);
+    box-shadow: none;
+  }
+
+  40%,
+  86% {
+    background: var(--agentory-color-bg-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 82%);
+  }
+
+  100% {
+    background: var(--agentory-color-bg-surface);
+    box-shadow: none;
+  }
+}
+
+@keyframes incident-plan-pencil {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  72% {
+    opacity: 1;
+    transform: translate3d(-4px, 48px, 0);
+  }
+
+  88%,
+  100% {
+    opacity: 0;
+    transform: translate3d(-4px, 56px, 0);
+  }
+}
+
+@keyframes incident-plan-progress {
+  0% {
+    transform: scaleX(0);
+  }
+
+  82% {
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
 }
 
 .work-log-panel__confirm {
@@ -804,6 +1292,45 @@ watch(
   border: 1px solid color-mix(in srgb, var(--agentory-color-bg-muted), transparent 42%);
   border-radius: var(--agentory-radius-16);
   box-shadow: var(--agentory-shadow-panel-soft);
+}
+
+.work-log-panel__plan-preview {
+  display: flex;
+  width: min(100%, 960px);
+  height: min(100%, 680px);
+  padding: var(--agentory-spacing-24);
+  flex-direction: column;
+  gap: var(--agentory-spacing-20);
+  overflow: hidden;
+  color: var(--agentory-color-text-primary);
+  background: var(--agentory-color-bg-app);
+  border-radius: var(--agentory-radius-16);
+  box-shadow: var(--agentory-shadow-panel-soft);
+}
+
+.work-log-panel__plan-preview .work-log-panel__modal-header p {
+  margin: var(--agentory-spacing-4) 0 0;
+  color: var(--agentory-color-text-muted);
+  font-size: var(--agentory-font-size-body-sm);
+  line-height: var(--agentory-line-height-body-sm);
+}
+
+.work-log-panel__plan-preview .work-log-panel__modal-header {
+  flex: 0 0 auto;
+}
+
+.work-log-panel__plan-preview-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: var(--agentory-spacing-18) var(--agentory-spacing-20);
+  overflow-y: auto;
+  background: var(--agentory-color-bg-surface);
+  border-radius: var(--agentory-radius-8);
+  font-size: var(--agentory-font-size-body);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .work-log-modal-enter-from,
@@ -824,114 +1351,6 @@ watch(
   font-size: var(--agentory-font-size-h2);
   font-weight: var(--agentory-font-weight-semi-bold);
   line-height: var(--agentory-line-height-h2);
-}
-
-.work-log-panel__incident-plan {
-  display: flex;
-  padding: var(--agentory-spacing-16);
-  flex-direction: column;
-  gap: var(--agentory-spacing-10);
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 94%);
-  border-radius: var(--agentory-radius-8);
-}
-
-.work-log-panel__incident-plan header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--agentory-spacing-12);
-}
-
-.work-log-panel__incident-plan header > div {
-  display: flex;
-  align-items: center;
-  gap: var(--agentory-spacing-8);
-}
-
-.work-log-panel__incident-plan header strong {
-  color: var(--agentory-color-text-primary);
-  font-size: var(--agentory-font-size-body-lg);
-  font-weight: var(--agentory-font-weight-semi-bold);
-}
-
-.work-log-panel__incident-plan header span {
-  color: var(--agentory-color-status-danger-text);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-bold);
-}
-
-.work-log-panel__incident-plan time,
-.work-log-panel__incident-plan p,
-.work-log-panel__deviations small {
-  color: var(--agentory-color-text-muted);
-  font-size: var(--agentory-font-size-body-sm);
-  line-height: var(--agentory-line-height-body-sm);
-}
-
-.work-log-panel__incident-plan p {
-  margin: 0;
-}
-
-.work-log-panel__deviations {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--agentory-spacing-8);
-}
-
-.work-log-panel__deviations > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--agentory-spacing-4) var(--agentory-spacing-8);
-  padding: var(--agentory-spacing-8) var(--agentory-spacing-10);
-  background: var(--agentory-color-bg-app);
-  border-radius: var(--agentory-radius-8);
-}
-
-.work-log-panel__deviations span,
-.work-log-panel__deviations strong {
-  font-size: var(--agentory-font-size-body-sm);
-}
-
-.work-log-panel__deviations span {
-  color: var(--agentory-color-text-muted);
-}
-
-.work-log-panel__deviations strong {
-  color: var(--agentory-color-text-primary);
-  font-weight: var(--agentory-font-weight-semi-bold);
-}
-
-.work-log-panel__deviations small {
-  grid-column: 1 / -1;
-}
-
-.work-log-panel__incident-warning {
-  color: var(--agentory-color-status-warning) !important;
-}
-
-.work-log-panel__citations {
-  display: flex;
-  align-items: center;
-  gap: var(--agentory-spacing-6);
-  flex-wrap: wrap;
-}
-
-.work-log-panel__citations span,
-.work-log-panel__citations strong {
-  font-size: var(--agentory-font-size-caption);
-}
-
-.work-log-panel__citations span {
-  color: var(--agentory-color-text-muted);
-}
-
-.work-log-panel__citations strong {
-  padding: var(--agentory-spacing-2) var(--agentory-spacing-6);
-  color: var(--agentory-color-bg-primary);
-  background: var(--agentory-color-bg-app);
-  border-radius: var(--agentory-radius-pill);
-  font-weight: var(--agentory-font-weight-semi-bold);
 }
 
 .work-log-panel__modal-close {
@@ -980,9 +1399,18 @@ watch(
 
 .work-log-panel__editor-layout {
   display: grid;
-  min-height: 330px;
-  grid-template-columns: minmax(250px, 280px) minmax(0, 1fr);
+  min-height: 370px;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(240px, 270px) minmax(0, 1fr);
   gap: var(--agentory-spacing-24);
+}
+
+.work-log-panel__content-workspace {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--agentory-spacing-20);
 }
 
 .work-log-panel__schedule-panel {
@@ -1049,7 +1477,7 @@ watch(
 }
 
 .work-log-panel__field textarea {
-  min-height: 300px;
+  min-height: 340px;
   height: 100%;
   padding: var(--agentory-spacing-14) var(--agentory-spacing-16);
   line-height: var(--agentory-line-height-body);
@@ -1059,6 +1487,12 @@ watch(
 .work-log-panel__field--content {
   min-width: 0;
   min-height: 0;
+}
+
+.work-log-panel__field--content > span {
+  display: flex;
+  align-items: baseline;
+  gap: var(--agentory-spacing-4);
 }
 
 .work-log-panel__field input:focus,
@@ -1245,6 +1679,16 @@ watch(
   }
 }
 
+@media (max-width: 980px) {
+  .work-log-panel__content-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .work-log-panel__field textarea {
+    min-height: 180px;
+  }
+}
+
 @media (max-width: 820px) {
   .work-log-panel__modal-toolbar {
     align-items: stretch;
@@ -1264,6 +1708,20 @@ watch(
     padding-bottom: var(--agentory-spacing-20);
     border-right: 0;
     border-bottom: 1px solid var(--agentory-color-table-divider);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-log-panel__incident-sheet-row > i,
+  .work-log-panel__incident-sheet-row > b::after,
+  .work-log-panel__incident-sheet > img,
+  .work-log-panel__incident-progress > i {
+    animation: none;
+  }
+
+  .incident-plan-loading-enter-active,
+  .incident-plan-loading-leave-active {
+    transition: none;
   }
 }
 </style>
