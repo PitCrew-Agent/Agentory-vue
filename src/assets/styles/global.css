@@ -6,25 +6,91 @@ body {
   font-weight: var(--agentory-font-weight-body);
   line-height: var(--line-height-body);
   text-rendering: optimizeLegibility;
-  transition:
-    background-color 180ms var(--agentory-ease-soft),
-    color 180ms var(--agentory-ease-soft);
+  transition: color 180ms var(--agentory-ease-soft);
 }
 
 #app {
   min-height: 100vh;
 }
 
+* {
+  scrollbar-color: var(--agentory-color-scrollbar-thumb) var(--agentory-color-scrollbar-track) !important;
+  scrollbar-width: thin !important;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: auto !important;
+    scrollbar-width: auto !important;
+  }
+}
+
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: var(--agentory-scrollbar-size) !important;
+  height: var(--agentory-scrollbar-size) !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: var(--agentory-color-scrollbar-track) !important;
+  margin: var(--agentory-scrollbar-track-inset) !important;
+}
+
+::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: var(--agentory-color-scrollbar-track) !important;
+}
+
+::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  min-width: var(--agentory-scrollbar-size);
+  min-height: 36px;
+  background: var(--agentory-color-scrollbar-thumb) !important;
+  background-clip: padding-box !important;
+  border: var(--agentory-scrollbar-thumb-inset) solid transparent !important;
+  border-radius: var(--agentory-radius-pill) !important;
+}
+
+::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--agentory-color-scrollbar-thumb-hover) !important;
+  background-clip: padding-box !important;
+}
+
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:single-button,
+::-webkit-scrollbar-button:start,
+::-webkit-scrollbar-button:end,
+::-webkit-scrollbar-button:increment,
+::-webkit-scrollbar-button:decrement,
+::-webkit-scrollbar-button:horizontal,
+::-webkit-scrollbar-button:vertical,
 *::-webkit-scrollbar-button,
 *::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:start,
+*::-webkit-scrollbar-button:end,
+*::-webkit-scrollbar-button:increment,
+*::-webkit-scrollbar-button:decrement,
+*::-webkit-scrollbar-button:horizontal,
+*::-webkit-scrollbar-button:vertical,
 *::-webkit-scrollbar-button:vertical:start:decrement,
 *::-webkit-scrollbar-button:vertical:end:increment,
 *::-webkit-scrollbar-button:horizontal:start:decrement,
 *::-webkit-scrollbar-button:horizontal:end:increment {
-  display: none;
-  width: 0;
-  height: 0;
-  background: transparent;
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
 
 .sr-only {
