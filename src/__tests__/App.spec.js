@@ -94,9 +94,7 @@ describe('App', () => {
       'Mark all as read',
     )
     await wrapper.find('[data-test="notification-log-panel-action"]').trigger('click')
-    expect(wrapper.find('#notification-bulk-confirm-title').text()).toBe(
-      'Mark all alerts as read?',
-    )
+    expect(wrapper.find('#notification-bulk-confirm-title').text()).toBe('Mark all alerts as read?')
 
     wrapper.unmount()
     i18n.global.locale.value = 'ko'

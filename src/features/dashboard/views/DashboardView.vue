@@ -38,6 +38,7 @@ import {
 } from '@/features/dashboard/services/telemetryApi'
 import {
   loadDashboardLayoutState,
+  resolveDashboardWidgetVisibility,
   saveDashboardLayoutState,
 } from '@/features/dashboard/utils/dashboardLayoutStorage'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
@@ -54,7 +55,7 @@ const {
   sessionId: assistantSessionId,
 } = storeToRefs(assistantStore)
 const {
-  alertToast,
+  alertToasts,
   pauseAlertToast,
   resumeAlertToast,
   startAlertToastStream,
@@ -101,6 +102,7 @@ let layoutResizeObserver
 let contentLoadingFrame = 0
 let realtimeSnapshotInterval = 0
 let realtimeSnapshotRequestId = 0
+const realtimeNotificationRequestIds = new Map()
 let equipmentSwitchRequestId = 0
 let assistantHistoryRequestId = 0
 let assistantSuggestionRequestId = 0
@@ -232,7 +234,7 @@ const widgetMeta = {
     minWidth: 220,
   },
 }
-const visibleWidgetMap = reactive({
+const defaultWidgetVisibility = {
   assistant: true,
   detail: true,
   equipmentAnalysis: false,
@@ -240,7 +242,11 @@ const visibleWidgetMap = reactive({
   factory: true,
   metricChart: true,
   repairHistory: false,
-})
+}
+const initialDashboardLayoutState = loadDashboardLayoutState()
+const visibleWidgetMap = reactive(
+  resolveDashboardWidgetVisibility(defaultWidgetVisibility, initialDashboardLayoutState),
+)
 const widgetLayouts = reactive({
   assistant: { x: 75, y: 0, w: 25, h: 100 },
   detail: { x: 50, y: 0, w: 25, h: 50 },
@@ -589,14 +595,12 @@ async function sendAssistantMessage(message, options = {}) {
   } finally {
     const shouldFinalizeRequest = assistantStore.completeRequest(assistantRequest.id)
 
-    if (!shouldFinalizeRequest) {
-      return
-    }
+    if (shouldFinalizeRequest) {
+      loadAssistantHistoryItems()
 
-    loadAssistantHistoryItems()
-
-    if (didCompleteAssistantResponse) {
-      loadAssistantSuggestions(selectedEquipment.value)
+      if (didCompleteAssistantResponse) {
+        loadAssistantSuggestions(selectedEquipment.value)
+      }
     }
   }
 }
@@ -625,6 +629,34 @@ function getNotificationMetricId(metric) {
   )
 }
 
+async function refreshRealtimeNotificationTelemetry(equipmentId) {
+  const requestId = (realtimeNotificationRequestIds.get(equipmentId) ?? 0) + 1
+  realtimeNotificationRequestIds.set(equipmentId, requestId)
+
+  const baseEquipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
+
+  if (!baseEquipment) {
+    return
+  }
+
+  try {
+    const updatedEquipment = await fetchEquipmentTelemetry(
+      equipmentId,
+      baseEquipment,
+      getMetricChartQuery(),
+    )
+
+    if (realtimeNotificationRequestIds.get(equipmentId) !== requestId) {
+      return
+    }
+
+    updateEquipmentTelemetry(updatedEquipment)
+    realtimeRevision.value += 1
+  } catch {
+    // The regular polling path retries transient telemetry refresh failures.
+  }
+}
+
 function applyRealtimeNotification(notification) {
   const equipmentId = notification?.equipmentId ?? notification?.equipmentCode
   const equipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
@@ -646,6 +678,7 @@ function applyRealtimeNotification(notification) {
 
   realtimeSnapshotRequestId += 1
   updateEquipmentTelemetry(updatedEquipment)
+  void refreshRealtimeNotificationTelemetry(equipmentId)
   alertFocusRequest.value = {
     equipmentId,
     key: `${notification.id ?? Date.now()}:${equipmentId}:${notification.metric ?? ''}`,
@@ -1074,7 +1107,7 @@ function normalizeStoredWidgetGrid(widgetId, grid, metrics) {
 }
 
 function restoreDashboardLayout() {
-  const state = loadDashboardLayoutState()
+  const state = initialDashboardLayoutState
   const metrics = getGridMetrics()
 
   if (!state || !metrics) {
@@ -1618,6 +1651,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelContentLoadingFrame()
   window.clearInterval(realtimeSnapshotInterval)
+  realtimeNotificationRequestIds.clear()
   stopAlertToastStream()
   layoutResizeObserver?.disconnect()
 })
@@ -1661,7 +1695,7 @@ watch(
       :is-responding="isIncidentCreating"
       :response-error="incidentErrorMessage"
       :response-error-notification-id="incidentErrorNotificationId"
-      :toast="alertToast"
+      :toasts="alertToasts"
       @pause="pauseAlertToast"
       @respond="startIncidentResponse"
       @resume="resumeAlertToast"

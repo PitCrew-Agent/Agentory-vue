@@ -29,7 +29,7 @@ const props = defineProps({
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { t } = useI18n()
 const {
-  alertToast,
+  alertToasts,
   pauseAlertToast,
   resumeAlertToast,
   startAlertToastStream,
@@ -136,7 +136,7 @@ watch(
       :is-responding="isIncidentCreating"
       :response-error="incidentErrorMessage"
       :response-error-notification-id="incidentErrorNotificationId"
-      :toast="alertToast"
+      :toasts="alertToasts"
       @pause="pauseAlertToast"
       @respond="startIncidentResponse"
       @resume="resumeAlertToast"

@@ -8,6 +8,7 @@ import listIcon from '@/assets/icons/dashboard/nav-list.svg'
 import { equipmentStatusMap } from '@/constants/equipmentStatus'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import FactoryViewport from '@/features/dashboard/components/FactoryViewport.vue'
+import { formatLineLabel } from '@/features/i18n/utils/formatLineLabel'
 
 const props = defineProps({
   groups: {
@@ -35,16 +36,10 @@ const selectedStructureEquipment = computed(() =>
 
 const selectedStructureChecklist = computed(() => selectedStructureEquipment.value?.checklist ?? [])
 
-function formatLineLabel(label) {
-  const source = String(label ?? '').trim()
-
-  return locale.value === 'en' ? source.replace(/라인/g, 'Line') : source
-}
-
 const displayedGroups = computed(() =>
   props.groups.map((group) => ({
     ...group,
-    date: formatLineLabel(group.date),
+    date: formatLineLabel(group.date, locale.value),
   })),
 )
 

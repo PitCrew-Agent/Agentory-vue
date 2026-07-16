@@ -224,7 +224,12 @@ onBeforeUnmount(() => {
             <strong>{{ t('header.unreadNotifications') }}</strong>
           </header>
 
-          <ul v-if="unreadNotifications.length" class="dashboard-header__notification-list">
+          <TransitionGroup
+            v-if="unreadNotifications.length"
+            name="dashboard-header-notification"
+            tag="ul"
+            class="dashboard-header__notification-list"
+          >
             <li
               v-for="notification in unreadNotifications"
               :key="notification.id"
@@ -274,7 +279,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </li>
-          </ul>
+          </TransitionGroup>
 
           <p v-else class="dashboard-header__notification-empty">
             {{ t('header.noUnreadNotifications') }}
@@ -571,6 +576,28 @@ onBeforeUnmount(() => {
   border-radius: var(--agentory-radius-8);
   box-shadow: inset 0 1px 0
     color-mix(in srgb, var(--agentory-color-border-inverse), transparent 72%);
+  transition:
+    opacity 220ms var(--agentory-ease-soft),
+    transform 360ms var(--agentory-ease-elastic),
+    background-color 180ms var(--agentory-ease-soft);
+}
+
+.dashboard-header-notification-enter-active,
+.dashboard-header-notification-leave-active,
+.dashboard-header-notification-move {
+  transition:
+    opacity 220ms var(--agentory-ease-soft),
+    transform 360ms var(--agentory-ease-elastic);
+}
+
+.dashboard-header-notification-enter-from {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.98);
+}
+
+.dashboard-header-notification-leave-to {
+  opacity: 0;
+  transform: translateX(16px) scale(0.98);
 }
 
 .dashboard-header__notification-item--warning {
@@ -902,6 +929,13 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dashboard-header-notification-enter-active,
+  .dashboard-header-notification-leave-active,
+  .dashboard-header-notification-move,
+  .dashboard-header__notification-item {
+    transition: none;
+  }
+
   .dashboard-header__notification-read--active img {
     animation: none;
   }

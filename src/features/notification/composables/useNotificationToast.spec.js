@@ -29,7 +29,8 @@ describe('useNotificationToast', () => {
 
   it('신규 알림을 토스트와 실시간 처리 콜백에 함께 전달한다', async () => {
     const onNotification = vi.fn()
-    const { alertToast, startAlertToastStream, stopAlertToastStream } = useNotificationToast()
+    const { alertToast, alertToasts, startAlertToastStream, stopAlertToastStream } =
+      useNotificationToast()
 
     await startAlertToastStream({ loadInitial: false, onNotification })
 
@@ -45,10 +46,34 @@ describe('useNotificationToast', () => {
     streamOptions.onNotification(notification)
 
     expect(alertToast.value).toMatchObject(notification)
+    expect(alertToasts.value).toHaveLength(1)
     expect(onNotification).toHaveBeenCalledOnce()
     expect(onNotification).toHaveBeenCalledWith(notification)
 
     stopAlertToastStream()
+  })
+
+  it('연속 알림은 앞 알림이 종료된 뒤 각자 전체 노출 시간을 보장한다', () => {
+    const { alertToast, alertToasts, showAlertToast } = useNotificationToast()
+
+    showAlertToast({ code: 'WRN-701', id: 10, message: '첫 알림' })
+    vi.advanceTimersByTime(1200)
+    showAlertToast({ code: 'ERR-301', id: 11, message: '두 번째 알림' })
+
+    expect(alertToasts.value).toHaveLength(2)
+    expect(alertToast.value.id).toBe(10)
+
+    vi.advanceTimersByTime(2999)
+    expect(alertToast.value.id).toBe(10)
+
+    vi.advanceTimersByTime(1)
+    expect(alertToast.value.id).toBe(11)
+
+    vi.advanceTimersByTime(4199)
+    expect(alertToast.value.id).toBe(11)
+
+    vi.advanceTimersByTime(1)
+    expect(alertToast.value).toBeNull()
   })
 
   it('호버 중에는 알림 토스트의 자동 종료 시간을 일시정지한다', () => {

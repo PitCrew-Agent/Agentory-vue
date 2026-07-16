@@ -137,9 +137,12 @@ function addNotification(rawNotification) {
 
 async function loadNotifications(options) {
   const shouldResetPagination = options?.reset ?? !options?.before
-  const nextBefore = shouldResetPagination ? '' : (options?.before ?? notificationPagination.currentCursor)
+  const nextBefore = shouldResetPagination
+    ? ''
+    : (options?.before ?? notificationPagination.currentCursor)
   const nextLimit = options?.limit ?? notificationPagination.limit
-  const nextUnreadOnly = options?.unreadOnly ?? (shouldResetPagination ? true : notificationPagination.unreadOnly)
+  const nextUnreadOnly =
+    options?.unreadOnly ?? (shouldResetPagination ? true : notificationPagination.unreadOnly)
 
   isNotificationLoading.value = true
 
@@ -197,7 +200,11 @@ async function primeNotificationStreamCursor() {
 }
 
 async function loadNextNotificationsPage() {
-  if (!notificationPagination.hasMore || !notificationPagination.nextCursor || isNotificationLoading.value) {
+  if (
+    !notificationPagination.hasMore ||
+    !notificationPagination.nextCursor ||
+    isNotificationLoading.value
+  ) {
     return
   }
 

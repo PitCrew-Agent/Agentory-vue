@@ -9,6 +9,7 @@ import cameraUnlockIcon from '@/assets/icons/dashboard/camera-unlock.svg'
 import chevronDownIcon from '@/assets/icons/dashboard/chevron-down.svg'
 import { equipmentStatusOrder } from '@/constants/equipmentStatus'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
+import { formatLineLabel } from '@/features/i18n/utils/formatLineLabel'
 
 const props = defineProps({
   alertFocusRequest: {
@@ -58,17 +59,11 @@ const selectedLine = computed(
 
 const activeEquipmentList = computed(() => selectedLine.value?.equipment ?? [])
 
-function formatLineLabel(label) {
-  const source = String(label ?? '').trim()
-
-  return locale.value === 'en' ? source.replace(/라인/g, 'Line') : source
-}
-
 const selectedLineSummary = computed(() =>
   selectedLine.value
     ? t('factory.lineSummary', {
         count: activeEquipmentList.value.length,
-        line: formatLineLabel(selectedLine.value.label),
+        line: formatLineLabel(selectedLine.value.label, locale.value),
       })
     : '',
 )
@@ -1386,7 +1381,7 @@ onBeforeUnmount(() => {
         class="factory-viewport__status-stack"
         :aria-label="
           t('factory.lineStatusSummary', {
-            line: formatLineLabel(selectedLine?.label ?? t('factory.line')),
+            line: formatLineLabel(selectedLine?.label ?? t('factory.line'), locale.value),
           })
         "
       >
@@ -1483,7 +1478,7 @@ onBeforeUnmount(() => {
             :class="{ 'factory-viewport__line-option--active': selectedLine?.id === line.id }"
             @click="selectLine(line.id)"
           >
-            <strong>{{ formatLineLabel(line.label) }}</strong>
+            <strong>{{ formatLineLabel(line.label, locale) }}</strong>
             <span>{{ t('factory.equipmentCount', { count: line.equipment.length }) }}</span>
           </button>
         </div>
