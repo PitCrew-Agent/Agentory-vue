@@ -1080,8 +1080,8 @@ watch(
   color: var(--agentory-color-text-primary);
   background: color-mix(in srgb, var(--agentory-color-bg-app), transparent 16%);
   text-align: center;
-  backdrop-filter: var(--agentory-blur-glass-strong);
   -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
+  backdrop-filter: var(--agentory-blur-glass-strong);
 }
 
 .work-log-panel__incident-loading strong {

@@ -522,8 +522,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 24%),
     inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%),
     var(--agentory-shadow-panel-strong);
-  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
   -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(112%);
+  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
 }
 
 .dashboard-header__notification-panel-header {
@@ -761,8 +761,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 20%),
     inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%),
     var(--agentory-shadow-panel-strong);
-  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
   -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(112%);
+  backdrop-filter: blur(24px) saturate(190%) contrast(112%);
 }
 
 .dashboard-header__profile-summary {

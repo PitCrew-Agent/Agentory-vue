@@ -1695,8 +1695,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 26%),
     inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%),
     0 10px 24px color-mix(in srgb, var(--agentory-color-text-primary), transparent 90%);
-  backdrop-filter: blur(22px) saturate(190%) contrast(112%);
   -webkit-backdrop-filter: blur(22px) saturate(190%) contrast(112%);
+  backdrop-filter: blur(22px) saturate(190%) contrast(112%);
   isolation: isolate;
 }
 
@@ -1781,8 +1781,8 @@ onBeforeUnmount(() => {
   border-radius: var(--agentory-radius-10);
   box-shadow: inset 0 1px 0
     color-mix(in srgb, var(--agentory-color-border-inverse), transparent 48%);
-  backdrop-filter: blur(14px) saturate(175%);
   -webkit-backdrop-filter: blur(14px) saturate(175%);
+  backdrop-filter: blur(14px) saturate(175%);
 }
 
 .assistant-panel__quick button {
@@ -1812,8 +1812,8 @@ onBeforeUnmount(() => {
   transition:
     box-shadow 220ms var(--agentory-ease-soft),
     transform 220ms var(--agentory-ease-elastic);
-  backdrop-filter: blur(16px) saturate(185%) contrast(108%);
   -webkit-backdrop-filter: blur(16px) saturate(185%) contrast(108%);
+  backdrop-filter: blur(16px) saturate(185%) contrast(108%);
 }
 
 .assistant-panel__quick button::before {
@@ -1875,8 +1875,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: var(--agentory-spacing-20);
   background: color-mix(in srgb, var(--agentory-color-text-primary), transparent 82%);
-  backdrop-filter: blur(8px) saturate(130%);
   -webkit-backdrop-filter: blur(8px) saturate(130%);
+  backdrop-filter: blur(8px) saturate(130%);
 }
 
 .assistant-panel__delete-dialog {

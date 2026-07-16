@@ -367,8 +367,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 24%),
     inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-text-primary), transparent 88%),
     0 4px 12px color-mix(in srgb, var(--agentory-color-text-primary), transparent 92%);
-  backdrop-filter: var(--agentory-blur-glass-strong);
   -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
+  backdrop-filter: var(--agentory-blur-glass-strong);
   isolation: isolate;
 }
 
