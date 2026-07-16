@@ -48,9 +48,9 @@ const emit = defineEmits(['action'])
 const contentRef = ref(null)
 
 function scrollToGroup(groupId) {
-  const target = Array.from(contentRef.value?.querySelectorAll('.dashboard-table-panel__group') ?? []).find(
-    (element) => element.dataset.groupId === groupId,
-  )
+  const target = Array.from(
+    contentRef.value?.querySelectorAll('.dashboard-table-panel__group') ?? [],
+  ).find((element) => element.dataset.groupId === groupId)
 
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -85,7 +85,12 @@ defineExpose({
           :data-test="`${dataTest}-action`"
           @click="emit('action')"
         >
-          <img v-if="actionIcon" class="dashboard-table-panel__action-icon" :src="actionIcon" alt="" />
+          <img
+            v-if="actionIcon"
+            class="dashboard-table-panel__action-icon"
+            :src="actionIcon"
+            alt=""
+          />
           <span>{{ actionLabel }}</span>
         </button>
       </div>
@@ -110,7 +115,11 @@ defineExpose({
           <span class="dashboard-table-panel__date-line" aria-hidden="true"></span>
         </div>
 
-        <div class="dashboard-table-panel__table" role="table" :aria-label="`${group.date} ${title}`">
+        <div
+          class="dashboard-table-panel__table"
+          role="table"
+          :aria-label="`${group.date} ${title}`"
+        >
           <div class="dashboard-table-panel__table-header" role="row">
             <span
               v-for="column in columns"
@@ -229,7 +238,11 @@ defineExpose({
 }
 
 .dashboard-table-panel__action:hover {
-  background: color-mix(in srgb, var(--agentory-color-bg-primary), var(--agentory-color-text-primary) 14%);
+  background: color-mix(
+    in srgb,
+    var(--agentory-color-bg-primary),
+    var(--agentory-color-text-primary) 14%
+  );
   transform: translateY(-1px);
 }
 

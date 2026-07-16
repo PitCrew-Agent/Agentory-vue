@@ -16,7 +16,8 @@ function extractLineTokens(value) {
   const tokens = new Set()
   const compactValue = normalizedValue.replace(/\s+/g, '')
   const lineMatch =
-    normalizedValue.match(/\b([A-Z])(?:[-_\s]*(?:LINE|라인))\b/) ?? compactValue.match(/^([A-Z])라인$/)
+    normalizedValue.match(/\b([A-Z])(?:[-_\s]*(?:LINE|라인))\b/) ??
+    compactValue.match(/^([A-Z])라인$/)
 
   tokens.add(compactValue.replace(/[^A-Z0-9가-힣]/g, ''))
 
@@ -48,9 +49,9 @@ function getNotificationLineTokens(notification) {
   extractLineTokens(notification.lineCode).forEach((token) => tokens.add(token))
   extractLineTokens(notification.message).forEach((token) => tokens.add(token))
 
-  const equipmentLineMatch = String(notification.equipmentId ?? notification.equipmentCode ?? '').match(
-    /^EQP-([A-Z])/i,
-  )
+  const equipmentLineMatch = String(
+    notification.equipmentId ?? notification.equipmentCode ?? '',
+  ).match(/^EQP-([A-Z])/i)
 
   if (equipmentLineMatch?.[1]) {
     tokens.add(equipmentLineMatch[1].toUpperCase())

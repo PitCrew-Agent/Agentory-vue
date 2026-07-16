@@ -589,14 +589,12 @@ async function sendAssistantMessage(message, options = {}) {
   } finally {
     const shouldFinalizeRequest = assistantStore.completeRequest(assistantRequest.id)
 
-    if (!shouldFinalizeRequest) {
-      return
-    }
+    if (shouldFinalizeRequest) {
+      loadAssistantHistoryItems()
 
-    loadAssistantHistoryItems()
-
-    if (didCompleteAssistantResponse) {
-      loadAssistantSuggestions(selectedEquipment.value)
+      if (didCompleteAssistantResponse) {
+        loadAssistantSuggestions(selectedEquipment.value)
+      }
     }
   }
 }
