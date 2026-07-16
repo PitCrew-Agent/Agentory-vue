@@ -102,6 +102,7 @@ let layoutResizeObserver
 let contentLoadingFrame = 0
 let realtimeSnapshotInterval = 0
 let realtimeSnapshotRequestId = 0
+const realtimeNotificationRequestIds = new Map()
 let equipmentSwitchRequestId = 0
 let assistantHistoryRequestId = 0
 let assistantSuggestionRequestId = 0
@@ -628,6 +629,34 @@ function getNotificationMetricId(metric) {
   )
 }
 
+async function refreshRealtimeNotificationTelemetry(equipmentId) {
+  const requestId = (realtimeNotificationRequestIds.get(equipmentId) ?? 0) + 1
+  realtimeNotificationRequestIds.set(equipmentId, requestId)
+
+  const baseEquipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
+
+  if (!baseEquipment) {
+    return
+  }
+
+  try {
+    const updatedEquipment = await fetchEquipmentTelemetry(
+      equipmentId,
+      baseEquipment,
+      getMetricChartQuery(),
+    )
+
+    if (realtimeNotificationRequestIds.get(equipmentId) !== requestId) {
+      return
+    }
+
+    updateEquipmentTelemetry(updatedEquipment)
+    realtimeRevision.value += 1
+  } catch {
+    // The regular polling path retries transient telemetry refresh failures.
+  }
+}
+
 function applyRealtimeNotification(notification) {
   const equipmentId = notification?.equipmentId ?? notification?.equipmentCode
   const equipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
@@ -649,6 +678,7 @@ function applyRealtimeNotification(notification) {
 
   realtimeSnapshotRequestId += 1
   updateEquipmentTelemetry(updatedEquipment)
+  void refreshRealtimeNotificationTelemetry(equipmentId)
   alertFocusRequest.value = {
     equipmentId,
     key: `${notification.id ?? Date.now()}:${equipmentId}:${notification.metric ?? ''}`,
@@ -1621,6 +1651,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelContentLoadingFrame()
   window.clearInterval(realtimeSnapshotInterval)
+  realtimeNotificationRequestIds.clear()
   stopAlertToastStream()
   layoutResizeObserver?.disconnect()
 })
