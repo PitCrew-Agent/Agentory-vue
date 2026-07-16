@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
@@ -17,7 +17,8 @@ function getNotificationToastTone(notification) {
 export function useNotificationToast() {
   const { loadNotifications, primeNotificationStreamCursor, startNotificationStream } =
     useNotificationCenter()
-  const alertToast = ref(null)
+  const alertToasts = ref([])
+  const alertToast = computed(() => alertToasts.value[0] ?? null)
   let alertToastExpiresAt = 0
   let alertToastRemaining = ALERT_TOAST_DURATION
   let alertToastTimer = 0
@@ -33,20 +34,30 @@ export function useNotificationToast() {
   }
 
   function showAlertToast(notification) {
-    clearAlertToastTimer()
-    alertToast.value = {
+    const nextToast = {
       ...notification,
+      toastKey: `${notification.id ?? 'notification'}-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
       tone: getNotificationToastTone(notification),
     }
 
-    scheduleAlertToastDismiss(ALERT_TOAST_DURATION)
+    alertToasts.value = [...alertToasts.value, nextToast]
+
+    if (alertToasts.value.length === 1) {
+      scheduleAlertToastDismiss(ALERT_TOAST_DURATION)
+    }
   }
 
   function dismissAlertToast() {
     clearAlertToastTimer()
-    alertToast.value = null
+    alertToasts.value = alertToasts.value.slice(1)
     alertToastExpiresAt = 0
     alertToastRemaining = ALERT_TOAST_DURATION
+
+    if (alertToasts.value.length) {
+      scheduleAlertToastDismiss(ALERT_TOAST_DURATION)
+    }
   }
 
   function scheduleAlertToastDismiss(duration) {
@@ -62,7 +73,7 @@ export function useNotificationToast() {
   }
 
   function pauseAlertToast() {
-    if (!alertToast.value || !alertToastTimer) {
+    if (!alertToasts.value.length || !alertToastTimer) {
       return
     }
 
@@ -71,7 +82,7 @@ export function useNotificationToast() {
   }
 
   function resumeAlertToast() {
-    if (!alertToast.value || alertToastTimer) {
+    if (!alertToasts.value.length || alertToastTimer) {
       return
     }
 
@@ -99,13 +110,17 @@ export function useNotificationToast() {
   }
 
   function stopAlertToastStream() {
-    dismissAlertToast()
+    clearAlertToastTimer()
+    alertToasts.value = []
+    alertToastExpiresAt = 0
+    alertToastRemaining = ALERT_TOAST_DURATION
     stopNotificationStream?.()
     stopNotificationStream = undefined
   }
 
   return {
     alertToast,
+    alertToasts,
     pauseAlertToast,
     resumeAlertToast,
     showAlertToast,

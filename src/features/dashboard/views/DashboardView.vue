@@ -54,7 +54,7 @@ const {
   sessionId: assistantSessionId,
 } = storeToRefs(assistantStore)
 const {
-  alertToast,
+  alertToasts,
   pauseAlertToast,
   resumeAlertToast,
   startAlertToastStream,
@@ -1661,7 +1661,7 @@ watch(
       :is-responding="isIncidentCreating"
       :response-error="incidentErrorMessage"
       :response-error-notification-id="incidentErrorNotificationId"
-      :toast="alertToast"
+      :toasts="alertToasts"
       @pause="pauseAlertToast"
       @respond="startIncidentResponse"
       @resume="resumeAlertToast"

@@ -1,7 +1,8 @@
 <script setup>
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps({
+const props = defineProps({
   activeNotificationId: {
     type: Number,
     default: null,
@@ -18,27 +19,34 @@ defineProps({
     type: Number,
     default: null,
   },
-  toast: {
-    type: Object,
-    default: null,
+  toasts: {
+    type: Array,
+    default: () => [],
   },
 })
 
 defineEmits(['pause', 'respond', 'resume'])
 
 const { t } = useI18n()
+const visibleToasts = computed(() => props.toasts.slice(0, 2))
 </script>
 
 <template>
-  <Transition name="dashboard-alert-toast">
+  <TransitionGroup
+    name="dashboard-alert-toast"
+    tag="div"
+    class="dashboard-alert-toast-stack"
+    role="status"
+    aria-live="polite"
+    @mouseenter="$emit('pause')"
+    @mouseleave="$emit('resume')"
+  >
     <aside
-      v-if="toast"
+      v-for="(toast, index) in visibleToasts"
+      :key="toast.toastKey ?? toast.id"
       class="dashboard-alert-toast"
       :class="`dashboard-alert-toast--${toast.tone}`"
-      role="status"
-      aria-live="polite"
-      @mouseenter="$emit('pause')"
-      @mouseleave="$emit('resume')"
+      :style="{ '--dashboard-toast-stack-index': index }"
     >
       <span class="dashboard-alert-toast__dot" aria-hidden="true"></span>
       <div class="dashboard-alert-toast__copy">
@@ -59,20 +67,28 @@ const { t } = useI18n()
         </button>
       </div>
     </aside>
-  </Transition>
+  </TransitionGroup>
 </template>
 
 <style scoped>
-.dashboard-alert-toast {
+.dashboard-alert-toast-stack {
   position: fixed;
   z-index: 46;
   top: var(--dashboard-header-height);
   left: calc(var(--dashboard-sidebar-width) + (100vw - var(--dashboard-sidebar-width)) / 2);
   display: grid;
+  width: min(520px, calc(100vw - var(--dashboard-sidebar-width) - 48px));
+  transform: translate(-50%, -50%);
+  transition: left 260ms ease;
+}
+
+.dashboard-alert-toast {
+  grid-area: 1 / 1;
+  display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--agentory-spacing-10);
-  width: min(520px, calc(100vw - var(--dashboard-sidebar-width) - 48px));
+  width: 100%;
   min-height: 54px;
   padding: var(--agentory-spacing-10) var(--agentory-spacing-16);
   color: var(--agentory-color-text-primary);
@@ -90,8 +106,21 @@ const { t } = useI18n()
     var(--agentory-shadow-panel-strong);
   backdrop-filter: blur(22px) saturate(165%) contrast(118%);
   -webkit-backdrop-filter: blur(22px) saturate(165%) contrast(118%);
-  transform: translate(-50%, -50%);
-  transition: left 260ms ease;
+  transform: translateY(calc(var(--dashboard-toast-stack-index) * 10px))
+    scale(calc(1 - var(--dashboard-toast-stack-index) * 0.025));
+  transform-origin: top center;
+  transition:
+    opacity 220ms var(--agentory-ease-soft),
+    transform 360ms var(--agentory-ease-elastic);
+}
+
+.dashboard-alert-toast:nth-child(1) {
+  z-index: 2;
+}
+
+.dashboard-alert-toast:nth-child(2) {
+  z-index: 1;
+  opacity: 0.84;
 }
 
 .dashboard-alert-toast__dot {
@@ -170,7 +199,8 @@ const { t } = useI18n()
 }
 
 .dashboard-alert-toast-enter-active,
-.dashboard-alert-toast-leave-active {
+.dashboard-alert-toast-leave-active,
+.dashboard-alert-toast-move {
   transition:
     opacity 220ms var(--agentory-ease-soft),
     transform 360ms var(--agentory-ease-elastic);
@@ -179,13 +209,19 @@ const { t } = useI18n()
 .dashboard-alert-toast-enter-from,
 .dashboard-alert-toast-leave-to {
   opacity: 0;
-  transform: translate(-50%, -64%) scale(0.96);
+  transform: translateY(-14px) scale(0.96);
+}
+
+.dashboard-alert-toast-leave-active {
+  position: absolute;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dashboard-alert-toast-stack,
   .dashboard-alert-toast,
   .dashboard-alert-toast-enter-active,
-  .dashboard-alert-toast-leave-active {
+  .dashboard-alert-toast-leave-active,
+  .dashboard-alert-toast-move {
     transition: none;
   }
 }
