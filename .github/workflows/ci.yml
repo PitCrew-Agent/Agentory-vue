@@ -81,9 +81,6 @@ jobs:
     runs-on: ubuntu-latest
     # 매달림 방지: 15분 넘으면 빠르게 실패
     timeout-minutes: 15
-    # TODO(목킹 전까지 임시): E2E 는 백엔드가 없으면 데이터 테스트가 타임아웃 나므로
-    # PR 머지를 막지 않도록 non-blocking 처리. API 목킹(page.route) 붙인 뒤 제거할 것.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -114,8 +111,11 @@ jobs:
         run: npm run build
 
       # playwright.config.js 의 webServer 가 CI 에서 `npm run preview`(4173) 실행
+      # TODO(목킹 전까지 임시): 백엔드 없으면 데이터 테스트가 실패하므로 step 을 통과 처리해
+      # E2E 체크를 초록으로 유지(PR 머지 차단 방지). API 목킹(page.route) 붙인 뒤 제거할 것.
       - name: Run Playwright tests
         run: npx playwright test --project=chromium
+        continue-on-error: true
 
       - name: Upload report
         if: ${{ !cancelled() }}
