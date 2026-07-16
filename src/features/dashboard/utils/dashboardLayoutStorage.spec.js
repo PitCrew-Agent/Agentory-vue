@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   loadDashboardLayoutState,
+  resolveDashboardWidgetVisibility,
   saveDashboardLayoutState,
 } from '@/features/dashboard/utils/dashboardLayoutStorage'
 
@@ -27,5 +28,14 @@ describe('dashboardLayoutStorage', () => {
 
     window.localStorage.setItem('agentory-dashboard-layout', JSON.stringify({ version: 99 }))
     expect(loadDashboardLayoutState()).toBeNull()
+  })
+
+  it('첫 렌더 전에 저장된 위젯 표시 상태를 기본값에 반영한다', () => {
+    const visibility = resolveDashboardWidgetVisibility(
+      { detail: true, repairHistory: false },
+      { visibleWidgets: { detail: false, repairHistory: true } },
+    )
+
+    expect(visibility).toEqual({ detail: false, repairHistory: true })
   })
 })
