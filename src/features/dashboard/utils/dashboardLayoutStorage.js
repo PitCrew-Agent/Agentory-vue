@@ -38,3 +38,16 @@ export function saveDashboardLayoutState(state) {
     // 브라우저 저장 공간을 사용할 수 없으면 현재 세션의 배치만 유지한다.
   }
 }
+
+export function resolveDashboardWidgetVisibility(
+  defaultVisibility,
+  state = loadDashboardLayoutState(),
+) {
+  return Object.fromEntries(
+    Object.entries(defaultVisibility).map(([widgetId, isVisible]) => {
+      const storedVisibility = state?.visibleWidgets?.[widgetId]
+
+      return [widgetId, typeof storedVisibility === 'boolean' ? storedVisibility : isVisible]
+    }),
+  )
+}

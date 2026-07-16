@@ -170,7 +170,7 @@ watch(
   display: grid;
   min-width: 0;
   min-height: 84px;
-  flex: 1 0 84px;
+  flex: 0 0 84px;
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   gap: var(--agentory-spacing-8);

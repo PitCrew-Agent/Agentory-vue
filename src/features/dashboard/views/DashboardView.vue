@@ -38,6 +38,7 @@ import {
 } from '@/features/dashboard/services/telemetryApi'
 import {
   loadDashboardLayoutState,
+  resolveDashboardWidgetVisibility,
   saveDashboardLayoutState,
 } from '@/features/dashboard/utils/dashboardLayoutStorage'
 import { useNotificationToast } from '@/features/notification/composables/useNotificationToast'
@@ -232,7 +233,7 @@ const widgetMeta = {
     minWidth: 220,
   },
 }
-const visibleWidgetMap = reactive({
+const defaultWidgetVisibility = {
   assistant: true,
   detail: true,
   equipmentAnalysis: false,
@@ -240,7 +241,11 @@ const visibleWidgetMap = reactive({
   factory: true,
   metricChart: true,
   repairHistory: false,
-})
+}
+const initialDashboardLayoutState = loadDashboardLayoutState()
+const visibleWidgetMap = reactive(
+  resolveDashboardWidgetVisibility(defaultWidgetVisibility, initialDashboardLayoutState),
+)
 const widgetLayouts = reactive({
   assistant: { x: 75, y: 0, w: 25, h: 100 },
   detail: { x: 50, y: 0, w: 25, h: 50 },
@@ -1074,7 +1079,7 @@ function normalizeStoredWidgetGrid(widgetId, grid, metrics) {
 }
 
 function restoreDashboardLayout() {
-  const state = loadDashboardLayoutState()
+  const state = initialDashboardLayoutState
   const metrics = getGridMetrics()
 
   if (!state || !metrics) {
