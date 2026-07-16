@@ -3,5 +3,7 @@ export function readChartToken(tokenName, fallback) {
     return fallback
   }
 
-  return window.getComputedStyle(document.documentElement).getPropertyValue(tokenName).trim() || fallback
+  return (
+    window.getComputedStyle(document.documentElement).getPropertyValue(tokenName).trim() || fallback
+  )
 }

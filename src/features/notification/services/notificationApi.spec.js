@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeNotification, normalizeNotificationTone } from '@/features/notification/services/notificationApi'
+import {
+  normalizeNotification,
+  normalizeNotificationTone,
+} from '@/features/notification/services/notificationApi'
 
 describe('notificationApi', () => {
   it('알람 코드 접두어로 주의와 위험을 구분한다', () => {

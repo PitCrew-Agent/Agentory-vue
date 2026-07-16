@@ -37,8 +37,7 @@ const rotationIndex = ref(0)
 let rotationTimer
 
 const activeIndex = computed(
-  () =>
-    ((rotationIndex.value % slides.value.length) + slides.value.length) % slides.value.length,
+  () => ((rotationIndex.value % slides.value.length) + slides.value.length) % slides.value.length,
 )
 
 const ringStyle = computed(() => ({
@@ -110,11 +109,7 @@ onBeforeUnmount(stopRotation)
           @click="setActiveSlide(index)"
         >
           <span class="auth-onboarding__face auth-onboarding__face--front">
-            <img
-              class="auth-onboarding__image"
-              :src="slide.image"
-              :alt="slide.title"
-            />
+            <img class="auth-onboarding__image" :src="slide.image" :alt="slide.title" />
           </span>
 
           <span class="auth-onboarding__face auth-onboarding__face--back" aria-hidden="true">

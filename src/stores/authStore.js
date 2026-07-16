@@ -39,7 +39,10 @@ function normalizeAuthUser(nextUser = {}) {
   const name = nextUser.name?.trim?.() ?? ''
   const role = nextUser.role?.trim?.() ?? ''
   const lines = Array.isArray(nextUser.lines) ? nextUser.lines.map(normalizeLine) : []
-  const assignedLineLabel = lines.map((line) => line.name || line.code).filter(Boolean).join(', ')
+  const assignedLineLabel = lines
+    .map((line) => line.name || line.code)
+    .filter(Boolean)
+    .join(', ')
 
   return {
     assignedLineLabel,
