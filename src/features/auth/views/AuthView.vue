@@ -227,8 +227,8 @@ onBeforeUnmount(() => {
     0 8px 20px color-mix(in srgb, var(--agentory-color-text-primary), transparent 86%),
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 4%),
     inset 0 -10px 24px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%);
-  backdrop-filter: blur(26px) saturate(220%) contrast(118%);
   -webkit-backdrop-filter: blur(26px) saturate(220%) contrast(118%);
+  backdrop-filter: blur(26px) saturate(220%) contrast(118%);
   font-family: var(--agentory-font-family-base);
   font-size: var(--auth-control-font-size, 16px);
   font-weight: var(--agentory-font-weight-medium);

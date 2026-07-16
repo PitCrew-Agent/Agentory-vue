@@ -96,8 +96,8 @@ const { isSidebarOpen } = useDashboardSidebar()
     inset 0 1px 0 color-mix(in srgb, var(--agentory-color-border-inverse), transparent 28%),
     inset 0 -1px 0 color-mix(in srgb, var(--agentory-color-text-primary), transparent 94%),
     var(--agentory-shadow-panel-strong);
-  backdrop-filter: blur(22px) saturate(165%) contrast(118%);
   -webkit-backdrop-filter: blur(22px) saturate(165%) contrast(118%);
+  backdrop-filter: blur(22px) saturate(165%) contrast(118%);
   transform: translate(-50%, -50%);
   transition: left 260ms ease;
 }

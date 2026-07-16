@@ -47,8 +47,8 @@ const displayLabel = computed(() => props.label || t('common.loading'))
       transparent 30%
     ),
     color-mix(in srgb, var(--agentory-color-bg-app), transparent 42%);
-  backdrop-filter: var(--agentory-blur-glass-strong);
   -webkit-backdrop-filter: var(--agentory-blur-glass-strong);
+  backdrop-filter: var(--agentory-blur-glass-strong);
   pointer-events: none;
 }
 

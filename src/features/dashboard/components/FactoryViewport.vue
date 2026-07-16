@@ -1766,8 +1766,8 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: var(--agentory-radius-12);
   box-shadow: var(--factory-glass-shadow);
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
   pointer-events: auto;
 }
 
@@ -1856,8 +1856,8 @@ onBeforeUnmount(() => {
   border-radius: var(--agentory-radius-pill);
   box-shadow: var(--factory-glass-shadow);
   cursor: default;
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
   pointer-events: auto;
 }
 
@@ -1955,8 +1955,8 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: var(--agentory-radius-10);
   box-shadow: var(--factory-glass-shadow);
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
 }
 
 .factory-viewport__camera-menu button {
@@ -2034,8 +2034,8 @@ onBeforeUnmount(() => {
   font-weight: var(--agentory-font-weight-bold);
   line-height: var(--agentory-line-height-body-sm);
   white-space: nowrap;
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
   cursor: pointer;
 }
 
@@ -2052,8 +2052,8 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: var(--agentory-radius-12);
   box-shadow: var(--factory-glass-shadow);
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
   scrollbar-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 48%) transparent;
   scrollbar-width: thin;
 }
@@ -2164,8 +2164,8 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: var(--agentory-radius-12);
   box-shadow: var(--factory-glass-shadow);
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
 }
 
 .factory-viewport__checklist--danger {
@@ -2299,8 +2299,8 @@ onBeforeUnmount(() => {
   box-shadow: var(--factory-glass-shadow);
   font-family: var(--agentory-font-family-base);
   text-align: left;
-  backdrop-filter: var(--factory-glass-filter);
   -webkit-backdrop-filter: var(--factory-glass-filter);
+  backdrop-filter: var(--factory-glass-filter);
   cursor: pointer;
   transition:
     opacity 120ms ease,
