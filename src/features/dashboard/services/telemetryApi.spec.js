@@ -91,4 +91,32 @@ describe('telemetryApi', () => {
       params: { start: '2026-07-13T00:00:00' },
     })
   })
+
+  it('센서 상세와 시계열을 동시에 요청한다', async () => {
+    let resolveDetail
+    let resolveSeries
+
+    http.get.mockImplementation((url) => {
+      if (url.endsWith('/series')) {
+        return new Promise((resolve) => {
+          resolveSeries = resolve
+        })
+      }
+
+      return new Promise((resolve) => {
+        resolveDetail = resolve
+      })
+    })
+
+    const telemetryPromise = fetchEquipmentTelemetry('EQP-A05', createEmptyEquipment())
+
+    expect(http.get).toHaveBeenCalledTimes(2)
+    expect(resolveDetail).toBeTypeOf('function')
+    expect(resolveSeries).toBeTypeOf('function')
+
+    resolveDetail({ process_type: 'Etching', status: '?묓샇' })
+    resolveSeries([])
+
+    await expect(telemetryPromise).resolves.toBeTruthy()
+  })
 })

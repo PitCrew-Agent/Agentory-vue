@@ -612,12 +612,14 @@ export async function fetchEquipmentTelemetry(
   baseEquipment = createEmptyEquipment(),
   options = {},
 ) {
-  const detail = await fetchEquipmentDetail(equipmentId)
-  const series = await fetchEquipmentSeries(
-    equipmentId,
-    options.start || createRecentSeriesStart(),
-    options.end,
-  )
+  const [detail, series] = await Promise.all([
+    fetchEquipmentDetail(equipmentId),
+    fetchEquipmentSeries(
+      equipmentId,
+      options.start || createRecentSeriesStart(),
+      options.end,
+    ),
+  ])
   const nextEquipment = applyEquipmentDetail(baseEquipment, detail)
 
   return applyEquipmentSeries(nextEquipment, series, detail)
