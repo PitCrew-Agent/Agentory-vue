@@ -101,40 +101,41 @@ export function groupNotificationRows(items) {
     }))
 }
 
-export async function fetchNotificationPage({ before = '', limit = 10, unreadOnly = false } = {}) {
-  const params = {
-    limit,
-    unread_only: unreadOnly,
-  }
-
-  if (before) {
-    params.before = before
-  }
-
+export async function fetchNotificationPage({ page = 1, limit = 10, unreadOnly = false } = {}) {
   const response = await http.get('/api/v1/notifications', {
-    params,
+    params: {
+      limit,
+      page,
+      unread_only: unreadOnly,
+    },
   })
-  const rawItems = Array.isArray(response) ? response : (response.items ?? [])
+  const rawItems = Array.isArray(response) ? response : (response?.items ?? [])
   const items = rawItems.map(normalizeNotification)
+  const currentPage = Number(response?.page ?? page) || 1
+  const pageLimit = Number(response?.limit ?? limit) || limit
+  const totalItems = Number(response?.total_items ?? items.length) || 0
+  const totalPages = Number(response?.total_pages ?? (items.length ? 1 : 0)) || 0
 
   return {
     groups: groupNotificationRows(items),
-    hasMore: Boolean(response?.has_more),
+    hasMore: response?.has_more ?? currentPage < totalPages,
     items,
-    nextCursor: response?.next_cursor ?? '',
+    limit: pageLimit,
+    page: currentPage,
+    totalItems,
+    totalPages,
   }
 }
 
 export async function fetchAllNotificationItems({ batchSize = 50, unreadOnly = false } = {}) {
   const items = []
   const itemIds = new Set()
-  const visitedCursors = new Set()
-  let before = ''
+  let pageNumber = 1
 
   while (true) {
     const page = await fetchNotificationPage({
-      before,
       limit: batchSize,
+      page: pageNumber,
       unreadOnly,
     })
 
@@ -145,12 +146,11 @@ export async function fetchAllNotificationItems({ batchSize = 50, unreadOnly = f
       }
     })
 
-    if (!page.hasMore || !page.nextCursor || visitedCursors.has(page.nextCursor)) {
+    if (!page.hasMore || page.page >= page.totalPages) {
       break
     }
 
-    visitedCursors.add(page.nextCursor)
-    before = page.nextCursor
+    pageNumber = page.page + 1
   }
 
   return items
@@ -163,15 +163,13 @@ export async function fetchNotificationGroups(options = {}) {
 }
 
 export async function fetchUnreadNotifications({ limit = 10 } = {}) {
-  const response = await http.get('/api/v1/notifications', {
-    params: {
-      limit,
-      unread_only: true,
-    },
+  const page = await fetchNotificationPage({
+    limit,
+    page: 1,
+    unreadOnly: true,
   })
-  const items = Array.isArray(response) ? response : (response.items ?? [])
 
-  return items.map(normalizeNotification)
+  return page.items
 }
 
 export function markNotificationReadRequest(notificationId) {

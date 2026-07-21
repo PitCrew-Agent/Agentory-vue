@@ -3,34 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   applyNotificationReadStatusMock,
   fetchAllNotificationItemsMock,
+  fetchNotificationPageMock,
   markNotificationReadRequestMock,
 } = vi.hoisted(() => ({
   applyNotificationReadStatusMock: vi.fn(),
   fetchAllNotificationItemsMock: vi.fn(),
+  fetchNotificationPageMock: vi.fn(),
   markNotificationReadRequestMock: vi.fn(),
 }))
 
 vi.mock('@/features/notification/services/notificationApi', () => ({
   fetchAllNotificationItems: fetchAllNotificationItemsMock,
+  fetchNotificationPage: fetchNotificationPageMock,
   groupNotificationRows(items) {
-    if (!items.length) {
-      return []
-    }
-
-    return [
-      {
-        date: '2026-07-10',
-        id: '2026-07-10',
-        rows: items,
-      },
-    ]
+    return [...new Set(items.map((item) => item.occurredDate))].map((date) => ({
+      date,
+      id: date,
+      rows: items.filter((item) => item.occurredDate === date),
+    }))
   },
   markNotificationReadRequest: markNotificationReadRequestMock,
-}))
-
-vi.mock('@/features/notification/utils/notificationLineFilter', () => ({
-  ensureNotificationLineContext: vi.fn(),
-  shouldIncludeAssignedLineNotification: (notification) => notification.assignedLine !== false,
 }))
 
 vi.mock('@/features/notification/composables/useNotificationCenter', () => ({
@@ -43,7 +35,6 @@ import { useNotificationLog } from '@/features/notification/composables/useNotif
 
 function createNotifications(count) {
   return Array.from({ length: count }, (_, index) => ({
-    assignedLine: true,
     id: index + 1,
     occurredAt: `2026-07-10 12:${String(index).padStart(2, '0')}`,
     occurredDate: '2026-07-10',
@@ -53,7 +44,6 @@ function createNotifications(count) {
 
 function createNotificationsForDate(date, count, startId) {
   return Array.from({ length: count }, (_, index) => ({
-    assignedLine: true,
     id: startId + index,
     occurredAt: `${date} 12:${String(index).padStart(2, '0')}`,
     occurredDate: date,
@@ -61,19 +51,32 @@ function createNotificationsForDate(date, count, startId) {
   }))
 }
 
+function mockPageResponse(notifications, totalItems = notifications.length) {
+  fetchNotificationPageMock.mockImplementation(({ limit, page }) => ({
+    groups: [],
+    hasMore: page < Math.ceil(totalItems / limit),
+    items: notifications.slice((page - 1) * limit, page * limit),
+    limit,
+    page,
+    totalItems,
+    totalPages: Math.ceil(totalItems / limit),
+  }))
+}
+
 describe('useNotificationLog', () => {
   beforeEach(() => {
     fetchAllNotificationItemsMock.mockReset()
+    fetchNotificationPageMock.mockReset()
     applyNotificationReadStatusMock.mockReset()
     markNotificationReadRequestMock.mockReset()
     markNotificationReadRequestMock.mockResolvedValue(undefined)
   })
 
-  it('담당 라인 알림을 페이지당 10건으로 나누고 전체 페이지를 계산한다', async () => {
-    fetchAllNotificationItemsMock.mockResolvedValue([
-      ...createNotifications(23),
-      { ...createNotifications(1)[0], assignedLine: false, id: 24 },
-    ])
+  it('uses backend page metadata and requests the selected page', async () => {
+    const notifications = createNotifications(23)
+
+    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
+    mockPageResponse(notifications)
     const notificationLog = useNotificationLog()
 
     await notificationLog.loadNotifications()
@@ -89,13 +92,21 @@ describe('useNotificationLog', () => {
     expect(notificationLog.notificationPagination.pageIndex).toBe(3)
     expect(notificationLog.notificationGroups.value[0].rows).toHaveLength(3)
     expect(notificationLog.notificationPagination.hasMore).toBe(false)
+    expect(fetchNotificationPageMock).toHaveBeenLastCalledWith({
+      limit: 10,
+      page: 3,
+      unreadOnly: false,
+    })
   })
 
-  it('서버가 지원하는 읽음 전환만 반영한다', async () => {
-    fetchAllNotificationItemsMock.mockResolvedValue([
+  it('only applies read transitions accepted by the backend', async () => {
+    const notifications = [
       { ...createNotifications(1)[0], id: 1, readStatus: 'read' },
       { ...createNotifications(1)[0], id: 2, readStatus: 'unread' },
-    ])
+    ]
+
+    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
+    mockPageResponse(notifications)
     const notificationLog = useNotificationLog()
 
     await notificationLog.loadNotifications()
@@ -111,12 +122,15 @@ describe('useNotificationLog', () => {
     expect(notificationLog.notificationGroups.value[0].rows[1].readStatus).toBe('read')
   })
 
-  it('전체 알림 날짜를 제공하고 선택 날짜가 처음 등장하는 페이지로 이동한다', async () => {
-    fetchAllNotificationItemsMock.mockResolvedValue([
+  it('keeps all calendar dates and loads the first page containing the selected date', async () => {
+    const notifications = [
       ...createNotificationsForDate('2026-07-12', 12, 1),
       ...createNotificationsForDate('2026-07-11', 5, 13),
       ...createNotificationsForDate('2026-07-10', 3, 18),
-    ])
+    ]
+
+    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
+    mockPageResponse(notifications)
     const notificationLog = useNotificationLog()
 
     await notificationLog.loadNotifications()
@@ -126,10 +140,14 @@ describe('useNotificationLog', () => {
       '2026-07-11',
       '2026-07-10',
     ])
-    expect(notificationLog.goToNotificationDate('2026-07-11')).toBe(true)
+    await expect(notificationLog.goToNotificationDate('2026-07-11')).resolves.toBe(true)
     expect(notificationLog.notificationPagination.pageIndex).toBe(2)
-    expect(notificationLog.notificationGroups.value[0].rows.map((row) => row.id)).toContain(13)
-    expect(notificationLog.goToNotificationDate('2026-07-09')).toBe(false)
+    expect(
+      notificationLog.notificationGroups.value.flatMap((group) =>
+        group.rows.map((row) => row.id),
+      ),
+    ).toContain(13)
+    await expect(notificationLog.goToNotificationDate('2026-07-09')).resolves.toBe(false)
     expect(notificationLog.notificationPagination.pageIndex).toBe(2)
   })
 })
