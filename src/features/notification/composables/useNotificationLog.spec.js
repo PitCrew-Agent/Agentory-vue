@@ -143,9 +143,7 @@ describe('useNotificationLog', () => {
     await expect(notificationLog.goToNotificationDate('2026-07-11')).resolves.toBe(true)
     expect(notificationLog.notificationPagination.pageIndex).toBe(2)
     expect(
-      notificationLog.notificationGroups.value.flatMap((group) =>
-        group.rows.map((row) => row.id),
-      ),
+      notificationLog.notificationGroups.value.flatMap((group) => group.rows.map((row) => row.id)),
     ).toContain(13)
     await expect(notificationLog.goToNotificationDate('2026-07-09')).resolves.toBe(false)
     expect(notificationLog.notificationPagination.pageIndex).toBe(2)

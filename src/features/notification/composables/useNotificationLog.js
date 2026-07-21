@@ -29,9 +29,9 @@ export function useNotificationLog() {
   let notificationDateIndexRequestId = 0
 
   const notificationDates = computed(() =>
-    [
-      ...new Set(notificationIndexItems.map((item) => item.occurredDate).filter(Boolean)),
-    ].toSorted((first, second) => second.localeCompare(first)),
+    [...new Set(notificationIndexItems.map((item) => item.occurredDate).filter(Boolean))].toSorted(
+      (first, second) => second.localeCompare(first),
+    ),
   )
 
   const notificationGroups = computed(() => groupNotificationRows(notificationItems))

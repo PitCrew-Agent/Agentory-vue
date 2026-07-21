@@ -125,9 +125,7 @@ function addNotification(rawNotification) {
 
 async function loadNotifications(options) {
   const shouldResetPagination = options?.reset ?? !options?.page
-  const nextPage = shouldResetPagination
-    ? 1
-    : (options?.page ?? notificationPagination.pageIndex)
+  const nextPage = shouldResetPagination ? 1 : (options?.page ?? notificationPagination.pageIndex)
   const nextLimit = options?.limit ?? notificationPagination.limit
   const nextUnreadOnly =
     options?.unreadOnly ?? (shouldResetPagination ? true : notificationPagination.unreadOnly)

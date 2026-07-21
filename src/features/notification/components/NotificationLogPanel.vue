@@ -638,7 +638,8 @@ defineExpose({
   background: var(--agentory-color-bg-app);
 }
 
-.notification-log-panel__pagination button:disabled:not(.notification-log-panel__pagination-page--active) {
+.notification-log-panel__pagination
+  button:disabled:not(.notification-log-panel__pagination-page--active) {
   opacity: 0.42;
   cursor: default;
 }
