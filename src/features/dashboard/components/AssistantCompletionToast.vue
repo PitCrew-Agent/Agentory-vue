@@ -5,6 +5,10 @@ import openConversationIcon from '@/assets/icons/dashboard/notification-open-pag
 import { useDashboardSidebar } from '@/features/dashboard/composables/useDashboardSidebar'
 
 defineProps({
+  stackIndex: {
+    type: Number,
+    default: 0,
+  },
   toast: {
     type: Object,
     default: null,
@@ -26,6 +30,10 @@ const { isSidebarOpen } = useDashboardSidebar()
         `assistant-completion-toast--${toast.status}`,
         { 'assistant-completion-toast--sidebar-open': isSidebarOpen },
       ]"
+      :style="{
+        '--dashboard-toast-stack-index': stackIndex,
+        zIndex: 46 - stackIndex,
+      }"
       role="status"
       aria-live="polite"
       data-test="assistant-completion-toast"
@@ -68,10 +76,9 @@ const { isSidebarOpen } = useDashboardSidebar()
 <style scoped>
 .assistant-completion-toast {
   position: fixed;
-  z-index: 1200;
   --assistant-completion-sidebar-width: 90px;
 
-  top: 72px;
+  top: var(--agentory-toast-top);
   left: calc(
     var(--assistant-completion-sidebar-width) +
       (100vw - var(--assistant-completion-sidebar-width)) / 2
@@ -79,10 +86,13 @@ const { isSidebarOpen } = useDashboardSidebar()
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--agentory-spacing-12);
-  width: min(440px, calc(100vw - var(--assistant-completion-sidebar-width) - 48px));
-  min-height: 58px;
-  padding: var(--agentory-spacing-10) var(--agentory-spacing-14);
+  gap: var(--agentory-toast-card-gap);
+  width: min(
+    var(--agentory-toast-width),
+    calc(100vw - var(--assistant-completion-sidebar-width) - 48px)
+  );
+  min-height: var(--agentory-toast-min-height);
+  padding: var(--agentory-toast-padding-block) var(--agentory-toast-padding-inline);
   color: var(--agentory-color-text-primary);
   background: linear-gradient(
     150deg,
@@ -98,8 +108,14 @@ const { isSidebarOpen } = useDashboardSidebar()
     var(--agentory-shadow-panel-strong);
   -webkit-backdrop-filter: blur(22px) saturate(165%) contrast(118%);
   backdrop-filter: blur(22px) saturate(165%) contrast(118%);
-  transform: translate(-50%, -50%);
-  transition: left 260ms ease;
+  transform: translate(-50%, -50%)
+    translateY(calc(var(--dashboard-toast-stack-index) * var(--agentory-toast-stack-offset)))
+    scale(calc(1 - var(--dashboard-toast-stack-index) * 0.025));
+  transform-origin: top center;
+  transition:
+    left 260ms ease,
+    opacity 220ms var(--agentory-ease-soft),
+    transform 360ms var(--agentory-ease-elastic);
 }
 
 .assistant-completion-toast--sidebar-open {
@@ -107,11 +123,11 @@ const { isSidebarOpen } = useDashboardSidebar()
 }
 
 .assistant-completion-toast__status {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   background: var(--agentory-color-bg-primary);
   border-radius: var(--agentory-radius-pill);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 84%);
 }
 
 .assistant-completion-toast--error .assistant-completion-toast__status {
@@ -124,7 +140,7 @@ const { isSidebarOpen } = useDashboardSidebar()
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--agentory-spacing-2);
+  gap: var(--agentory-toast-copy-gap);
 }
 
 .assistant-completion-toast__copy strong,
@@ -136,28 +152,28 @@ const { isSidebarOpen } = useDashboardSidebar()
 
 .assistant-completion-toast__copy strong {
   color: var(--agentory-color-text-primary);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-semi-bold);
-  line-height: var(--agentory-line-height-body-sm);
+  font-size: var(--agentory-font-size-body);
+  font-weight: var(--agentory-font-weight-bold);
+  line-height: var(--agentory-line-height-body);
 }
 
 .assistant-completion-toast__copy span {
   color: var(--agentory-color-text-muted);
-  font-size: var(--agentory-font-size-caption);
-  font-weight: var(--agentory-font-weight-regular);
-  line-height: var(--agentory-line-height-caption);
+  font-size: var(--agentory-font-size-body-sm);
+  font-weight: var(--agentory-font-weight-medium);
+  line-height: var(--agentory-line-height-body-sm);
 }
 
 .assistant-completion-toast__open {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   place-items: center;
   color: var(--agentory-color-bg-primary);
   background: color-mix(in srgb, var(--agentory-color-bg-glass-white), transparent 58%);
   border: 0;
-  border-radius: var(--agentory-radius-10);
+  border-radius: var(--agentory-radius-pill);
   box-shadow: inset 0 1px 0
     color-mix(in srgb, var(--agentory-color-border-inverse), transparent 48%);
   cursor: pointer;
@@ -186,13 +202,20 @@ const { isSidebarOpen } = useDashboardSidebar()
 .assistant-completion-toast-leave-active {
   transition:
     opacity 220ms var(--agentory-ease-soft),
-    transform 380ms var(--agentory-ease-elastic);
+    transform 380ms var(--agentory-ease-elastic),
+    translate 380ms var(--agentory-ease-elastic);
 }
 
-.assistant-completion-toast-enter-from,
+.assistant-completion-toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -50%)
+    translateY(calc(var(--dashboard-toast-stack-index) * var(--agentory-toast-stack-offset) - 14px))
+    scale(0.96);
+}
+
 .assistant-completion-toast-leave-to {
   opacity: 0;
-  transform: translate(-50%, -64%) scale(0.96);
+  translate: 72px 0;
 }
 
 @media (max-width: 640px) {

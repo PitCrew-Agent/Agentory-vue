@@ -3,7 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
-import { equipmentStatusMap } from '@/constants/equipmentStatus'
+import {
+  equipmentStatusMap,
+  equipmentStatusOrder,
+  normalizeEquipmentStatus,
+} from '@/constants/equipmentStatus'
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
 import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
@@ -32,6 +36,7 @@ import {
 import {
   createEmptyEquipment,
   createEmptyFactoryScene,
+  fetchEquipmentStatuses,
   fetchEquipmentTelemetry,
   fetchEquipmentSuggestions,
   fetchFactoryScene,
@@ -48,12 +53,14 @@ import { useAssistantStore } from '@/stores/assistantStore'
 const { isSidebarOpen, toggleSidebar } = useDashboardSidebar()
 const { t } = useI18n()
 const assistantStore = useAssistantStore()
+const assistantStoreRefs = storeToRefs(assistantStore)
 const {
   isLoading: isAssistantLoading,
   messages: assistantMessages,
   openConversationRequest: assistantOpenConversationRequest,
   sessionId: assistantSessionId,
-} = storeToRefs(assistantStore)
+} = assistantStoreRefs
+const assistantSessionEquipmentId = assistantStoreRefs.sessionEquipmentId ?? ref('')
 const {
   alertToasts,
   pauseAlertToast,
@@ -75,6 +82,7 @@ const assistantHistoryItems = ref([])
 const isAssistantHistoryLoading = ref(false)
 const isQuickCommandsLoading = ref(false)
 const quickCommands = ref([])
+const assistantPanelView = ref('history')
 const shouldSkipDashboardApi = import.meta.env.MODE === 'test'
 const initialFactoryScene = createEmptyFactoryScene()
 const factoryScene = reactive({
@@ -98,14 +106,23 @@ const alertFocusRequest = ref(null)
 const widgetGapPx = 15
 const layoutGridColumns = 4
 const layoutGridRows = 2
+const realtimePollingInterval = 1000
+const statusPollingInterval = 5000
 let layoutResizeObserver
 let contentLoadingFrame = 0
 let realtimeSnapshotInterval = 0
 let realtimeSnapshotRequestId = 0
+let isRealtimePollPending = false
+let nextStatusPollAt = 0
 const realtimeNotificationRequestIds = new Map()
+const realtimeNotificationRefreshStates = new Map()
+const realtimeNotificationUpdatedAt = new Map()
+const assistantSuggestionCache = new Map()
+const assistantSuggestionRequests = new Map()
 let equipmentSwitchRequestId = 0
 let assistantHistoryRequestId = 0
 let assistantSuggestionRequestId = 0
+let assistantSuggestionEquipmentId = ''
 let lastMetricSyncEquipmentId = ''
 let isDashboardInitializing = false
 const isContentLoading = ref(true)
@@ -116,6 +133,16 @@ const selectedEquipment = computed(
     factoryScene.equipmentList[0] ??
     createEmptyEquipment(),
 )
+
+const conversationEquipmentId = computed(() =>
+  assistantPanelView.value === 'chat' ? assistantSessionEquipmentId.value : '',
+)
+
+const assistantContextEquipment = computed(() => {
+  const equipmentId = conversationEquipmentId.value || selectedEquipmentId.value
+
+  return factoryScene.equipmentList.find((equipment) => equipment.id === equipmentId)
+})
 
 const selectedChecklistItems = computed(() => selectedEquipment.value.checklist ?? [])
 
@@ -328,6 +355,7 @@ async function selectAssistantHistory(history) {
 
   const requestId = ++assistantHistoryRequestId
   isAssistantHistoryLoading.value = true
+  assistantSessionEquipmentId.value = ''
 
   try {
     const detail = await fetchChatSessionDetail(sessionId)
@@ -337,6 +365,7 @@ async function selectAssistantHistory(history) {
     }
 
     assistantSessionId.value = detail.sessionId || sessionId
+    assistantSessionEquipmentId.value = detail.equipmentId || ''
     assistantMessages.value = detail.messages.map(createAssistantHistoryMessage)
 
     if (
@@ -377,6 +406,7 @@ async function deleteAssistantHistory(history) {
 
     if (assistantSessionId.value === sessionId) {
       assistantStore.startNewSession()
+      assistantSessionEquipmentId.value = ''
     }
   } catch {
     return
@@ -432,6 +462,14 @@ function createAssistantRequestMessage(message) {
   return message
 }
 
+function setAssistantPanelView(view) {
+  assistantPanelView.value = view === 'chat' ? 'chat' : 'history'
+
+  if (assistantPanelView.value === 'history') {
+    loadAssistantSuggestions(selectedEquipment.value)
+  }
+}
+
 function applySuggestedQuestions(suggestedQuestions = []) {
   quickCommands.value = suggestedQuestions.map((question, index) => ({
     id: `suggested-${index + 1}-${question}`,
@@ -440,28 +478,78 @@ function applySuggestedQuestions(suggestedQuestions = []) {
   }))
 }
 
-async function loadAssistantSuggestions(equipment) {
-  const requestId = ++assistantSuggestionRequestId
+async function loadAssistantSuggestions(equipment, { force = false } = {}) {
+  const equipmentId = equipment?.id
 
-  if (!equipment?.id || shouldSkipDashboardApi || isAssistantLoading.value) {
+  if (!equipmentId || shouldSkipDashboardApi) {
+    assistantSuggestionEquipmentId = ''
+    quickCommands.value = []
     isQuickCommandsLoading.value = false
     return
   }
 
+  const didChangeEquipment = assistantSuggestionEquipmentId !== equipmentId
+  assistantSuggestionEquipmentId = equipmentId
+
+  if (didChangeEquipment) {
+    const cachedSuggestions = assistantSuggestionCache.get(equipmentId)
+    quickCommands.value = []
+
+    if (cachedSuggestions) {
+      applySuggestedQuestions(cachedSuggestions)
+    }
+  }
+
+  if (isAssistantLoading.value) {
+    isQuickCommandsLoading.value = false
+    return
+  }
+
+  const cachedSuggestions = assistantSuggestionCache.get(equipmentId)
+
+  if (!force && cachedSuggestions) {
+    applySuggestedQuestions(cachedSuggestions)
+    isQuickCommandsLoading.value = false
+    return
+  }
+
+  const requestId = ++assistantSuggestionRequestId
   isQuickCommandsLoading.value = true
+  let suggestionRequest = !force ? assistantSuggestionRequests.get(equipmentId) : null
+
+  if (!suggestionRequest) {
+    suggestionRequest = fetchEquipmentSuggestions(equipmentId)
+    assistantSuggestionRequests.set(equipmentId, suggestionRequest)
+  }
 
   try {
-    const suggestions = await fetchEquipmentSuggestions(equipment.id)
+    const suggestions = await suggestionRequest
+    assistantSuggestionCache.set(equipmentId, suggestions)
 
-    if (requestId === assistantSuggestionRequestId) {
+    if (
+      requestId === assistantSuggestionRequestId &&
+      assistantSuggestionEquipmentId === equipmentId &&
+      assistantContextEquipment.value?.id === equipmentId
+    ) {
       applySuggestedQuestions(suggestions)
     }
   } catch {
-    if (requestId === assistantSuggestionRequestId) {
+    if (
+      requestId === assistantSuggestionRequestId &&
+      assistantSuggestionEquipmentId === equipmentId &&
+      !assistantSuggestionCache.has(equipmentId)
+    ) {
       quickCommands.value = []
     }
   } finally {
-    if (requestId === assistantSuggestionRequestId) {
+    if (assistantSuggestionRequests.get(equipmentId) === suggestionRequest) {
+      assistantSuggestionRequests.delete(equipmentId)
+    }
+
+    if (
+      requestId === assistantSuggestionRequestId &&
+      assistantSuggestionEquipmentId === equipmentId
+    ) {
       isQuickCommandsLoading.value = false
     }
   }
@@ -474,11 +562,14 @@ async function sendAssistantMessage(message, options = {}) {
     return
   }
 
+  const selectedRequestEquipmentId = selectedEquipment.value.id || selectedEquipmentId.value
+
   if (options.startNewSession) {
-    assistantStore.startNewSession()
+    assistantStore.startNewSession({ equipmentId: selectedRequestEquipmentId })
+    assistantSessionEquipmentId.value = selectedRequestEquipmentId
   }
 
-  const requestEquipmentId = selectedEquipment.value.id || selectedEquipmentId.value
+  const requestEquipmentId = assistantSessionEquipmentId.value || selectedRequestEquipmentId
 
   if (!requestEquipmentId) {
     assistantMessages.value = [
@@ -489,6 +580,10 @@ async function sendAssistantMessage(message, options = {}) {
       }),
     ]
     return
+  }
+
+  if (!assistantSessionEquipmentId.value) {
+    assistantSessionEquipmentId.value = requestEquipmentId
   }
 
   const assistantMessage = createAssistantMessage('assistant', '', {
@@ -507,8 +602,6 @@ async function sendAssistantMessage(message, options = {}) {
     createAssistantMessage('user', nextMessage),
   ]
   assistantMessages.value = [...assistantMessages.value, assistantMessage]
-  assistantSuggestionRequestId += 1
-  isQuickCommandsLoading.value = false
   const assistantRequest = assistantStore.beginRequest()
   let hasReceivedDelta = false
   let didCompleteAssistantResponse = false
@@ -584,8 +677,6 @@ async function sendAssistantMessage(message, options = {}) {
         tone: 'error',
       }),
     )
-    quickCommands.value = []
-
     if (error?.status !== 401) {
       assistantStore.showCompletionToast({
         equipmentId: requestEquipmentId,
@@ -598,9 +689,11 @@ async function sendAssistantMessage(message, options = {}) {
     if (shouldFinalizeRequest) {
       loadAssistantHistoryItems()
 
-      if (didCompleteAssistantResponse) {
-        loadAssistantSuggestions(selectedEquipment.value)
-      }
+      loadAssistantSuggestions(assistantContextEquipment.value, {
+        force:
+          didCompleteAssistantResponse &&
+          assistantContextEquipment.value?.id === requestEquipmentId,
+      })
     }
   }
 }
@@ -636,25 +729,76 @@ async function refreshRealtimeNotificationTelemetry(equipmentId) {
   const baseEquipment = factoryScene.equipmentList.find((item) => item.id === equipmentId)
 
   if (!baseEquipment) {
-    return
+    return false
   }
 
   try {
-    const updatedEquipment = await fetchEquipmentTelemetry(
+    const shouldMergeIncrementalTelemetry =
+      metricChartRange.mode !== 'custom' && hasChartPoints(baseEquipment)
+    const updatedEquipmentResponse = await fetchEquipmentTelemetry(
       equipmentId,
       baseEquipment,
-      getMetricChartQuery(),
+      shouldMergeIncrementalTelemetry
+        ? getIncrementalMetricChartQuery(baseEquipment)
+        : getMetricChartQuery(),
     )
 
     if (realtimeNotificationRequestIds.get(equipmentId) !== requestId) {
-      return
+      return false
     }
 
+    const updatedEquipment = shouldMergeIncrementalTelemetry
+      ? mergeIncrementalTelemetry(baseEquipment, updatedEquipmentResponse)
+      : updatedEquipmentResponse
+
     updateEquipmentTelemetry(updatedEquipment)
-    realtimeRevision.value += 1
+
+    if (selectedEquipmentId.value === equipmentId) {
+      realtimeRevision.value += 1
+    }
+    return true
   } catch {
     // The regular polling path retries transient telemetry refresh failures.
+    return false
   }
+}
+
+function scheduleRealtimeNotificationTelemetryRefresh(equipmentId) {
+  const activeState = realtimeNotificationRefreshStates.get(equipmentId)
+
+  if (activeState) {
+    activeState.shouldRefreshAgain = true
+    return activeState.promise
+  }
+
+  const refreshState = {
+    promise: null,
+    shouldRefreshAgain: false,
+  }
+
+  refreshState.promise = (async () => {
+    let didRefresh = false
+
+    do {
+      refreshState.shouldRefreshAgain = false
+      const didRefreshCurrentRequest = await refreshRealtimeNotificationTelemetry(equipmentId)
+
+      didRefresh ||= didRefreshCurrentRequest
+
+      if (didRefreshCurrentRequest) {
+        realtimeNotificationUpdatedAt.set(equipmentId, Date.now())
+      }
+    } while (refreshState.shouldRefreshAgain)
+
+    return didRefresh
+  })().finally(() => {
+    if (realtimeNotificationRefreshStates.get(equipmentId) === refreshState) {
+      realtimeNotificationRefreshStates.delete(equipmentId)
+    }
+  })
+
+  realtimeNotificationRefreshStates.set(equipmentId, refreshState)
+  return refreshState.promise
 }
 
 function applyRealtimeNotification(notification) {
@@ -678,10 +822,19 @@ function applyRealtimeNotification(notification) {
 
   realtimeSnapshotRequestId += 1
   updateEquipmentTelemetry(updatedEquipment)
-  void refreshRealtimeNotificationTelemetry(equipmentId)
+  scheduleRealtimeNotificationTelemetryRefresh(equipmentId)
+}
+
+function focusActiveAlertToast(notification) {
+  const equipmentId = notification?.equipmentId ?? notification?.equipmentCode
+
+  if (!equipmentId || !['warning', 'danger'].includes(notification?.tone)) {
+    return
+  }
+
   alertFocusRequest.value = {
     equipmentId,
-    key: `${notification.id ?? Date.now()}:${equipmentId}:${notification.metric ?? ''}`,
+    key: `toast:${notification.toastKey ?? notification.id ?? Date.now()}:${equipmentId}`,
   }
 }
 
@@ -747,15 +900,112 @@ function updateEquipmentTelemetry(updatedEquipment) {
     return
   }
 
-  factoryScene.equipmentList = factoryScene.equipmentList.map((equipment) =>
+  const nextEquipmentList = factoryScene.equipmentList.map((equipment) =>
     equipment.id === updatedEquipment.id ? updatedEquipment : equipment,
   )
+  factoryScene.equipmentList = nextEquipmentList
   factoryScene.lineGroups = factoryScene.lineGroups.map((line) => ({
     ...line,
     equipment: line.equipment.map((equipment) =>
       equipment.id === updatedEquipment.id ? updatedEquipment : equipment,
     ),
   }))
+  factoryScene.statusSummary = createFactoryStatusSummary(nextEquipmentList)
+}
+
+function getEquipmentTelemetrySignature(equipment) {
+  const chartSignature = Object.entries(equipment?.charts ?? {})
+    .map(([metricId, chart]) => {
+      const lastPoint = chart?.points?.at(-1)
+
+      return [
+        metricId,
+        chart?.points?.length ?? 0,
+        lastPoint?.timestamp ?? '',
+        lastPoint?.value ?? '',
+        lastPoint?.statusTone ?? '',
+      ].join(':')
+    })
+    .join('|')
+
+  return JSON.stringify({
+    alarmCode: equipment?.alarmCode,
+    alarmMetricIds: equipment?.alarmMetricIds,
+    chartSignature,
+    inspectedAt: equipment?.inspectedAt,
+    metrics: equipment?.metrics,
+    owner: equipment?.owner,
+    statusTone: equipment?.status?.tone,
+    updatedAt: equipment?.updatedAt,
+  })
+}
+
+function updateEquipmentTelemetryIfChanged(updatedEquipment) {
+  const currentEquipment = factoryScene.equipmentList.find(
+    (equipment) => equipment.id === updatedEquipment?.id,
+  )
+
+  if (
+    currentEquipment &&
+    getEquipmentTelemetrySignature(currentEquipment) ===
+      getEquipmentTelemetrySignature(updatedEquipment)
+  ) {
+    return false
+  }
+
+  updateEquipmentTelemetry(updatedEquipment)
+  return true
+}
+
+function createFactoryStatusSummary(equipmentList) {
+  return equipmentStatusOrder.map((statusTone) => ({
+    count: equipmentList.filter((equipment) => equipment.status?.tone === statusTone).length,
+    id: statusTone,
+    label: equipmentStatusMap[statusTone].label,
+    tone: statusTone,
+  }))
+}
+
+function applyEquipmentStatusSnapshot(statusItems = []) {
+  const statusByEquipmentId = new Map(
+    statusItems
+      .map((statusItem) => [statusItem.equipment_id ?? statusItem.equipmentId, statusItem])
+      .filter(([equipmentId]) => equipmentId),
+  )
+  let hasChanges = false
+  const nextEquipmentList = factoryScene.equipmentList.map((equipment) => {
+    const statusItem = statusByEquipmentId.get(equipment.id)
+
+    if (!statusItem) {
+      return equipment
+    }
+
+    const nextStatus = normalizeEquipmentStatus(statusItem.status)
+    const nextAlarmCode = statusItem.alarm_code || statusItem.alarmCode || equipment.alarmCode
+
+    if (nextStatus.tone === equipment.status?.tone && nextAlarmCode === equipment.alarmCode) {
+      return equipment
+    }
+
+    hasChanges = true
+    return {
+      ...equipment,
+      alarmCode: nextAlarmCode,
+      status: nextStatus,
+    }
+  })
+
+  if (!hasChanges) {
+    return
+  }
+
+  const nextEquipmentMap = new Map(nextEquipmentList.map((equipment) => [equipment.id, equipment]))
+  factoryScene.equipmentList = nextEquipmentList
+  factoryScene.lineGroups = factoryScene.lineGroups.map((line) => ({
+    ...line,
+    equipment: line.equipment.map((equipment) => nextEquipmentMap.get(equipment.id) ?? equipment),
+  }))
+  factoryScene.statusSummary = createFactoryStatusSummary(nextEquipmentList)
 }
 
 function getMetricChartQuery() {
@@ -775,20 +1025,93 @@ function getMetricChartQuery() {
   }
 }
 
-async function loadRealtimeSnapshot({ includeFactoryScene = true } = {}) {
+function getIncrementalMetricChartQuery(equipment) {
+  const fullRange = getMetricChartQuery()
+
+  if (metricChartRange.mode === 'custom') {
+    return fullRange
+  }
+
+  const latestTimestamp = Object.values(equipment?.charts ?? {})
+    .map((chart) => chart?.points?.at(-1)?.timestamp)
+    .filter(Boolean)
+    .toSorted()
+    .at(-1)
+
+  if (!latestTimestamp || !Number.isFinite(Date.parse(latestTimestamp))) {
+    return fullRange
+  }
+
+  return {
+    ...fullRange,
+    start: new Date(latestTimestamp).toISOString(),
+  }
+}
+
+function mergeIncrementalTelemetry(baseEquipment, updatedEquipment) {
+  const rangeStart = Date.parse(getMetricChartQuery().start)
+  const metricIds = new Set([
+    ...Object.keys(baseEquipment?.charts ?? {}),
+    ...Object.keys(updatedEquipment?.charts ?? {}),
+  ])
+  const charts = Object.fromEntries(
+    [...metricIds].map((metricId) => {
+      const currentChart = baseEquipment?.charts?.[metricId]
+      const updatedChart = updatedEquipment?.charts?.[metricId]
+      const pointMap = new Map(
+        [...(currentChart?.points ?? []), ...(updatedChart?.points ?? [])].map((point) => [
+          point.timestamp,
+          point,
+        ]),
+      )
+      const points = [...pointMap.values()]
+        .filter(
+          (point) => !Number.isFinite(rangeStart) || Date.parse(point.timestamp) >= rangeStart,
+        )
+        .toSorted((first, second) => Date.parse(first.timestamp) - Date.parse(second.timestamp))
+
+      return [
+        metricId,
+        {
+          ...currentChart,
+          ...updatedChart,
+          points,
+        },
+      ]
+    }),
+  )
+
+  return {
+    ...updatedEquipment,
+    charts,
+  }
+}
+
+async function loadRealtimeSnapshot({
+  includeFactoryScene = false,
+  includeStatusSnapshot = false,
+  includeTelemetry = true,
+  incrementalTelemetry = false,
+} = {}) {
   const equipmentId = selectedEquipmentId.value
 
-  if (!equipmentId && !includeFactoryScene) {
+  if (!equipmentId && !includeFactoryScene && !includeStatusSnapshot) {
     return
   }
 
   const requestId = ++realtimeSnapshotRequestId
   const baseEquipment = selectedEquipment.value
+  const shouldMergeIncrementalTelemetry =
+    incrementalTelemetry && metricChartRange.mode !== 'custom' && hasChartPoints(baseEquipment)
+  const chartQuery = shouldMergeIncrementalTelemetry
+    ? getIncrementalMetricChartQuery(baseEquipment)
+    : getMetricChartQuery()
 
-  const [sceneResult, telemetryResult] = await Promise.allSettled([
+  const [sceneResult, statusResult, telemetryResult] = await Promise.allSettled([
     includeFactoryScene ? fetchFactoryScene() : Promise.resolve(null),
-    equipmentId
-      ? fetchEquipmentTelemetry(equipmentId, baseEquipment, getMetricChartQuery())
+    includeStatusSnapshot ? fetchEquipmentStatuses() : Promise.resolve(null),
+    equipmentId && includeTelemetry
+      ? fetchEquipmentTelemetry(equipmentId, baseEquipment, chartQuery)
       : Promise.resolve(null),
   ])
 
@@ -802,13 +1125,19 @@ async function loadRealtimeSnapshot({ includeFactoryScene = true } = {}) {
     applyFactoryScene(createEmptyFactoryScene())
   }
 
-  if (equipmentId && selectedEquipmentId.value === equipmentId) {
-    if (telemetryResult.status === 'fulfilled' && telemetryResult.value) {
-      updateEquipmentTelemetry(telemetryResult.value)
-    }
+  if (statusResult.status === 'fulfilled' && statusResult.value) {
+    applyEquipmentStatusSnapshot(statusResult.value)
   }
 
-  realtimeRevision.value += 1
+  if (equipmentId && selectedEquipmentId.value === equipmentId) {
+    if (telemetryResult.status === 'fulfilled' && telemetryResult.value) {
+      const updatedEquipment = shouldMergeIncrementalTelemetry
+        ? mergeIncrementalTelemetry(baseEquipment, telemetryResult.value)
+        : telemetryResult.value
+
+      updateEquipmentTelemetryIfChanged(updatedEquipment)
+    }
+  }
 }
 
 async function loadInitialRealtimeSnapshot() {
@@ -820,7 +1149,7 @@ async function loadInitialRealtimeSnapshot() {
     applyFactoryScene(nextFactoryScene)
     await Promise.all([
       loadRealtimeSnapshot({ includeFactoryScene: false }),
-      loadAssistantSuggestions(selectedEquipment.value),
+      loadAssistantSuggestions(assistantContextEquipment.value),
     ])
   } catch {
     if (!factoryScene.equipmentList.length) {
@@ -838,15 +1167,22 @@ async function loadSelectedEquipmentSnapshot(equipmentId) {
   }
 
   const requestId = ++equipmentSwitchRequestId
+  const notificationRefreshState = realtimeNotificationRefreshStates.get(equipmentId)
+  const wasRecentlyRefreshed =
+    Date.now() - (realtimeNotificationUpdatedAt.get(equipmentId) ?? 0) < 800
+  const telemetryRequest =
+    notificationRefreshState?.promise.then((didRefresh) =>
+      didRefresh ? undefined : loadRealtimeSnapshot({ includeFactoryScene: false }),
+    ) ??
+    (wasRecentlyRefreshed
+      ? Promise.resolve()
+      : loadRealtimeSnapshot({ includeFactoryScene: false }))
 
   isEquipmentSwitching.value = true
-  loadAssistantSuggestions(selectedEquipment.value)
+  loadAssistantSuggestions(assistantContextEquipment.value)
 
   try {
-    await Promise.all([
-      loadRealtimeSnapshot({ includeFactoryScene: false }),
-      new Promise((resolve) => window.setTimeout(resolve, 520)),
-    ])
+    await telemetryRequest
   } finally {
     if (requestId === equipmentSwitchRequestId) {
       isEquipmentSwitching.value = false
@@ -869,7 +1205,37 @@ async function returnMetricChartToLive() {
 
 function startRealtimePolling() {
   window.clearInterval(realtimeSnapshotInterval)
-  realtimeSnapshotInterval = window.setInterval(loadRealtimeSnapshot, 5000)
+  nextStatusPollAt = Date.now() + statusPollingInterval
+  realtimeSnapshotInterval = window.setInterval(async () => {
+    if (document.hidden || isRealtimePollPending) {
+      return
+    }
+
+    isRealtimePollPending = true
+
+    try {
+      const now = Date.now()
+      const includeStatusSnapshot = now >= nextStatusPollAt
+
+      if (includeStatusSnapshot) {
+        nextStatusPollAt = now + statusPollingInterval
+      }
+
+      const includeTelemetry = metricChartRange.mode !== 'custom'
+
+      if (!includeTelemetry && !includeStatusSnapshot) {
+        return
+      }
+
+      await loadRealtimeSnapshot({
+        includeStatusSnapshot,
+        includeTelemetry,
+        incrementalTelemetry: includeTelemetry,
+      })
+    } finally {
+      isRealtimePollPending = false
+    }
+  }, realtimePollingInterval)
 }
 
 function clamp(value, min, max) {
@@ -1614,7 +1980,10 @@ async function loadInitialDashboardContent() {
   if (!shouldSkipDashboardApi) {
     await Promise.allSettled([
       loadInitialRealtimeSnapshot(),
-      startAlertToastStream({ onNotification: applyRealtimeNotification }),
+      startAlertToastStream({
+        onActiveToast: focusActiveAlertToast,
+        onNotification: applyRealtimeNotification,
+      }),
       loadAssistantHistoryItems(),
     ])
     startRealtimePolling()
@@ -1651,7 +2020,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelContentLoadingFrame()
   window.clearInterval(realtimeSnapshotInterval)
+  isRealtimePollPending = false
   realtimeNotificationRequestIds.clear()
+  realtimeNotificationRefreshStates.clear()
+  realtimeNotificationUpdatedAt.clear()
+  assistantSuggestionCache.clear()
+  assistantSuggestionRequests.clear()
   stopAlertToastStream()
   layoutResizeObserver?.disconnect()
 })
@@ -1725,6 +2099,7 @@ watch(
             <FactoryViewport
               :alert-focus-request="alertFocusRequest"
               :checklist-items="selectedChecklistItems"
+              :conversation-equipment-id="conversationEquipmentId"
               :is-equipment-switching="isEquipmentSwitching"
               :lines="factoryScene.lineGroups"
               :selected-equipment-id="selectedEquipmentId"
@@ -1794,6 +2169,7 @@ watch(
               @delete-history="deleteAssistantHistory"
               @select-history="selectAssistantHistory"
               @send-message="sendAssistantMessage"
+              @view-change="setAssistantPanelView"
             />
           </DashboardEditableWidget>
 
@@ -1843,10 +2219,7 @@ watch(
             @stash="stashWidget('repairHistory')"
             @update:layout="updateWidgetLayout('repairHistory', $event)"
           >
-            <RepairHistoryPanel
-              :equipment-id="selectedEquipmentId"
-              :refresh-key="realtimeRevision"
-            />
+            <RepairHistoryPanel :equipment-id="selectedEquipmentId" />
           </DashboardEditableWidget>
         </div>
       </div>

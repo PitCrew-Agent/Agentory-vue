@@ -20,11 +20,14 @@ describe('AssistantCompletionToast', () => {
       global: {
         plugins: [i18n],
       },
-      props: { toast },
+      props: { stackIndex: 1, toast },
     })
 
     expect(wrapper.get('[data-test="assistant-completion-toast"]').text()).toContain('Tory')
     expect(wrapper.get('[data-test="assistant-completion-toast"]').text()).toContain('EQP-A01')
+    expect(wrapper.get('[data-test="assistant-completion-toast"]').attributes('style')).toContain(
+      '--dashboard-toast-stack-index: 1',
+    )
 
     await wrapper.get('[data-test="assistant-completion-toast-open"]').trigger('click')
 

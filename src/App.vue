@@ -4,12 +4,14 @@ import { storeToRefs } from 'pinia'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
 import AssistantCompletionToast from '@/features/dashboard/components/AssistantCompletionToast.vue'
+import { useNotificationToastStackState } from '@/features/notification/composables/useNotificationToast'
 import { useAssistantStore } from '@/stores/assistantStore'
 
 const route = useRoute()
 const router = useRouter()
 const assistantStore = useAssistantStore()
 const { completionToast } = storeToRefs(assistantStore)
+const { visibleAlertToastCount } = useNotificationToastStackState()
 const isRouteLoading = ref(false)
 const dashboardRouteNames = new Set(['Dashboard', 'WorkLog', 'EquipmentList', 'NotificationLog'])
 const authRouteNames = new Set(['Login'])
@@ -61,6 +63,23 @@ watch(
   },
 )
 
+watch(
+  [visibleAlertToastCount, completionToast],
+  ([alertToastCount, assistantToast]) => {
+    if (!assistantToast) {
+      return
+    }
+
+    if (alertToastCount > 0) {
+      assistantStore.pauseCompletionToast()
+      return
+    }
+
+    assistantStore.resumeCompletionToast()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   window.clearTimeout(loadingTimer)
 })
@@ -69,6 +88,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-route-shell" :class="{ 'app-route-shell--loading': isRouteLoading }">
     <AssistantCompletionToast
+      :stack-index="visibleAlertToastCount"
       :toast="completionToast"
       @open="openCompletedAssistantConversation"
       @pause="assistantStore.pauseCompletionToast"

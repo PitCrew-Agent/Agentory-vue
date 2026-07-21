@@ -81,4 +81,20 @@ describe('useAssistantStore', () => {
     expect(request.signal.aborted).toBe(true)
     expect(store.isRequestActive(request.id)).toBe(false)
   })
+
+  it('keeps one equipment context for each conversation session', () => {
+    const store = useAssistantStore()
+
+    store.startNewSession({ equipmentId: 'EQP-A05' })
+
+    expect(store.sessionEquipmentId).toBe('EQP-A05')
+
+    store.startNewSession({ equipmentId: 'EQP-B03' })
+
+    expect(store.sessionEquipmentId).toBe('EQP-B03')
+
+    store.reset()
+
+    expect(store.sessionEquipmentId).toBe('')
+  })
 })

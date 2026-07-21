@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createEmptyEquipment,
+  fetchEquipmentStatuses,
   fetchEquipmentTelemetry,
 } from '@/features/dashboard/services/telemetryApi'
 import { http } from '@/services/api/http'
@@ -118,5 +119,51 @@ describe('telemetryApi', () => {
     resolveSeries([])
 
     await expect(telemetryPromise).resolves.toBeTruthy()
+  })
+
+  it('상태 폴링은 전 설비 상세 대신 상태 목록 API만 조회한다', async () => {
+    const statuses = [{ equipment_id: 'EQP-A01', status: 'warning' }]
+    http.get.mockResolvedValue(statuses)
+
+    await expect(fetchEquipmentStatuses()).resolves.toEqual(statuses)
+    expect(http.get).toHaveBeenCalledOnce()
+    expect(http.get).toHaveBeenCalledWith('/api/v1/telemetry/equipment/status')
+  })
+
+  it('uses the backend Deposition profile for sensor status and chart thresholds', async () => {
+    http.get.mockImplementation((url) => {
+      if (url.endsWith('/series')) {
+        return Promise.resolve([
+          {
+            gas_flow: 400,
+            pressure: 30,
+            rf_power: 1.8,
+            temperature: 46,
+            timestamp: '2026-07-20T12:00:00Z',
+          },
+        ])
+      }
+
+      return Promise.resolve({
+        gas_flow: 400,
+        pressure: 30,
+        process_type: 'Deposition',
+        rf_power: 1.8,
+        status: 'warning',
+        temperature: 46,
+        updated_at: '2026-07-20T12:00:00Z',
+      })
+    })
+
+    const equipment = await fetchEquipmentTelemetry('EQP-B01', createEmptyEquipment())
+    const temperatureMetric = equipment.metrics.find((metric) => metric.id === 'temperature')
+
+    expect(temperatureMetric.statusTone).toBe('warning')
+    expect(equipment.charts.temperature.thresholds).toEqual({
+      lcl: 44.7,
+      lsl: 43.5,
+      ucl: 45.3,
+      usl: 46.5,
+    })
   })
 })

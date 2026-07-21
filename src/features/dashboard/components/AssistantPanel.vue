@@ -37,7 +37,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['delete-history', 'select-history', 'send-message'])
+const emit = defineEmits(['delete-history', 'select-history', 'send-message', 'view-change'])
 const { locale, t } = useI18n()
 const activePanelView = ref(props.isLoading ? 'chat' : 'history')
 const inputMessage = ref('')
@@ -525,10 +525,12 @@ function scrollToBottom() {
 
 function openHistoryView() {
   activePanelView.value = 'history'
+  emit('view-change', 'history')
 }
 
 function closeHistoryView() {
   activePanelView.value = 'chat'
+  emit('view-change', 'chat')
   scrollToBottom()
 }
 
@@ -639,8 +641,6 @@ onBeforeUnmount(() => {
         </span>
       </div>
     </div>
-
-    <div class="assistant-panel__divider"></div>
 
     <div v-if="isHistoryView" class="assistant-panel__history" data-test="assistant-history">
       <div
@@ -846,16 +846,16 @@ onBeforeUnmount(() => {
             <span>{{ command.label }}</span>
           </button>
         </div>
-        <div v-else class="assistant-panel__quick-list" aria-hidden="true">
+        <div
+          v-else
+          class="assistant-panel__quick-list assistant-panel__quick-list--loading"
+          aria-hidden="true"
+        >
           <div
             v-for="item in 3"
             :key="`quick-loading-${item}`"
             class="assistant-panel__quick-loading-row"
-          >
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+          ></div>
         </div>
       </div>
 
@@ -920,7 +920,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  padding: 0 var(--agentory-spacing-15) var(--agentory-spacing-15);
+  padding: 0 var(--agentory-spacing-16) var(--agentory-spacing-15);
   overflow: hidden;
   background: var(--agentory-color-bg-app);
   border-radius: var(--agentory-radius-16);
@@ -933,7 +933,8 @@ onBeforeUnmount(() => {
   gap: var(--agentory-spacing-8);
   min-height: 28px;
   width: 100%;
-  padding: var(--agentory-spacing-20) var(--agentory-spacing-20) var(--agentory-spacing-10);
+  padding: var(--agentory-spacing-20) 0 var(--agentory-spacing-10);
+  border-bottom: 2px solid var(--agentory-color-bg-primary);
 }
 
 .assistant-panel__title {
@@ -986,12 +987,6 @@ onBeforeUnmount(() => {
   font-weight: var(--agentory-font-weight-medium);
   line-height: var(--agentory-line-height-body-sm);
   white-space: nowrap;
-}
-
-.assistant-panel__divider {
-  height: 2px;
-  margin-inline: var(--agentory-spacing-5);
-  background: var(--agentory-color-bg-primary);
 }
 
 .assistant-panel__history {
@@ -1722,8 +1717,7 @@ onBeforeUnmount(() => {
   line-height: var(--agentory-line-height-body-sm);
 }
 
-.assistant-panel__quick-dots,
-.assistant-panel__quick-loading-row {
+.assistant-panel__quick-dots {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1735,8 +1729,7 @@ onBeforeUnmount(() => {
   height: var(--agentory-line-height-caption);
 }
 
-.assistant-panel__quick-dots span,
-.assistant-panel__quick-loading-row span {
+.assistant-panel__quick-dots span {
   width: 5px;
   height: 5px;
   background: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 28%);
@@ -1744,13 +1737,11 @@ onBeforeUnmount(() => {
   animation: assistant-quick-dot-dance 820ms ease-in-out infinite;
 }
 
-.assistant-panel__quick-dots span:nth-child(2),
-.assistant-panel__quick-loading-row span:nth-child(2) {
+.assistant-panel__quick-dots span:nth-child(2) {
   animation-delay: 120ms;
 }
 
-.assistant-panel__quick-dots span:nth-child(3),
-.assistant-panel__quick-loading-row span:nth-child(3) {
+.assistant-panel__quick-dots span:nth-child(3) {
   animation-delay: 240ms;
 }
 
@@ -1771,6 +1762,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-panel__quick-loading-row {
+  display: block;
   min-height: 34px;
   background: linear-gradient(
     135deg,
@@ -2083,7 +2075,6 @@ onBeforeUnmount(() => {
   .assistant-panel__history-loading span,
   .assistant-panel__message,
   .assistant-panel__quick-dots span,
-  .assistant-panel__quick-loading-row span,
   .assistant-panel__thinking-copy strong,
   .assistant-panel__thinking-status::after,
   .assistant-panel__streaming-text::after,

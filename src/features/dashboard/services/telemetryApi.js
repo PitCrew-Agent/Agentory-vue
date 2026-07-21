@@ -6,6 +6,7 @@ import {
 import {
   createEmptyMetricChart,
   createEmptyMetricCharts,
+  getMetricThresholds,
   metricConfigs,
   metricIds,
 } from '@/features/dashboard/constants/equipmentMetrics'
@@ -213,8 +214,8 @@ function getPointStatus(point, index, pointCount, detail) {
   return null
 }
 
-function getMetricThresholdStatus(metricId, value) {
-  const thresholds = metricConfigs[metricId]?.thresholds
+function getMetricThresholdStatus(metricId, value, processType) {
+  const thresholds = getMetricThresholds(metricId, processType)
 
   if (!thresholds || value === null) {
     return null
@@ -235,7 +236,8 @@ function createMetrics(detail = {}) {
   return metricIds.map((metricId) => {
     const config = metricConfigs[metricId]
     const rawValue = getMetricRawValue(detail, metricId)
-    const status = getMetricThresholdStatus(metricId, rawValue) ?? equipmentStatusMap.normal
+    const status =
+      getMetricThresholdStatus(metricId, rawValue, detail.process_type) ?? equipmentStatusMap.normal
 
     return {
       icon: config.icon,
@@ -252,6 +254,7 @@ function createMetrics(detail = {}) {
 
 function createMetricChart(metricId, series = [], detail = {}) {
   const config = metricConfigs[metricId]
+  const thresholds = getMetricThresholds(metricId, detail.process_type)
 
   if (!config) {
     return createEmptyMetricChart()
@@ -261,7 +264,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
     .map((point, index) => {
       const value = getMetricRawValue(point, metricId)
       const status =
-        getMetricThresholdStatus(metricId, value) ??
+        getMetricThresholdStatus(metricId, value, detail.process_type) ??
         getPointStatus(point, index, series.length, detail)
 
       return {
@@ -278,7 +281,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
   if (!points.length) {
     const currentValue = getMetricRawValue(detail, metricId)
     const status =
-      getMetricThresholdStatus(metricId, currentValue) ??
+      getMetricThresholdStatus(metricId, currentValue, detail.process_type) ??
       (detail.status ? normalizeEquipmentStatus(detail.status) : null)
 
     if (currentValue !== null) {
@@ -294,9 +297,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
   }
 
   const values = points.map((point) => point.value)
-  const thresholdValues = Object.values(config.thresholds ?? {}).filter((value) =>
-    Number.isFinite(value),
-  )
+  const thresholdValues = Object.values(thresholds).filter((value) => Number.isFinite(value))
   const scaleValues = [...values, ...thresholdValues]
   const configRange = Math.max(config.max - config.min, 1)
   const dataMinValue = scaleValues.length ? Math.min(...scaleValues) : config.min
@@ -318,7 +319,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
     min: Number((minValue - padding).toFixed(config.precision)),
     points,
     precision: config.precision,
-    thresholds: config.thresholds,
+    thresholds,
     title: `${config.label}(${config.unit})`,
     unit: config.unit,
   }
@@ -566,10 +567,20 @@ export async function fetchEquipmentSuggestions(equipmentId) {
     .slice(0, 3)
 }
 
+export async function fetchEquipmentStatuses() {
+  const response = await http.get('/api/v1/telemetry/equipment/status')
+
+  if (Array.isArray(response)) {
+    return response
+  }
+
+  return response?.items ?? response?.equipment ?? response?.results ?? []
+}
+
 export async function fetchFactoryScene() {
   const [lineItems, statusItems] = await Promise.all([
     http.get('/api/v1/telemetry/lines'),
-    http.get('/api/v1/telemetry/equipment/status'),
+    fetchEquipmentStatuses(),
   ])
   const lines = normalizeLineItems(lineItems, statusItems)
   const detailResults = await Promise.allSettled(
@@ -614,11 +625,7 @@ export async function fetchEquipmentTelemetry(
 ) {
   const [detail, series] = await Promise.all([
     fetchEquipmentDetail(equipmentId),
-    fetchEquipmentSeries(
-      equipmentId,
-      options.start || createRecentSeriesStart(),
-      options.end,
-    ),
+    fetchEquipmentSeries(equipmentId, options.start || createRecentSeriesStart(), options.end),
   ])
   const nextEquipment = applyEquipmentDetail(baseEquipment, detail)
 

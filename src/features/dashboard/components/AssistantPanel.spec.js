@@ -92,4 +92,39 @@ describe('AssistantPanel', () => {
     expect(wrapper.find('textarea').element.value).toBe('압력 이력을 확인해줘')
     expect(wrapper.emitted('send-message')).toBeUndefined()
   })
+
+  it('keeps one loading animation while the recommendation rows stay blurred', () => {
+    const wrapper = mountAssistantPanel({
+      props: {
+        isQuickCommandLoading: true,
+      },
+    })
+
+    expect(wrapper.findAll('.assistant-panel__quick-dots span')).toHaveLength(3)
+    expect(wrapper.findAll('.assistant-panel__quick-loading-row')).toHaveLength(3)
+    expect(wrapper.findAll('.assistant-panel__quick-loading-row span')).toHaveLength(0)
+    expect(wrapper.find('.assistant-panel__quick-list--loading').exists()).toBe(true)
+  })
+
+  it('uses the header itself as the shared widget divider', () => {
+    const wrapper = mountAssistantPanel()
+
+    expect(wrapper.find('.assistant-panel__header').exists()).toBe(true)
+    expect(wrapper.find('.assistant-panel__divider').exists()).toBe(false)
+  })
+
+  it('reports chat and history view changes to the dashboard', async () => {
+    const wrapper = mountAssistantPanel({
+      props: {
+        messages: [{ id: 'user-1', role: 'user', text: '설비 상태 확인' }],
+      },
+    })
+
+    await wrapper.setProps({ openConversationRequest: 1 })
+    await nextTick()
+    expect(wrapper.emitted('view-change')).toContainEqual(['chat'])
+
+    await wrapper.find('.assistant-panel__nav-button').trigger('click')
+    expect(wrapper.emitted('view-change')).toContainEqual(['history'])
+  })
 })

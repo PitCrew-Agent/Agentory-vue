@@ -65,7 +65,46 @@ export const metricConfigs = {
   },
 }
 
+const depositionThresholds = {
+  gasFlow: {
+    lcl: 392.5,
+    lsl: 350,
+    ucl: 407.5,
+    usl: 450,
+  },
+  pressure: {
+    lcl: 28.5,
+    lsl: 22,
+    ucl: 31.5,
+    usl: 40,
+  },
+  rfPower: {
+    lcl: 1.74,
+    lsl: 1.55,
+    ucl: 1.86,
+    usl: 2.05,
+  },
+  temperature: {
+    lcl: 44.7,
+    lsl: 43.5,
+    ucl: 45.3,
+    usl: 46.5,
+  },
+}
+
 export const metricIds = Object.keys(metricConfigs)
+
+export function getMetricThresholds(metricId, processType = 'Etching') {
+  const normalizedProcessType = String(processType ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (normalizedProcessType === 'deposition' && depositionThresholds[metricId]) {
+    return depositionThresholds[metricId]
+  }
+
+  return metricConfigs[metricId]?.thresholds ?? {}
+}
 
 export function createEmptyMetricChart(metricId = 'temperature') {
   const config = metricConfigs[metricId] ?? metricConfigs.temperature

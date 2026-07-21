@@ -40,6 +40,8 @@ describe('DashboardAlertToast', () => {
     const renderedToasts = wrapper.findAll('.dashboard-alert-toast')
 
     expect(renderedToasts).toHaveLength(2)
+    expect(renderedToasts[0].classes()).toContain('dashboard-alert-toast--warning')
+    expect(renderedToasts[1].classes()).toContain('dashboard-alert-toast--danger')
     expect(wrapper.text()).toContain('첫 번째 알림')
     expect(wrapper.text()).toContain('두 번째 알림')
     expect(wrapper.text()).not.toContain('대기 중인 알림')
