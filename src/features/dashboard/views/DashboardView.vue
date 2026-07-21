@@ -2185,8 +2185,8 @@ watch(
             @update:layout="updateWidgetLayout('equipmentAnalysis', $event)"
           >
             <EquipmentAnalysisPanel
+              :charts="selectedEquipment.charts"
               :equipment-id="selectedEquipmentId"
-              :start-at="selectedEquipment.inspectionStartedAt"
             />
           </DashboardEditableWidget>
 
