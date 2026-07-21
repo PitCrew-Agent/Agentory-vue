@@ -64,6 +64,9 @@ describe('LineChart', () => {
     const options = wrapper.findComponent({ name: 'ChartCanvas' }).props('options')
 
     expect(datasets.filter((dataset) => dataset.kind === 'threshold')).toHaveLength(4)
+    expect(options.animations.x.duration({ dataset: { kind: 'threshold' } })).toBe(0)
+    expect(options.animations.y.duration({ dataset: { kind: 'threshold' } })).toBe(0)
+    expect(options.animations.x.duration({ dataset: { kind: 'metric' } })).toBe(360)
     expect(options.scales.x.ticks.count).toBe(6)
     expect(wrapper.find('input[type="range"]').exists()).toBe(true)
     expect(wrapper.find('.line-chart__live').text()).toBe('LIVE')

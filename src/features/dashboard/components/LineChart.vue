@@ -149,7 +149,7 @@ const chartData = computed(() => {
     pointHoverRadius: points.map((point, index) => getPointRadius(point, index, points.length) + 2),
     pointRadius: points.map((point, index) => getPointRadius(point, index, points.length)),
     pointStyle: points.map(getPointStyle),
-    tension: 0.28,
+    tension: 0.16,
   }
   const thresholdDatasets = [
     createThresholdDataset({
@@ -200,12 +200,14 @@ const chartOptions = computed(() => {
         duration: 0,
       },
       x: {
-        duration: isFollowingLive.value ? 1400 : 220,
-        easing: 'easeInOutCubic',
+        duration: (context) =>
+          context.dataset?.kind === 'threshold' ? 0 : isFollowingLive.value ? 360 : 180,
+        easing: 'linear',
       },
       y: {
-        duration: isFollowingLive.value ? 900 : 180,
-        easing: 'easeOutCubic',
+        duration: (context) =>
+          context.dataset?.kind === 'threshold' ? 0 : isFollowingLive.value ? 160 : 120,
+        easing: 'linear',
       },
     },
     interaction: {
@@ -216,6 +218,7 @@ const chartOptions = computed(() => {
       padding: { bottom: 0, left: 2, right: 6, top: 2 },
     },
     maintainAspectRatio: false,
+    normalized: true,
     plugins: {
       legend: {
         align: 'end',

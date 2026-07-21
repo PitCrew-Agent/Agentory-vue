@@ -20,6 +20,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  conversationEquipmentId: {
+    type: String,
+    default: '',
+  },
   isEquipmentSwitching: {
     type: Boolean,
     default: false,
@@ -36,6 +40,7 @@ const props = defineProps({
 
 const emit = defineEmits(['select-equipment'])
 const { locale, t } = useI18n()
+const AUTO_FOCUS_RECOVERY_DELAY = 5000
 const statusSummaryOrder = equipmentStatusOrder.map((statusId) => ({ id: statusId }))
 
 const canvasRef = ref(null)
@@ -43,6 +48,7 @@ const cameraControlRef = ref(null)
 const viewportRef = ref(null)
 const activeCameraViewId = ref('overview')
 const canRenderScene = ref(true)
+const cameraLockMotion = ref('')
 const currentSelectedEquipmentId = ref(props.selectedEquipmentId || '')
 const isCameraMenuOpen = ref(false)
 const isCameraViewLocked = ref(false)
@@ -56,7 +62,6 @@ const labelItems = ref([])
 const selectedLine = computed(
   () => props.lines.find((line) => line.id === selectedLineId.value) ?? props.lines[0],
 )
-
 const activeEquipmentList = computed(() => selectedLine.value?.equipment ?? [])
 
 const selectedLineSummary = computed(() =>
@@ -127,17 +132,19 @@ let selectableObjects = []
 let targetFocus = null
 let labelLayoutSignature = ''
 let lineSceneLoadingTimer = 0
-let overviewAlertFocusTimer = 0
+let lastLabelUpdateAt = 0
+let autoFocusRecoveryTimer = 0
+let autoFocusedEquipmentId = ''
+let cameraLockMotionTimer = 0
+let conversationLockedEquipmentId = ''
 let hasCompletedInitialOverview = false
 let hasFocusedEquipmentByInteraction = false
 let isLineOverviewFocused = true
 let lastHandledAlertFocusKey = ''
 let shouldFocusLineOverview = false
-let statusSnapshotLineId = ''
 
 const equipmentGroups = new Map()
 const labelAnchors = new Map()
-const equipmentStatusSnapshot = new Map()
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -267,6 +274,45 @@ function addToolPort(group, palette, x = 0) {
   efemArm.rotation.y = -0.26
 }
 
+function addIntegratedEtchLoadPort(group, palette) {
+  const recessMaterial = createStandardMaterial(palette.dark, {
+    metalness: 0.2,
+    opacity: 0.84,
+    roughness: 0.34,
+    transparent: true,
+  })
+  const moduleMaterial = createStandardMaterial(palette.panel, {
+    metalness: 0.12,
+    roughness: 0.4,
+  })
+  const slotMaterial = createStandardMaterial(palette.accent, {
+    opacity: 0.76,
+    roughness: 0.32,
+    transparent: true,
+  })
+  const glassMaterial = createStandardMaterial(palette.accent, {
+    opacity: 0.2,
+    roughness: 0.22,
+    transparent: true,
+  })
+  glassMaterial.depthWrite = false
+
+  addBox(group, { x: 0.78, y: 0.46, z: 0.035 }, { x: 0.04, y: 0.58, z: -0.47 }, recessMaterial)
+  addBox(group, { x: 0.26, y: 0.3, z: 0.035 }, { x: -0.18, y: 0.58, z: -0.5 }, moduleMaterial)
+  addBox(group, { x: 0.16, y: 0.18, z: 0.025 }, { x: -0.18, y: 0.58, z: -0.525 }, slotMaterial)
+  ;[-0.11, 0, 0.11].forEach((offsetY) => {
+    addBox(
+      group,
+      { x: 0.25, y: 0.035, z: 0.035 },
+      { x: 0.22, y: 0.58 + offsetY, z: -0.515 },
+      slotMaterial,
+    )
+  })
+
+  addBox(group, { x: 0.035, y: 0.31, z: 0.035 }, { x: 0.38, y: 0.58, z: -0.515 }, moduleMaterial)
+  addBox(group, { x: 0.72, y: 0.4, z: 0.018 }, { x: 0.04, y: 0.58, z: -0.55 }, glassMaterial)
+}
+
 function createFoupLoaderEquipment(group, palette) {
   const bodyMaterial = createStandardMaterial(palette.panel)
   const accentMaterial = createStandardMaterial(palette.accent)
@@ -296,18 +342,12 @@ function createEtchEquipment(group, palette) {
     roughness: 0.36,
     transparent: true,
   })
-  const glassMaterial = createStandardMaterial(palette.accent, {
-    opacity: 0.32,
-    transparent: true,
-  })
-
   addBox(group, { x: 1.3, y: 1.08, z: 0.88 }, { x: 0, y: 0.6, z: 0 }, bodyMaterial)
   addCylinder(group, 0.42, 0.52, { x: -0.26, y: 0.98, z: -0.02 }, chamberMaterial, 48)
   addCylinder(group, 0.34, 0.42, { x: 0.36, y: 0.88, z: -0.02 }, chamberMaterial, 48)
   addBox(group, { x: 0.8, y: 0.2, z: 0.12 }, { x: 0.02, y: 1.3, z: -0.44 }, accentMaterial)
-  addBox(group, { x: 0.56, y: 0.36, z: 0.06 }, { x: 0.05, y: 0.58, z: -0.48 }, glassMaterial)
+  addIntegratedEtchLoadPort(group, palette)
   addHorizontalCylinder(group, 0.035, 1.12, { x: 0.02, y: 1.56, z: 0.44 }, accentMaterial)
-  addToolPort(group, palette)
 }
 
 function createTransferRobotEquipment(group, palette) {
@@ -468,19 +508,6 @@ function buildProcessInfrastructure(group, palette) {
   addBox(group, { x: lineLength, y: 0.02, z: 1.3 }, { x: centerX, y: 0.028, z: 1.8 }, bayMaterial)
   addBox(group, { x: lineLength, y: 0.02, z: 1.3 }, { x: centerX, y: 0.028, z: -1.8 }, bayMaterial)
 
-  addBox(
-    group,
-    { x: lineLength, y: 0.035, z: 0.08 },
-    { x: centerX, y: 0.09, z: -0.48 },
-    railMaterial,
-  )
-  addBox(
-    group,
-    { x: lineLength, y: 0.035, z: 0.08 },
-    { x: centerX, y: 0.09, z: 0.48 },
-    railMaterial,
-  )
-
   addHorizontalCylinder(group, 0.04, lineLength, { x: centerX, y: 2.72, z: -0.32 }, railMaterial)
   addHorizontalCylinder(group, 0.04, lineLength, { x: centerX, y: 2.72, z: 0.32 }, railMaterial)
   addBox(group, { x: lineLength, y: 0.04, z: 0.72 }, { x: centerX, y: 2.58, z: 0 }, utilityMaterial)
@@ -503,43 +530,13 @@ function buildProcessInfrastructure(group, palette) {
     )
   })
 
-  addBox(
-    group,
-    { x: lineLength, y: 0.08, z: 0.18 },
-    { x: centerX, y: 0.08, z: 2.72 },
-    utilityMaterial,
-  )
-  addBox(
-    group,
-    { x: lineLength, y: 0.08, z: 0.18 },
-    { x: centerX, y: 0.08, z: -2.72 },
-    utilityMaterial,
-  )
-
   addHorizontalCylinder(group, 0.032, lineLength, { x: centerX, y: 2.96, z: 0.86 }, pipeMaterial)
   addHorizontalCylinder(group, 0.032, lineLength, { x: centerX, y: 2.96, z: -0.86 }, pipeMaterial)
   addHorizontalCylinder(group, 0.026, 1.72, { x: minX, y: 2.96, z: 0 }, utilityMaterial, 'z')
   addHorizontalCylinder(group, 0.026, 1.72, { x: maxX, y: 2.96, z: 0 }, utilityMaterial, 'z')
 
   equipmentList.forEach((equipment) => {
-    const frontDirection = getEquipmentFrontDirection(equipment)
-    const portZ = equipment.position.z + frontDirection.z * 0.82
-    const bridgeZ = portZ / 2
-    const bridgeLength = Math.max(Math.abs(portZ), 0.24)
     const trackZ = equipment.position.z > 0 ? 0.68 : equipment.position.z < 0 ? -0.68 : 0
-
-    addBox(
-      group,
-      { x: 0.38, y: 0.08, z: bridgeLength },
-      { x: equipment.position.x, y: 0.2, z: bridgeZ },
-      railMaterial,
-    )
-    addBox(
-      group,
-      { x: 0.7, y: 0.045, z: 0.07 },
-      { x: equipment.position.x, y: 0.31, z: portZ },
-      railMaterial,
-    )
     addCylinder(
       group,
       0.018,
@@ -668,7 +665,7 @@ function setFocusForEquipment(equipment, immediate = false) {
     return
   }
 
-  clearOverviewAlertFocusTimer()
+  clearAutoFocusRecoveryTimer()
 
   const target = new THREE.Vector3(equipment.position.x, 0.78, equipment.position.z)
   const currentOffset = camera.position.clone().sub(controls.target)
@@ -693,38 +690,48 @@ function setFocusForEquipment(equipment, immediate = false) {
   }
 }
 
-function clearOverviewAlertFocusTimer() {
-  window.clearTimeout(overviewAlertFocusTimer)
-  overviewAlertFocusTimer = 0
+function clearAutoFocusRecoveryTimer() {
+  window.clearTimeout(autoFocusRecoveryTimer)
+  autoFocusRecoveryTimer = 0
 }
 
-function scheduleOverviewAlertFocus() {
-  clearOverviewAlertFocusTimer()
+function releaseAutoFocusControl() {
+  clearAutoFocusRecoveryTimer()
+  autoFocusedEquipmentId = ''
+}
 
-  if (isCameraViewLocked.value || !isLineOverviewFocused) {
+function scheduleAutoFocusRecovery() {
+  clearAutoFocusRecoveryTimer()
+
+  const equipmentId = autoFocusedEquipmentId
+  const equipment = equipmentById.value[equipmentId]
+
+  if (
+    !equipmentId ||
+    isCameraViewLocked.value ||
+    isLineOverviewFocused ||
+    currentSelectedEquipmentId.value !== equipmentId ||
+    equipment?.status?.tone !== 'normal'
+  ) {
     return
   }
 
-  const targetLineId = selectedLine.value?.id ?? ''
-  const alertEquipment = getPriorityAlertEquipment()
+  autoFocusRecoveryTimer = window.setTimeout(() => {
+    autoFocusRecoveryTimer = 0
+    const latestEquipment = equipmentById.value[equipmentId]
 
-  if (!targetLineId || !alertEquipment) {
-    return
-  }
-
-  overviewAlertFocusTimer = window.setTimeout(() => {
-    overviewAlertFocusTimer = 0
-
-    if (!isLineOverviewFocused || selectedLine.value?.id !== targetLineId) {
+    if (
+      autoFocusedEquipmentId !== equipmentId ||
+      isCameraViewLocked.value ||
+      isLineOverviewFocused ||
+      currentSelectedEquipmentId.value !== equipmentId ||
+      latestEquipment?.status?.tone !== 'normal'
+    ) {
       return
     }
 
-    const nextAlertEquipment = getPriorityAlertEquipment()
-
-    if (nextAlertEquipment) {
-      selectEquipment(nextAlertEquipment.id, { autoFocus: true })
-    }
-  }, 5000)
+    setLineOverviewFocus()
+  }, AUTO_FOCUS_RECOVERY_DELAY)
 }
 
 function getActiveLineBounds() {
@@ -774,13 +781,13 @@ function setLineOverviewFocus(immediate = false) {
     return
   }
 
+  releaseAutoFocusControl()
   const overviewState = getLineOverviewCameraState()
 
   isLineOverviewFocused = true
   activeCameraViewId.value = 'overview'
   isAlertChecklistOpen.value = false
   targetFocus = overviewState
-  scheduleOverviewAlertFocus()
 
   if (immediate) {
     camera.position.copy(overviewState.camera)
@@ -791,6 +798,10 @@ function setLineOverviewFocus(immediate = false) {
 }
 
 function focusLineOverview() {
+  if (isCameraViewLocked.value && conversationLockedEquipmentId) {
+    return
+  }
+
   isCameraMenuOpen.value = false
   setLineOverviewFocus()
 }
@@ -805,17 +816,39 @@ function toggleCameraMenu() {
   isLineSelectorOpen.value = false
 }
 
-function toggleCameraViewLock() {
-  isCameraViewLocked.value = !isCameraViewLocked.value
+function playCameraLockMotion(motion) {
+  window.clearTimeout(cameraLockMotionTimer)
+  cameraLockMotion.value = ''
 
-  if (isCameraViewLocked.value) {
-    clearOverviewAlertFocusTimer()
+  nextTick(() => {
+    cameraLockMotion.value = motion
+    cameraLockMotionTimer = window.setTimeout(() => {
+      cameraLockMotion.value = ''
+      cameraLockMotionTimer = 0
+    }, 620)
+  })
+}
+
+function setCameraViewLock(locked, { conversationEquipmentId = '' } = {}) {
+  const didChange = isCameraViewLocked.value !== locked
+
+  isCameraViewLocked.value = locked
+  conversationLockedEquipmentId = locked ? conversationEquipmentId : ''
+
+  if (didChange) {
+    playCameraLockMotion(locked ? 'lock' : 'unlock')
+  }
+
+  if (locked) {
+    clearAutoFocusRecoveryTimer()
     return
   }
 
-  if (isLineOverviewFocused) {
-    scheduleOverviewAlertFocus()
-  }
+  scheduleAutoFocusRecovery()
+}
+
+function toggleCameraViewLock() {
+  setCameraViewLock(!isCameraViewLocked.value)
 }
 
 function showLineSceneLoading() {
@@ -833,7 +866,23 @@ function selectEquipment(equipmentId, options = {}) {
     return
   }
 
-  clearOverviewAlertFocusTimer()
+  if (
+    options.manual &&
+    isCameraViewLocked.value &&
+    conversationLockedEquipmentId &&
+    equipmentId !== conversationLockedEquipmentId
+  ) {
+    return
+  }
+
+  if (options.manual) {
+    releaseAutoFocusControl()
+  } else if (options.autoFocus) {
+    clearAutoFocusRecoveryTimer()
+    autoFocusedEquipmentId = equipmentId
+  } else if (options.conversationFocus) {
+    releaseAutoFocusControl()
+  }
 
   currentSelectedEquipmentId.value = equipmentId
   selectedLineId.value = equipment.lineId
@@ -849,6 +898,10 @@ function selectEquipment(equipmentId, options = {}) {
 }
 
 function selectLine(lineId) {
+  if (isCameraViewLocked.value && conversationLockedEquipmentId) {
+    return
+  }
+
   const line = props.lines.find((item) => item.id === lineId)
   const firstEquipment = line?.equipment[0]
   const isChangingLine = selectedLineId.value !== lineId
@@ -857,6 +910,7 @@ function selectLine(lineId) {
     showLineSceneLoading()
   }
 
+  releaseAutoFocusControl()
   shouldFocusLineOverview = true
   selectedLineId.value = lineId
   isAlertChecklistOpen.value = false
@@ -875,84 +929,28 @@ function toggleLineSelector() {
   isCameraMenuOpen.value = false
 }
 
-function rememberActiveEquipmentStatuses() {
-  equipmentStatusSnapshot.clear()
-  activeEquipmentList.value.forEach((equipment) => {
-    equipmentStatusSnapshot.set(equipment.id, equipment.status?.tone ?? 'normal')
-  })
-  statusSnapshotLineId = selectedLine.value?.id ?? ''
-}
+function syncConversationCameraFocus() {
+  const equipmentId = props.conversationEquipmentId
 
-function isAlertTone(tone) {
-  return ['warning', 'danger'].includes(tone)
-}
-
-function getPriorityAlertEquipment(excludeEquipmentId = '') {
-  return ['danger', 'warning']
-    .map((tone) =>
-      activeEquipmentList.value.find(
-        (equipment) => equipment.id !== excludeEquipmentId && equipment.status?.tone === tone,
-      ),
-    )
-    .find(Boolean)
-}
-
-function focusChangedAlertEquipment() {
-  const lineId = selectedLine.value?.id ?? ''
-
-  if (!lineId || statusSnapshotLineId !== lineId || equipmentStatusSnapshot.size === 0) {
-    rememberActiveEquipmentStatuses()
-    return
-  }
-
-  const selectedEquipment = activeEquipmentList.value.find(
-    (equipment) => equipment.id === currentSelectedEquipmentId.value,
-  )
-  const selectedPreviousTone = equipmentStatusSnapshot.get(selectedEquipment?.id)
-  const selectedNextTone = selectedEquipment?.status?.tone ?? 'normal'
-  const hasSelectedRecovered =
-    Boolean(selectedEquipment) && isAlertTone(selectedPreviousTone) && selectedNextTone === 'normal'
-  const priorityAlertEquipment = getPriorityAlertEquipment(
-    hasSelectedRecovered ? selectedEquipment.id : '',
-  )
-  const alertEquipment = activeEquipmentList.value.find((equipment) => {
-    const previousTone = equipmentStatusSnapshot.get(equipment.id)
-    const nextTone = equipment.status?.tone
-
-    return isAlertTone(nextTone) && previousTone !== nextTone
-  })
-
-  rememberActiveEquipmentStatuses()
-
-  if (isCameraViewLocked.value) {
-    return
-  }
-
-  if (hasSelectedRecovered) {
-    if (priorityAlertEquipment) {
-      if (isLineOverviewFocused) {
-        scheduleOverviewAlertFocus()
-        return
-      }
-
-      selectEquipment(priorityAlertEquipment.id, { autoFocus: true })
-      return
+  if (!equipmentId) {
+    if (conversationLockedEquipmentId) {
+      setCameraViewLock(false)
     }
-
-    setLineOverviewFocus()
     return
   }
 
-  if (!alertEquipment || alertEquipment.id === currentSelectedEquipmentId.value) {
+  const equipment = equipmentById.value[equipmentId]
+
+  if (!equipment || !hasCompletedInitialOverview || !camera || !controls) {
     return
   }
 
-  if (isLineOverviewFocused) {
-    scheduleOverviewAlertFocus()
-    return
+  if (equipment.lineId !== selectedLineId.value) {
+    showLineSceneLoading()
   }
 
-  selectEquipment(alertEquipment.id, { autoFocus: true })
+  setCameraViewLock(true, { conversationEquipmentId: equipmentId })
+  selectEquipment(equipmentId, { conversationFocus: true })
 }
 
 function handleAlertFocusRequest() {
@@ -974,14 +972,26 @@ function handleAlertFocusRequest() {
   lastHandledAlertFocusKey = requestKey
 
   if (
+    isCameraViewLocked.value &&
+    conversationLockedEquipmentId &&
+    equipment.id !== conversationLockedEquipmentId
+  ) {
+    return
+  }
+
+  if (
     (!request.force && isCameraViewLocked.value) ||
     (!request.force && equipment.lineId !== selectedLineId.value)
   ) {
     return
   }
 
-  clearOverviewAlertFocusTimer()
-  selectEquipment(equipment.id, { autoFocus: true })
+  const isToastRequest = requestKey.startsWith('toast:')
+
+  selectEquipment(equipment.id, {
+    autoFocus: isToastRequest,
+    manual: !isToastRequest,
+  })
 }
 
 function syncLineWithEquipment(equipmentId) {
@@ -1011,6 +1021,7 @@ function handlePointerDown(event) {
 
 function handleCameraInteractionStart() {
   targetFocus = null
+  releaseAutoFocusControl()
 }
 
 function closeCameraMenusOnOutsidePointer(event) {
@@ -1058,7 +1069,7 @@ function resizeScene() {
   const nextWidth = Math.max(width, 1)
   const nextHeight = Math.max(height, 1)
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.setSize(nextWidth, nextHeight, false)
   camera.aspect = nextWidth / nextHeight
   camera.updateProjectionMatrix()
@@ -1130,7 +1141,7 @@ function updateLabels() {
   }
 }
 
-function animateScene() {
+function animateScene(timestamp = 0) {
   animationFrame = window.requestAnimationFrame(animateScene)
 
   if (targetFocus) {
@@ -1147,11 +1158,16 @@ function animateScene() {
 
   equipmentGroups.forEach((group) => {
     const targetScale = group.userData.targetScale ?? 1
-    group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12)
+    group.scale.setScalar(THREE.MathUtils.lerp(group.scale.x, targetScale, 0.12))
   })
 
   controls.update()
-  updateLabels()
+
+  if (timestamp - lastLabelUpdateAt >= 32) {
+    lastLabelUpdateAt = timestamp
+    updateLabels()
+  }
+
   renderer.render(scene, camera)
 }
 
@@ -1220,11 +1236,11 @@ function setupScene() {
   }
 
   buildActiveLine()
-  rememberActiveEquipmentStatuses()
   resizeScene()
   setLineOverviewFocus(true)
   hasCompletedInitialOverview = true
   handleAlertFocusRequest()
+  syncConversationCameraFocus()
   animateScene()
 }
 
@@ -1238,7 +1254,8 @@ function disposeScene() {
   controls?.removeEventListener('start', handleCameraInteractionStart)
   resizeObserver?.disconnect()
   window.clearTimeout(lineSceneLoadingTimer)
-  clearOverviewAlertFocusTimer()
+  window.clearTimeout(cameraLockMotionTimer)
+  clearAutoFocusRecoveryTimer()
   controls?.dispose()
   clearGroup(equipmentGroup)
   clearGroup(floorGroup)
@@ -1277,6 +1294,14 @@ watch(
 )
 
 watch(
+  () => [
+    props.conversationEquipmentId,
+    equipmentById.value[props.conversationEquipmentId]?.id,
+  ],
+  syncConversationCameraFocus,
+)
+
+watch(
   () => selectedEquipment.value?.status?.tone,
   (statusTone) => {
     if (!statusTone) {
@@ -1291,6 +1316,12 @@ watch(
       isAlertChecklistOpen.value = false
     }
 
+    if (statusTone === 'normal') {
+      scheduleAutoFocusRecovery()
+    } else {
+      clearAutoFocusRecoveryTimer()
+    }
+
     updateLabels()
   },
 )
@@ -1299,7 +1330,6 @@ watch(
   () => selectedLine.value?.id,
   () => {
     buildActiveLine()
-    rememberActiveEquipmentStatuses()
     updateSelectionVisuals()
 
     if (
@@ -1332,6 +1362,7 @@ watch(
   },
 )
 
+// Telemetry refreshes labels and checklist state; camera movement stays on the toast/overview paths.
 watch(
   () =>
     activeEquipmentList.value
@@ -1339,7 +1370,6 @@ watch(
       .join('|'),
   () => {
     updateLabels()
-    focusChangedAlertEquipment()
   },
 )
 
@@ -1447,7 +1477,12 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="factory-viewport__camera-lock"
-          :class="{ 'factory-viewport__camera-lock--active': isCameraViewLocked }"
+          :class="[
+            { 'factory-viewport__camera-lock--active': isCameraViewLocked },
+            cameraLockMotion
+              ? `factory-viewport__camera-lock--motion-${cameraLockMotion}`
+              : '',
+          ]"
           :aria-label="isCameraViewLocked ? t('factory.cameraUnlock') : t('factory.cameraLock')"
           :aria-pressed="isCameraViewLocked"
           :title="isCameraViewLocked ? t('factory.cameraUnlock') : t('factory.cameraLock')"
@@ -1938,6 +1973,91 @@ onBeforeUnmount(() => {
   filter: var(--agentory-filter-header-action);
 }
 
+.factory-viewport__camera-lock--motion-lock {
+  animation: factory-camera-lock-shell 620ms var(--agentory-ease-elastic);
+}
+
+.factory-viewport__camera-lock--motion-lock img {
+  animation: factory-camera-lock-icon 620ms var(--agentory-ease-elastic);
+}
+
+.factory-viewport__camera-lock--motion-unlock {
+  animation: factory-camera-unlock-shell 620ms var(--agentory-ease-elastic);
+}
+
+.factory-viewport__camera-lock--motion-unlock img {
+  animation: factory-camera-unlock-icon 620ms var(--agentory-ease-elastic);
+}
+
+@keyframes factory-camera-lock-shell {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent 42%);
+    transform: scale(0.82);
+  }
+
+  48% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 86%);
+    transform: scale(1.12);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+@keyframes factory-camera-lock-icon {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) rotate(-12deg) scale(0.7);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translateY(1px) rotate(4deg) scale(1.14);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
+@keyframes factory-camera-unlock-shell {
+  0% {
+    transform: scale(1);
+  }
+
+  42% {
+    transform: scale(0.86);
+  }
+
+  72% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes factory-camera-unlock-icon {
+  0% {
+    opacity: 0;
+    transform: translateY(3px) rotate(10deg) scale(0.72);
+  }
+
+  54% {
+    opacity: 1;
+    transform: translateY(-2px) rotate(-5deg) scale(1.12);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
 .factory-viewport__camera-menu {
   position: absolute;
   z-index: 8;
@@ -2355,7 +2475,11 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .factory-viewport__focus-lock,
-  .factory-viewport__focus-lock::before {
+  .factory-viewport__focus-lock::before,
+  .factory-viewport__camera-lock--motion-lock,
+  .factory-viewport__camera-lock--motion-lock img,
+  .factory-viewport__camera-lock--motion-unlock,
+  .factory-viewport__camera-lock--motion-unlock img {
     animation: none;
   }
 }

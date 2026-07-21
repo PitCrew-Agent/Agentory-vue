@@ -46,6 +46,14 @@
   --agentory-scrollbar-size: 12px;
   --agentory-scrollbar-thumb-inset: 4px;
   --agentory-scrollbar-track-inset: 8px;
+  --agentory-toast-card-gap: 8px;
+  --agentory-toast-copy-gap: 3px;
+  --agentory-toast-min-height: 54px;
+  --agentory-toast-padding-block: 8px;
+  --agentory-toast-padding-inline: 13px;
+  --agentory-toast-stack-offset: -10px;
+  --agentory-toast-top: 72px;
+  --agentory-toast-width: 520px;
 
   --agentory-font-family-base:
     Pretendard, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

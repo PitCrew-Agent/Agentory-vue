@@ -359,20 +359,20 @@ function getMetricStatusLabel(metric) {
   will-change: transform;
 }
 
-.detail-panel__metric-icon--gasFlow img {
-  animation: detail-metric-flow 2.4s ease-in-out infinite;
+.detail-panel__metric--selected .detail-panel__metric-icon--gasFlow img {
+  animation: detail-metric-gas-flame 1.1s ease-in-out infinite;
 }
 
-.detail-panel__metric-icon--pressure img {
-  animation: detail-metric-pressure 2s ease-in-out infinite;
+.detail-panel__metric--selected .detail-panel__metric-icon--pressure img {
+  animation: detail-metric-pressure-gauge 1.6s var(--agentory-ease-soft) infinite;
 }
 
-.detail-panel__metric-icon--rfPower img {
-  animation: detail-metric-power 2.2s ease-in-out infinite;
+.detail-panel__metric--selected .detail-panel__metric-icon--rfPower img {
+  animation: detail-metric-rf-pulse 1.25s linear infinite;
 }
 
-.detail-panel__metric-icon--temperature img {
-  animation: detail-metric-temperature 2.6s ease-in-out infinite;
+.detail-panel__metric--selected .detail-panel__metric-icon--temperature img {
+  animation: detail-metric-temperature-rise 1.8s var(--agentory-ease-soft) infinite;
 }
 
 .detail-panel__metric-copy {
@@ -439,47 +439,76 @@ function getMetricStatusLabel(metric) {
   transform: translateY(-8px);
 }
 
-@keyframes detail-metric-flow {
+@keyframes detail-metric-gas-flame {
   0%,
   100% {
-    transform: translate3d(0, 1px, 0) rotate(-2deg);
+    transform: translateY(1px) rotate(-2deg) scaleX(0.96) scaleY(1);
   }
 
-  50% {
-    transform: translate3d(0, -2px, 0) rotate(2deg);
+  28% {
+    transform: translateY(-2px) rotate(3deg) scaleX(1.04) scaleY(1.12);
+  }
+
+  58% {
+    transform: translateY(0) rotate(-3deg) scaleX(0.92) scaleY(1.06);
+  }
+
+  78% {
+    transform: translateY(-1px) rotate(2deg) scaleX(1.02) scaleY(1.1);
   }
 }
 
-@keyframes detail-metric-pressure {
+@keyframes detail-metric-pressure-gauge {
   0%,
   100% {
-    transform: scale(0.94);
+    transform: rotate(-7deg) scale(0.98);
   }
 
   50% {
-    transform: scale(1.06);
+    transform: rotate(7deg) scale(1.04);
   }
 }
 
-@keyframes detail-metric-power {
+@keyframes detail-metric-rf-pulse {
   0%,
+  18%,
+  24%,
+  62%,
   100% {
-    transform: rotate(-4deg) scale(0.98);
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--agentory-color-bg-primary), transparent));
+    transform: translateX(0) scale(1);
   }
 
-  45% {
-    transform: rotate(4deg) scale(1.06);
+  20% {
+    filter: drop-shadow(
+      0 0 4px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 34%)
+    );
+    transform: translateX(-2px) scale(1.08);
+  }
+
+  22% {
+    filter: drop-shadow(
+      0 0 6px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 22%)
+    );
+    transform: translateX(2px) scale(1.12);
+  }
+
+  58% {
+    filter: drop-shadow(
+      0 0 4px color-mix(in srgb, var(--agentory-color-bg-primary), transparent 38%)
+    );
+    transform: translateX(1px) scale(1.06);
   }
 }
 
-@keyframes detail-metric-temperature {
+@keyframes detail-metric-temperature-rise {
   0%,
   100% {
-    transform: translateY(1px);
+    transform: translateY(2px) scaleY(0.96);
   }
 
   50% {
-    transform: translateY(-2px);
+    transform: translateY(-3px) scaleY(1.08);
   }
 }
 

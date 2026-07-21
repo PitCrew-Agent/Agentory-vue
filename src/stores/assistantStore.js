@@ -16,6 +16,7 @@ export const useAssistantStore = defineStore('assistant', () => {
   const isLoading = ref(false)
   const messages = ref([])
   const openConversationRequest = ref(0)
+  const sessionEquipmentId = ref('')
   const sessionId = ref(createAssistantSessionId())
   let activeRequestController = null
   let activeRequestId = 0
@@ -192,9 +193,10 @@ export const useAssistantStore = defineStore('assistant', () => {
     openConversationRequest.value += 1
   }
 
-  function startNewSession() {
+  function startNewSession({ equipmentId = '' } = {}) {
     clearTypingQueue()
     sessionId.value = createAssistantSessionId()
+    sessionEquipmentId.value = equipmentId
     messages.value = []
   }
 
@@ -204,6 +206,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     dismissCompletionToast()
     messages.value = []
     openConversationRequest.value = 0
+    sessionEquipmentId.value = ''
     sessionId.value = createAssistantSessionId()
   }
 
@@ -224,6 +227,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     requestConversationOpen,
     reset,
     resumeCompletionToast,
+    sessionEquipmentId,
     sessionId,
     showCompletionToast,
     startNewSession,

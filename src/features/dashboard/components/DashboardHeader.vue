@@ -94,6 +94,12 @@ function openNotificationHistory() {
   router.push({ name: 'NotificationLog' })
 }
 
+function openDashboard() {
+  isNotificationOpen.value = false
+  isProfileOpen.value = false
+  router.push({ name: 'Dashboard' })
+}
+
 async function focusNotificationEquipment(notification) {
   requestDashboardEquipmentFocus(notification)
   isNotificationOpen.value = false
@@ -162,7 +168,15 @@ onBeforeUnmount(() => {
 
 <template>
   <header class="dashboard-header">
-    <img class="dashboard-header__logo" :src="logoImage" alt="Agentory" width="266" height="49" />
+    <button
+      class="dashboard-header__logo-button"
+      type="button"
+      aria-label="Agentory"
+      data-test="dashboard-header-logo"
+      @click="openDashboard"
+    >
+      <img class="dashboard-header__logo" :src="logoImage" alt="" width="266" height="49" />
+    </button>
 
     <ul
       v-if="summary.length"
@@ -372,6 +386,20 @@ onBeforeUnmount(() => {
   width: 213px;
   height: 39px;
   object-fit: contain;
+}
+
+.dashboard-header__logo-button {
+  display: flex;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agentory-radius-4);
+  cursor: pointer;
+}
+
+.dashboard-header__logo-button:focus-visible {
+  outline: 2px solid var(--agentory-color-border-inverse);
+  outline-offset: var(--agentory-spacing-4);
 }
 
 .dashboard-header__summary {
