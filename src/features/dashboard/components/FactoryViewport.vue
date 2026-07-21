@@ -1294,10 +1294,7 @@ watch(
 )
 
 watch(
-  () => [
-    props.conversationEquipmentId,
-    equipmentById.value[props.conversationEquipmentId]?.id,
-  ],
+  () => [props.conversationEquipmentId, equipmentById.value[props.conversationEquipmentId]?.id],
   syncConversationCameraFocus,
 )
 
@@ -1479,9 +1476,7 @@ onBeforeUnmount(() => {
           class="factory-viewport__camera-lock"
           :class="[
             { 'factory-viewport__camera-lock--active': isCameraViewLocked },
-            cameraLockMotion
-              ? `factory-viewport__camera-lock--motion-${cameraLockMotion}`
-              : '',
+            cameraLockMotion ? `factory-viewport__camera-lock--motion-${cameraLockMotion}` : '',
           ]"
           :aria-label="isCameraViewLocked ? t('factory.cameraUnlock') : t('factory.cameraLock')"
           :aria-pressed="isCameraViewLocked"
