@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DashboardFramePage from '@/features/dashboard/components/DashboardFramePage.vue'
@@ -12,6 +12,7 @@ const {
   isNotificationLoading,
   loadNextNotificationsPage,
   loadNotifications,
+  loadNotificationsPage,
   loadPreviousNotificationsPage,
   markAllNotificationsRead,
   notificationDates,
@@ -20,6 +21,7 @@ const {
   setNotificationReadStatus,
 } = useNotificationLog()
 const { t } = useI18n()
+const notificationLogPanelRef = ref(null)
 const shouldSkipNotificationApi = import.meta.env.MODE === 'test'
 const { activeNotificationId, incidentErrorMessage, isIncidentCreating, startIncidentResponse } =
   useIncidentResponse()
@@ -41,6 +43,17 @@ async function startNotificationResponse(notification) {
   return responseRequest
 }
 
+async function selectNotificationDate(date) {
+  const didFindDate = await goToNotificationDate(date)
+
+  if (!didFindDate) {
+    return
+  }
+
+  await nextTick()
+  notificationLogPanelRef.value?.scrollToDate(date)
+}
+
 onMounted(() => {
   refreshNotifications()
 })
@@ -53,6 +66,7 @@ onMounted(() => {
     :is-loading="isNotificationLoading"
   >
     <NotificationLogPanel
+      ref="notificationLogPanelRef"
       :active-notification-id="activeNotificationId"
       :groups="notificationGroups"
       :is-loading="isNotificationLoading"
@@ -62,9 +76,10 @@ onMounted(() => {
       :response-error="incidentErrorMessage"
       @mark-all-read="markAllNotificationsRead"
       @next-page="loadNextNotificationsPage"
+      @page-change="loadNotificationsPage"
       @previous-page="loadPreviousNotificationsPage"
       @refresh="refreshNotifications"
-      @select-date="goToNotificationDate"
+      @select-date="selectNotificationDate"
       @set-read-status="setNotificationReadStatus"
       @start-response="startNotificationResponse"
     />

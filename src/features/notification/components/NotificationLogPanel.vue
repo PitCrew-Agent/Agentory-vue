@@ -1,13 +1,14 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import refreshIcon from '@/assets/icons/dashboard/refresh.svg'
+import paginationArrowIcon from '@/assets/icons/dashboard/chat-back.svg'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
 import { notificationReadStatusMap } from '@/constants/notificationStatus'
 
-defineProps({
+const props = defineProps({
   activeNotificationId: {
     type: Number,
     default: null,
@@ -47,6 +48,7 @@ defineProps({
 const emit = defineEmits([
   'mark-all-read',
   'next-page',
+  'page-change',
   'previous-page',
   'refresh',
   'select-date',
@@ -57,6 +59,24 @@ const { t } = useI18n()
 const tablePanelRef = ref(null)
 const isBulkConfirmOpen = ref(false)
 const activeReadStatusMenuId = ref('')
+
+const visiblePageItems = computed(() => {
+  const totalPages = Math.max(0, Number(props.pagination.totalPages) || 0)
+  const currentPage = Math.min(
+    Math.max(1, Number(props.pagination.pageIndex) || 1),
+    Math.max(1, totalPages),
+  )
+  const visiblePageCount = Math.min(5, totalPages)
+  const firstPage = Math.min(
+    Math.max(1, currentPage - Math.floor(visiblePageCount / 2)),
+    Math.max(1, totalPages - visiblePageCount + 1),
+  )
+
+  return Array.from({ length: visiblePageCount }, (_, index) => ({
+    key: `page-${firstPage + index}`,
+    value: firstPage + index,
+  }))
+})
 
 const notificationColumns = computed(() => [
   {
@@ -129,11 +149,13 @@ function scrollToDate(date) {
   tablePanelRef.value?.scrollToGroup(date)
 }
 
-async function selectCalendarDate(date) {
+function selectCalendarDate(date) {
   emit('select-date', date)
-  await nextTick()
-  scrollToDate(date)
 }
+
+defineExpose({
+  scrollToDate,
+})
 </script>
 
 <template>
@@ -247,32 +269,48 @@ async function selectCalendarDate(date) {
         </button>
       </template>
 
-      <template #footer>
+      <template v-if="pagination.totalPages" #footer>
         <div class="notification-log-panel__pagination" data-test="notification-pagination">
           <button
+            class="notification-log-panel__pagination-nav"
             type="button"
             :disabled="isLoading || !pagination.canGoPrevious"
+            :aria-label="t('common.previous')"
+            :title="t('common.previous')"
             data-test="notification-pagination-prev"
             @click="emit('previous-page')"
           >
-            {{ t('common.previous') }}
+            <img :src="paginationArrowIcon" alt="" width="20" height="20" />
           </button>
-          <span>
-            {{
-              t('notificationLog.pageSummary', {
-                count: pagination.totalItems,
-                current: pagination.totalPages ? pagination.pageIndex : 0,
-                total: pagination.totalPages,
-              })
-            }}
-          </span>
+          <div class="notification-log-panel__pagination-pages">
+            <button
+              v-for="item in visiblePageItems"
+              :key="item.key"
+              class="notification-log-panel__pagination-page"
+              :class="{
+                'notification-log-panel__pagination-page--active':
+                  item.value === pagination.pageIndex,
+              }"
+              type="button"
+              :aria-current="item.value === pagination.pageIndex ? 'page' : undefined"
+              :aria-label="`${item.value} / ${pagination.totalPages}`"
+              :disabled="isLoading || item.value === pagination.pageIndex"
+              :data-test="`notification-pagination-page-${item.value}`"
+              @click="emit('page-change', item.value)"
+            >
+              {{ item.value }}
+            </button>
+          </div>
           <button
+            class="notification-log-panel__pagination-nav notification-log-panel__pagination-nav--next"
             type="button"
             :disabled="isLoading || !pagination.hasMore"
+            :aria-label="t('common.next')"
+            :title="t('common.next')"
             data-test="notification-pagination-next"
             @click="emit('next-page')"
           >
-            {{ t('common.next') }}
+            <img :src="paginationArrowIcon" alt="" width="20" height="20" />
           </button>
         </div>
       </template>
@@ -543,44 +581,65 @@ async function selectCalendarDate(date) {
 
 .notification-log-panel__pagination {
   display: flex;
+  width: 100%;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: var(--agentory-spacing-8);
   padding-top: var(--agentory-spacing-4);
 }
 
-.notification-log-panel__pagination span {
-  min-width: 118px;
-  color: var(--agentory-color-text-muted);
-  font-size: var(--agentory-font-size-body-sm);
-  font-weight: var(--agentory-font-weight-medium);
-  line-height: var(--agentory-line-height-body-sm);
-  text-align: center;
+.notification-log-panel__pagination-pages {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--agentory-spacing-4);
 }
 
 .notification-log-panel__pagination button {
-  min-height: 30px;
-  padding: var(--agentory-spacing-5) var(--agentory-spacing-12);
+  height: 30px;
   color: var(--agentory-color-text-primary);
   background: var(--agentory-color-bg-surface);
-  border: 1px solid color-mix(in srgb, var(--agentory-color-border-primary), transparent 62%);
-  border-radius: var(--agentory-radius-pill);
+  border: 0;
+  border-radius: var(--agentory-radius-5);
   font-size: var(--agentory-font-size-body-sm);
   font-weight: var(--agentory-font-weight-medium);
   cursor: pointer;
   transition:
     background-color 160ms var(--agentory-ease-soft),
-    border-color 160ms var(--agentory-ease-soft),
     color 160ms var(--agentory-ease-soft);
+}
+
+.notification-log-panel__pagination-nav {
+  display: inline-flex;
+  width: 30px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-log-panel__pagination-nav--next img {
+  transform: rotate(180deg);
+}
+
+.notification-log-panel__pagination-page {
+  width: 30px;
+  padding: 0;
+}
+
+.notification-log-panel__pagination-page--active,
+.notification-log-panel__pagination-page--active:disabled {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
+  opacity: 1;
 }
 
 .notification-log-panel__pagination button:hover:not(:disabled) {
   color: var(--agentory-color-bg-primary);
   background: var(--agentory-color-bg-app);
-  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 62%);
 }
 
-.notification-log-panel__pagination button:disabled {
+.notification-log-panel__pagination
+  button:disabled:not(.notification-log-panel__pagination-page--active) {
   opacity: 0.42;
   cursor: default;
 }

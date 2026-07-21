@@ -8,21 +8,15 @@ import {
   normalizeNotification,
   subscribeNotificationStream,
 } from '@/features/notification/services/notificationApi'
-import {
-  ensureNotificationLineContext,
-  filterNotificationGroupsByAssignedLines,
-  shouldIncludeAssignedLineNotification,
-} from '@/features/notification/utils/notificationLineFilter'
 
 const notificationGroups = reactive([])
 const notificationPagination = reactive({
   canGoPrevious: false,
-  cursorStack: [],
-  currentCursor: '',
   hasMore: false,
   limit: 10,
-  nextCursor: '',
   pageIndex: 1,
+  totalItems: 0,
+  totalPages: 0,
   unreadOnly: false,
 })
 const isNotificationLoading = ref(false)
@@ -51,12 +45,10 @@ function captureLatestNotificationId(row) {
 }
 
 function replaceNotificationGroups(groups) {
-  const filteredGroups = filterNotificationGroupsByAssignedLines(groups)
-
   notificationGroups.splice(
     0,
     notificationGroups.length,
-    ...filteredGroups.map((group) => ({
+    ...groups.map((group) => ({
       ...group,
       rows: group.rows.map((row) => ({ ...row })),
     })),
@@ -103,10 +95,6 @@ function sortNotificationGroups() {
 function addNotification(rawNotification) {
   const row = normalizeNotification(rawNotification)
 
-  if (!shouldIncludeAssignedLineNotification(row)) {
-    return null
-  }
-
   if (!row.id || knownNotificationIds.has(row.id) || findNotification(row.id)) {
     return null
   }
@@ -136,10 +124,8 @@ function addNotification(rawNotification) {
 }
 
 async function loadNotifications(options) {
-  const shouldResetPagination = options?.reset ?? !options?.before
-  const nextBefore = shouldResetPagination
-    ? ''
-    : (options?.before ?? notificationPagination.currentCursor)
+  const shouldResetPagination = options?.reset ?? !options?.page
+  const nextPage = shouldResetPagination ? 1 : (options?.page ?? notificationPagination.pageIndex)
   const nextLimit = options?.limit ?? notificationPagination.limit
   const nextUnreadOnly =
     options?.unreadOnly ?? (shouldResetPagination ? true : notificationPagination.unreadOnly)
@@ -147,34 +133,29 @@ async function loadNotifications(options) {
   isNotificationLoading.value = true
 
   try {
-    await ensureNotificationLineContext()
-
     const page = await fetchNotificationPage({
-      before: nextBefore,
       limit: nextLimit,
+      page: nextPage,
       unreadOnly: nextUnreadOnly,
     })
 
     replaceNotificationGroups(page.groups)
-    notificationPagination.currentCursor = nextBefore
+    notificationPagination.canGoPrevious = page.page > 1
     notificationPagination.hasMore = page.hasMore
-    notificationPagination.limit = nextLimit
-    notificationPagination.nextCursor = page.nextCursor
+    notificationPagination.limit = page.limit
+    notificationPagination.pageIndex = page.page
+    notificationPagination.totalItems = page.totalItems
+    notificationPagination.totalPages = page.totalPages
     notificationPagination.unreadOnly = nextUnreadOnly
-
-    if (shouldResetPagination) {
-      notificationPagination.cursorStack = []
-      notificationPagination.pageIndex = 1
-    }
-
-    notificationPagination.canGoPrevious = notificationPagination.cursorStack.length > 0
 
     return page.groups
   } catch {
     replaceNotificationGroups([])
+    notificationPagination.canGoPrevious = false
     notificationPagination.hasMore = false
-    notificationPagination.nextCursor = ''
-    notificationPagination.canGoPrevious = notificationPagination.cursorStack.length > 0
+    notificationPagination.pageIndex = 1
+    notificationPagination.totalItems = 0
+    notificationPagination.totalPages = 0
     return []
   } finally {
     isNotificationLoading.value = false
@@ -183,8 +164,6 @@ async function loadNotifications(options) {
 
 async function primeNotificationStreamCursor() {
   try {
-    await ensureNotificationLineContext()
-
     const page = await fetchNotificationPage({
       limit: 1,
       unreadOnly: false,
@@ -200,37 +179,26 @@ async function primeNotificationStreamCursor() {
 }
 
 async function loadNextNotificationsPage() {
-  if (
-    !notificationPagination.hasMore ||
-    !notificationPagination.nextCursor ||
-    isNotificationLoading.value
-  ) {
+  if (!notificationPagination.hasMore || isNotificationLoading.value) {
     return
   }
 
-  const previousCursor = notificationPagination.currentCursor
-
-  notificationPagination.cursorStack.push(previousCursor)
-  notificationPagination.pageIndex += 1
   await loadNotifications({
-    before: notificationPagination.nextCursor,
     limit: notificationPagination.limit,
+    page: notificationPagination.pageIndex + 1,
     reset: false,
     unreadOnly: notificationPagination.unreadOnly,
   })
 }
 
 async function loadPreviousNotificationsPage() {
-  if (!notificationPagination.cursorStack.length || isNotificationLoading.value) {
+  if (!notificationPagination.canGoPrevious || isNotificationLoading.value) {
     return
   }
 
-  const previousCursor = notificationPagination.cursorStack.pop()
-
-  notificationPagination.pageIndex = Math.max(1, notificationPagination.pageIndex - 1)
   await loadNotifications({
-    before: previousCursor,
     limit: notificationPagination.limit,
+    page: notificationPagination.pageIndex - 1,
     reset: false,
     unreadOnly: notificationPagination.unreadOnly,
   })
