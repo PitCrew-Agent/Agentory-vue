@@ -1,29 +1,22 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DashboardDataPanel from '@/features/dashboard/components/DashboardDataPanel.vue'
 import { metricConfigs, metricIds } from '@/features/dashboard/constants/equipmentMetrics'
-import { fetchEquipmentSensorSeries } from '@/features/dashboard/services/equipmentInsightApi'
 
 const props = defineProps({
-  equipmentId: {
-    type: String,
-    default: '',
+  charts: {
+    type: Object,
+    default: () => ({}),
   },
-  startAt: {
+  equipmentId: {
     type: String,
     default: '',
   },
 })
 
 const { t } = useI18n()
-
-const errorMessage = ref('')
-const isLoading = ref(false)
-const series = ref([])
-let refreshTimer = 0
-let requestId = 0
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -56,28 +49,33 @@ function getMetricStatus(value, thresholds) {
 const metricRows = computed(() =>
   metricIds.map((metricId) => {
     const config = metricConfigs[metricId]
-    const values = series.value
+    const chart = props.charts?.[metricId] ?? {}
+    const thresholds = {
+      ...config.thresholds,
+      ...chart.thresholds,
+    }
+    const values = (chart.points ?? [])
       .slice(-12)
-      .map((point) => point[metricId])
+      .map((point) => Number(point?.value))
       .filter(Number.isFinite)
     const currentValue = values.at(-1) ?? null
-    const range = config.thresholds.usl - config.thresholds.lsl
+    const range = thresholds.usl - thresholds.lsl
     const displayPadding = range * 0.12
-    const displayMin = config.thresholds.lsl - displayPadding
-    const displayMax = config.thresholds.usl + displayPadding
+    const displayMin = thresholds.lsl - displayPadding
+    const displayMax = thresholds.usl + displayPadding
     const displayRange = displayMax - displayMin
     const position = (value) => clamp(((value - displayMin) / displayRange) * 100, 0, 100)
-    const status = getMetricStatus(currentValue, config.thresholds)
+    const status = getMetricStatus(currentValue, thresholds)
     const recentMin = values.length ? Math.min(...values) : null
     const recentMax = values.length ? Math.max(...values) : null
     const recentStart = Number.isFinite(recentMin) ? position(recentMin) : 0
     const recentEnd = Number.isFinite(recentMax) ? position(recentMax) : 0
     const trend = values.length > 1 ? currentValue - values[0] : 0
     const thresholdPositions = [
-      position(config.thresholds.lsl),
-      position(config.thresholds.lcl),
-      position(config.thresholds.ucl),
-      position(config.thresholds.usl),
+      position(thresholds.lsl),
+      position(thresholds.lcl),
+      position(thresholds.ucl),
+      position(thresholds.usl),
     ]
 
     return {
@@ -87,8 +85,8 @@ const metricRows = computed(() =>
       displayMinLabel: formatValue(displayMin, config.precision),
       id: metricId,
       labelKey: config.labelKey,
-      normalRangeLabel: `${formatValue(config.thresholds.lcl, config.precision)} - ${formatValue(
-        config.thresholds.ucl,
+      normalRangeLabel: `${formatValue(thresholds.lcl, config.precision)} - ${formatValue(
+        thresholds.ucl,
         config.precision,
       )}`,
       recentLeft: recentStart,
@@ -110,51 +108,6 @@ const metricRows = computed(() =>
 const hasAnalysisData = computed(() =>
   metricRows.value.some((metric) => metric.currentLabel !== '-'),
 )
-
-async function loadSeries() {
-  if (!props.equipmentId) {
-    series.value = []
-    return
-  }
-
-  const currentRequestId = ++requestId
-
-  isLoading.value = true
-  errorMessage.value = ''
-
-  try {
-    const nextSeries = await fetchEquipmentSensorSeries(props.equipmentId, {
-      start: props.startAt,
-    })
-
-    if (currentRequestId === requestId) {
-      series.value = nextSeries
-    }
-  } catch {
-    if (currentRequestId === requestId) {
-      series.value = []
-      errorMessage.value = t('analysis.error')
-    }
-  } finally {
-    if (currentRequestId === requestId) {
-      isLoading.value = false
-    }
-  }
-}
-
-watch(
-  () => [props.equipmentId, props.startAt],
-  () => {
-    loadSeries()
-    window.clearInterval(refreshTimer)
-    refreshTimer = window.setInterval(loadSeries, 15000)
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(() => {
-  window.clearInterval(refreshTimer)
-})
 </script>
 
 <template>
@@ -220,7 +173,7 @@ onBeforeUnmount(() => {
       </div>
 
       <p v-else class="equipment-analysis-panel__state">
-        {{ isLoading ? t('analysis.loading') : errorMessage || t('analysis.empty') }}
+        {{ t('analysis.empty') }}
       </p>
     </div>
   </DashboardDataPanel>
