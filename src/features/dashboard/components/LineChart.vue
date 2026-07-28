@@ -95,23 +95,73 @@ function getPointRadius(point, index, pointCount) {
   return index === pointCount - 1 ? 4 : 2.5
 }
 
-function createThresholdDataset({ color, label, showInLegend, value }) {
+function createHardLimitDataset({ color, label, showInLegend, value }) {
   if (!Number.isFinite(value)) {
     return null
   }
 
   return {
     borderColor: color,
-    borderDash: [6, 5],
-    borderWidth: 1.2,
+    borderDash: [7, 6],
+    borderWidth: 1.6,
     data: visiblePoints.value.map((point) => ({ x: point.sourceIndex, y: value })),
     fill: false,
     kind: 'threshold',
     label,
-    order: 2,
+    order: 3,
     pointRadius: 0,
     showInLegend,
+    spanGaps: true,
   }
+}
+
+// 시점별 SPC 밴드(±3σ) · 중심선 데이터셋. center가 null인 구간은 밴드를 끊어 측정값 선만 남긴다.
+function createBandDatasets(points, band, bandColor, centerColor) {
+  if (!band) {
+    return []
+  }
+
+  const pickY = (value) => (value == null || !Number.isFinite(value) ? null : value)
+
+  return [
+    {
+      borderWidth: 0,
+      data: points.map((point) => ({ x: point.sourceIndex, y: pickY(point.bandLower) })),
+      fill: false,
+      kind: 'band',
+      label: '_bandLower',
+      order: 5,
+      pointRadius: 0,
+      showInLegend: false,
+      spanGaps: false,
+    },
+    {
+      backgroundColor: bandColor,
+      borderWidth: 0,
+      data: points.map((point) => ({ x: point.sourceIndex, y: pickY(point.bandUpper) })),
+      fill: '-1',
+      kind: 'band',
+      label: t('chart.normalBand'),
+      order: 5,
+      pointRadius: 0,
+      pointStyle: 'rect',
+      showInLegend: true,
+      spanGaps: false,
+    },
+    {
+      borderColor: centerColor,
+      borderDash: [5, 5],
+      borderWidth: 1.4,
+      data: points.map((point) => ({ x: point.sourceIndex, y: pickY(point.center) })),
+      fill: false,
+      kind: 'band',
+      label: '_center',
+      order: 4,
+      pointRadius: 0,
+      showInLegend: false,
+      spanGaps: false,
+    },
+  ]
 }
 
 const chartData = computed(() => {
@@ -121,8 +171,9 @@ const chartData = computed(() => {
   const surfaceColor = readChartToken('--agentory-color-bg-app', '#f8f9f6')
   const warningColor = readChartToken('--agentory-color-status-warning', '#f4c300')
   const dangerColor = readChartToken('--agentory-color-status-danger-text', '#ef4444')
+  const bandColor = readChartToken('--agentory-color-chart-band', 'rgba(35, 124, 226, 0.16)')
   const points = visiblePoints.value
-  const thresholds = props.chart.thresholds ?? {}
+  const band = props.chart.band ?? null
   const mainDataset = {
     borderColor: primaryColor,
     borderWidth: 2,
@@ -151,35 +202,26 @@ const chartData = computed(() => {
     pointStyle: points.map(getPointStyle),
     tension: 0.16,
   }
-  const thresholdDatasets = [
-    createThresholdDataset({
-      color: dangerColor,
-      label: t('chart.dangerThreshold'),
-      showInLegend: true,
-      value: thresholds.usl,
-    }),
-    createThresholdDataset({
-      color: dangerColor,
-      label: t('chart.dangerLower'),
-      showInLegend: false,
-      value: thresholds.lsl,
-    }),
-    createThresholdDataset({
-      color: warningColor,
-      label: t('chart.warningThreshold'),
-      showInLegend: true,
-      value: thresholds.ucl,
-    }),
-    createThresholdDataset({
-      color: warningColor,
-      label: t('chart.warningLower'),
-      showInLegend: false,
-      value: thresholds.lcl,
-    }),
-  ].filter(Boolean)
+  const bandDatasets = createBandDatasets(points, band, bandColor, primaryColor)
+  const hardLimitDatasets = band
+    ? [
+        createHardLimitDataset({
+          color: dangerColor,
+          label: t('chart.hardLimit'),
+          showInLegend: true,
+          value: band.usl,
+        }),
+        createHardLimitDataset({
+          color: dangerColor,
+          label: '_hardLimitLower',
+          showInLegend: false,
+          value: band.lsl,
+        }),
+      ].filter(Boolean)
+    : []
 
   return {
-    datasets: [mainDataset, ...thresholdDatasets],
+    datasets: [mainDataset, ...bandDatasets, ...hardLimitDatasets],
   }
 })
 
@@ -231,6 +273,10 @@ const chartOptions = computed(() => {
           },
           font: { family: fontFamily, size: 11 },
           padding: 12,
+          // order는 z축 그리기 순서용이라 범례는 데이터셋 순서(측정값 → 밴드 → 하드리밋)로 고정한다.
+          sort(first, second) {
+            return first.datasetIndex - second.datasetIndex
+          },
           usePointStyle: true,
         },
         position: 'top',

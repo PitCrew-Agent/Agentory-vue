@@ -106,10 +106,52 @@ export function getMetricThresholds(metricId, processType = 'Etching') {
   return metricConfigs[metricId]?.thresholds ?? {}
 }
 
+function toFiniteNumber(value) {
+  const numberValue = Number(value)
+
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+// SPC 밴드 규격을 해석한다. 백엔드가 내려주는 `bands`(반폭/하드리밋)를 우선 사용하고,
+// 미배포 구간에서는 정적 관리한계(±3σ = (ucl - lcl) / 2)로 대체해 그래프가 동일하게 그려지도록 한다.
+export function getMetricBand(metricId, bands = {}, thresholds) {
+  const config = metricConfigs[metricId]
+
+  if (!config) {
+    return null
+  }
+
+  const apiBand = bands?.[config.apiKey]
+  const half = toFiniteNumber(apiBand?.half)
+  const usl = toFiniteNumber(apiBand?.usl)
+  const lsl = toFiniteNumber(apiBand?.lsl)
+
+  if (half !== null && usl !== null && lsl !== null) {
+    return { half, lsl, usl }
+  }
+
+  const resolvedThresholds = thresholds ?? config.thresholds ?? {}
+  const controlUcl = toFiniteNumber(resolvedThresholds.ucl)
+  const controlLcl = toFiniteNumber(resolvedThresholds.lcl)
+  const limitUsl = toFiniteNumber(resolvedThresholds.usl)
+  const limitLsl = toFiniteNumber(resolvedThresholds.lsl)
+
+  if (controlUcl === null || controlLcl === null || limitUsl === null || limitLsl === null) {
+    return null
+  }
+
+  return {
+    half: Number(((controlUcl - controlLcl) / 2).toFixed(config.precision)),
+    lsl: limitLsl,
+    usl: limitUsl,
+  }
+}
+
 export function createEmptyMetricChart(metricId = 'temperature') {
   const config = metricConfigs[metricId] ?? metricConfigs.temperature
 
   return {
+    band: getMetricBand(metricId, {}, config.thresholds),
     max: config.max,
     metricId,
     min: config.min,
