@@ -29,6 +29,7 @@
   --agentory-color-status-waiting: #5f5e5a;
   --agentory-color-alert-warning: #f97316;
   --agentory-color-chart-grid: rgba(125, 125, 125, 0.18);
+  --agentory-color-chart-band: rgba(35, 124, 226, 0.16);
   --agentory-color-chart-series-2: #37a57a;
   --agentory-color-chart-series-3: #7569c9;
   --agentory-color-chart-series-4: #d57954;
@@ -247,6 +248,7 @@
   --agentory-color-status-waiting: #9299a2;
   --agentory-color-alert-warning: #ef9d4d;
   --agentory-color-chart-grid: rgba(167, 175, 184, 0.2);
+  --agentory-color-chart-band: rgba(88, 158, 235, 0.22);
   --agentory-color-chart-series-2: #56bd94;
   --agentory-color-chart-series-3: #9389de;
   --agentory-color-chart-series-4: #df8c6a;

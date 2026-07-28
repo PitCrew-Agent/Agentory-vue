@@ -6,6 +6,7 @@ import {
 import {
   createEmptyMetricChart,
   createEmptyMetricCharts,
+  getMetricBand,
   getMetricThresholds,
   metricConfigs,
   metricIds,
@@ -200,6 +201,23 @@ function getMetricRawValue(source, metricId) {
   return toNumber(source?.[config.apiKey])
 }
 
+function getMetricCenter(source, metricId) {
+  const config = metricConfigs[metricId]
+
+  if (!config) {
+    return null
+  }
+
+  const rawCenter = source?.[`${config.apiKey}_center`]
+
+  // null/미존재는 밴드 생략 신호이므로 0으로 강제하지 않고 그대로 null 유지한다.
+  if (rawCenter === null || rawCenter === undefined || rawCenter === '') {
+    return null
+  }
+
+  return toNumber(rawCenter)
+}
+
 function getPointStatus(point, index, pointCount, detail) {
   const pointStatus = point.status ?? point.status_level ?? point.statusTone ?? point.status_tone
 
@@ -226,6 +244,28 @@ function getMetricThresholdStatus(metricId, value, processType) {
   }
 
   if (value <= thresholds.lcl || value >= thresholds.ucl) {
+    return equipmentStatusMap.warning
+  }
+
+  return equipmentStatusMap.normal
+}
+
+// 시점별 SPC 밴드 기준 상태. 하드리밋 이탈=위험, 밴드(center±half) 이탈=경고.
+// center를 모르는 구간(과거 행)이나 밴드가 없으면 null을 반환해 정적 관리한계 판정으로 폴백한다.
+function getMetricBandStatus(value, point, band) {
+  if (band === null || value === null) {
+    return null
+  }
+
+  if (value <= band.lsl || value >= band.usl) {
+    return equipmentStatusMap.danger
+  }
+
+  if (point.bandLower === null || point.bandUpper === null) {
+    return null
+  }
+
+  if (value <= point.bandLower || value >= point.bandUpper) {
     return equipmentStatusMap.warning
   }
 
@@ -269,6 +309,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
 
       return {
         alarmCode: compactText(point.alarm_code ?? point.alarmCode) || detail.alarm_code || '',
+        center: getMetricCenter(point, metricId),
         statusLabel: status?.label ?? '',
         statusTone: status?.tone ?? 'normal',
         time: formatTimePart(point.timestamp, false),
@@ -287,6 +328,7 @@ function createMetricChart(metricId, series = [], detail = {}) {
     if (currentValue !== null) {
       points.push({
         alarmCode: detail.alarm_code ?? '',
+        center: getMetricCenter(detail, metricId),
         statusLabel: status?.label ?? '',
         statusTone: status?.tone ?? 'normal',
         time: formatTimePart(detail.updated_at ?? new Date().toISOString(), false),
@@ -296,9 +338,42 @@ function createMetricChart(metricId, series = [], detail = {}) {
     }
   }
 
+  const band = getMetricBand(metricId, detail.bands, thresholds)
+  const hasDynamicCenter = points.some((point) => point.center !== null)
+  const fallbackCenter =
+    band && Number.isFinite(thresholds.ucl) && Number.isFinite(thresholds.lcl)
+      ? Number(((thresholds.ucl + thresholds.lcl) / 2).toFixed(config.precision))
+      : null
+
+  points.forEach((point) => {
+    // 시점별 center가 하나도 없으면(밴드 필드 미배포) 정적 중심선으로 채워 밴드가 평평하게 그려지도록 한다.
+    if (!hasDynamicCenter && point.center === null && fallbackCenter !== null) {
+      point.center = fallbackCenter
+    }
+
+    const hasBand = band !== null && point.center !== null
+
+    point.bandLower = hasBand ? point.center - band.half : null
+    point.bandUpper = hasBand ? point.center + band.half : null
+
+    // 점 상태를 시점별 밴드 기준으로 갱신(드리프트 반영). 판정 불가 시 정적 관리한계 기반 값을 유지한다.
+    const bandStatus = getMetricBandStatus(point.value, point, band)
+
+    if (bandStatus) {
+      point.statusLabel = bandStatus.label
+      point.statusTone = bandStatus.tone
+    }
+  })
+
   const values = points.map((point) => point.value)
   const thresholdValues = Object.values(thresholds).filter((value) => Number.isFinite(value))
-  const scaleValues = [...values, ...thresholdValues]
+  // 밴드가 있으면 하드리밋 선과 시점별 밴드 경계까지 축 계산에 포함해, 위험 이탈/드리프트 시에도 잘리지 않게 한다.
+  const bandScaleValues = band
+    ? [band.usl, band.lsl, ...points.flatMap((point) => [point.bandLower, point.bandUpper])].filter(
+        (value) => Number.isFinite(value),
+      )
+    : []
+  const scaleValues = [...values, ...thresholdValues, ...bandScaleValues]
   const configRange = Math.max(config.max - config.min, 1)
   const dataMinValue = scaleValues.length ? Math.min(...scaleValues) : config.min
   const dataMaxValue = scaleValues.length ? Math.max(...scaleValues) : config.max
@@ -310,13 +385,16 @@ function createMetricChart(metricId, series = [], detail = {}) {
     visibleRange * 0.04,
     config.precision === 0 ? 0.8 : 8 * 10 ** -config.precision,
   )
-  const minValue = dataCenterValue - visibleRange / 2
-  const maxValue = dataCenterValue + visibleRange / 2
+  // 하드리밋을 기준 프레임으로 삼되(정상 구간 = 목표안과 동일), 데이터·밴드가 벗어나면 축을 넓혀 항상 보이게 한다.
+  const bandPadding = band ? (band.usl - band.lsl) * 0.04 : 0
+  const minValue = band ? dataMinValue - bandPadding : dataCenterValue - visibleRange / 2 - padding
+  const maxValue = band ? dataMaxValue + bandPadding : dataCenterValue + visibleRange / 2 + padding
 
   return {
-    max: Number((maxValue + padding).toFixed(config.precision)),
+    band,
+    max: Number(maxValue.toFixed(config.precision)),
     metricId,
-    min: Number((minValue - padding).toFixed(config.precision)),
+    min: Number(minValue.toFixed(config.precision)),
     points,
     precision: config.precision,
     thresholds,
