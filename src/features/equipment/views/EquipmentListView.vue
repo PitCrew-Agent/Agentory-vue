@@ -13,6 +13,7 @@ const lineGroups = ref([])
 const shouldSkipEquipmentApi = import.meta.env.MODE === 'test'
 let equipmentListInterval = 0
 let equipmentListRequestId = 0
+let isEquipmentListLoadInFlight = false
 
 async function loadEquipmentListPageData(options = {}) {
   if (shouldSkipEquipmentApi) {
@@ -20,7 +21,14 @@ async function loadEquipmentListPageData(options = {}) {
   }
 
   const isSilent = options.silent === true
+
+  // 이전 로드가 진행 중이면 폴링(무음) 호출은 건너뛰어 요청 중첩을 막는다.
+  if (isSilent && isEquipmentListLoadInFlight) {
+    return
+  }
+
   const requestId = ++equipmentListRequestId
+  isEquipmentListLoadInFlight = true
 
   if (!isSilent) {
     isEquipmentListLoading.value = true
@@ -41,6 +49,8 @@ async function loadEquipmentListPageData(options = {}) {
       lineGroups.value = []
     }
   } finally {
+    isEquipmentListLoadInFlight = false
+
     if (!isSilent) {
       isEquipmentListLoading.value = false
     }
