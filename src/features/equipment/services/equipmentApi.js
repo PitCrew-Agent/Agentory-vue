@@ -4,6 +4,11 @@ import { fetchNotificationPage } from '@/features/notification/services/notifica
 
 const alarmMessageCache = new Map()
 
+const ALARM_MESSAGE_PAGE_SIZE = 50
+// 활성 알람은 최신 알림이므로 최근 페이지만 조회한다. 담당 라인 밖(서버 라인 스코핑) 알람은
+// 라인 스코핑된 /notifications 에 존재하지 않으므로, 전체 순회 대신 상한을 둬 요청 폭주를 막는다.
+const MAX_ALARM_MESSAGE_PAGES = 3
+
 function getMetricValue(equipment, metricId) {
   return equipment.metrics.find((metric) => metric.id === metricId)?.value ?? '-'
 }
@@ -43,25 +48,28 @@ async function fetchCurrentAlarmMessages(scene) {
       .map((equipment) => [equipment.id, equipment.alarmCode]),
   )
   const notificationMessageByEquipmentId = new Map()
-  let pageNumber = 1
 
+  // 성공/실패(네거티브) 캐시를 먼저 반영해 조회 대상을 줄인다. 빈 문자열은 "스코프 밖/부재"로 공란 처리.
   pendingAlarmByEquipmentId.forEach((alarmCode, equipmentId) => {
     const cachedMessage = alarmMessageCache.get(`${locale}:${equipmentId}:${alarmCode}`)
 
+    if (cachedMessage === undefined) {
+      return
+    }
+
     if (cachedMessage) {
       notificationMessageByEquipmentId.set(equipmentId, cachedMessage)
-      pendingAlarmByEquipmentId.delete(equipmentId)
     }
+
+    pendingAlarmByEquipmentId.delete(equipmentId)
   })
 
-  while (pendingAlarmByEquipmentId.size) {
-    const page = await fetchNotificationPage({
-      limit: 50,
-      page: pageNumber,
-      unreadOnly: false,
-    })
+  if (!pendingAlarmByEquipmentId.size) {
+    return notificationMessageByEquipmentId
+  }
 
-    page.items.forEach((notification) => {
+  const applyNotifications = (items = []) => {
+    items.forEach((notification) => {
       const alarmCode = pendingAlarmByEquipmentId.get(notification.equipmentId)
 
       if (alarmCode && alarmCode === notification.code && notification.message) {
@@ -73,13 +81,38 @@ async function fetchCurrentAlarmMessages(scene) {
         pendingAlarmByEquipmentId.delete(notification.equipmentId)
       }
     })
-
-    if (!page.hasMore || page.page >= page.totalPages) {
-      break
-    }
-
-    pageNumber = page.page + 1
   }
+
+  const firstPage = await fetchNotificationPage({
+    limit: ALARM_MESSAGE_PAGE_SIZE,
+    page: 1,
+    unreadOnly: false,
+  })
+
+  applyNotifications(firstPage.items)
+
+  // 최근 페이지만 병렬로 상한 조회한다(순차 전체 순회 금지).
+  const lastPage = Math.min(MAX_ALARM_MESSAGE_PAGES, firstPage.totalPages || 1)
+
+  if (pendingAlarmByEquipmentId.size && lastPage > 1) {
+    const remainingPages = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, index) =>
+        fetchNotificationPage({
+          limit: ALARM_MESSAGE_PAGE_SIZE,
+          page: index + 2,
+          unreadOnly: false,
+        }),
+      ),
+    )
+
+    remainingPages.forEach((page) => applyNotifications(page.items))
+  }
+
+  // 상한 내에서 못 찾은 알람은 네거티브 캐시로 남겨 폴링마다 재순회하지 않는다.
+  // 새 알람은 alarm_code 가 달라 새 키로 다시 조회된다.
+  pendingAlarmByEquipmentId.forEach((alarmCode, equipmentId) => {
+    alarmMessageCache.set(`${locale}:${equipmentId}:${alarmCode}`, '')
+  })
 
   return notificationMessageByEquipmentId
 }

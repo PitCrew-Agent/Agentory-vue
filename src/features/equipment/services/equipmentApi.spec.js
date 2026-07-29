@@ -77,4 +77,44 @@ describe('equipmentApi', () => {
     expect(pageData.groups[0].rows[0]).not.toHaveProperty('noteKey')
     expect(fetchNotificationPage).not.toHaveBeenCalled()
   })
+
+  it('스코프 밖 알람은 전체 순회 대신 최근 페이지 상한만 병렬 조회한다', async () => {
+    const equipment = createEquipment('EQP-CAP1', 'WRN-CAP1')
+    const scene = {
+      equipmentList: [equipment],
+      lineGroups: [{ equipment: [equipment], id: 'a-line', label: 'A-Line' }],
+    }
+
+    fetchFactoryScene.mockResolvedValue(scene)
+    // 담당 라인 밖이라 매칭되는 알림이 없고 총 10페이지가 있어도 상한(3)까지만 조회해야 한다.
+    fetchNotificationPage.mockImplementation(({ page }) =>
+      Promise.resolve({ hasMore: page < 10, items: [], page, totalPages: 10 }),
+    )
+
+    const pageData = await fetchEquipmentListPageData()
+
+    expect(fetchNotificationPage).toHaveBeenCalledTimes(3)
+    expect(fetchNotificationPage.mock.calls.map(([args]) => args.page)).toEqual([1, 2, 3])
+    expect(pageData.groups[0].rows[0].note).toBe('')
+  })
+
+  it('상한 내 미매칭 알람을 네거티브 캐시해 다음 로드에서 재조회하지 않는다', async () => {
+    const equipment = createEquipment('EQP-CAP2', 'WRN-CAP2')
+    const scene = {
+      equipmentList: [equipment],
+      lineGroups: [{ equipment: [equipment], id: 'a-line', label: 'A-Line' }],
+    }
+
+    fetchFactoryScene.mockResolvedValue(scene)
+    fetchNotificationPage.mockResolvedValue({ hasMore: false, items: [], page: 1, totalPages: 1 })
+
+    await fetchEquipmentListPageData()
+    expect(fetchNotificationPage).toHaveBeenCalledTimes(1)
+
+    const secondLoad = await fetchEquipmentListPageData()
+
+    // 두 번째 로드는 네거티브 캐시로 해결되어 추가 알림 조회가 없어야 한다.
+    expect(fetchNotificationPage).toHaveBeenCalledTimes(1)
+    expect(secondLoad.groups[0].rows[0].note).toBe('')
+  })
 })
