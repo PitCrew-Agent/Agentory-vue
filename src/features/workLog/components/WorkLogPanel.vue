@@ -7,6 +7,7 @@ import planDocumentIcon from '@/assets/icons/dashboard/nav-note.svg'
 import pencilIcon from '@/assets/icons/dashboard/action-pencil.png'
 import trashIcon from '@/assets/icons/dashboard/action-trash.svg'
 import { workLogStatusMap } from '@/constants/workLogStatus'
+import { formatKstDate, formatKstTime } from '@/services/datetime/kstDateTime'
 import { useAuthStore } from '@/stores/authStore'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
@@ -152,15 +153,11 @@ const logSubmitLabel = computed(() => {
 })
 
 function getToday() {
-  const now = new Date()
-
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return formatKstDate(new Date())
 }
 
 function getCurrentTime() {
-  const now = new Date()
-
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return formatKstTime(new Date())
 }
 
 function splitDateTime(value) {
@@ -168,22 +165,9 @@ function splitDateTime(value) {
     return { date: '', time: '' }
   }
 
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    const [datePart = '', timePart = ''] = String(value).split('T')
-
-    return {
-      date: datePart.slice(0, 10),
-      time: timePart.slice(0, 5),
-    }
-  }
-
   return {
-    date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-      date.getDate(),
-    ).padStart(2, '0')}`,
-    time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
+    date: formatKstDate(value),
+    time: formatKstTime(value),
   }
 }
 

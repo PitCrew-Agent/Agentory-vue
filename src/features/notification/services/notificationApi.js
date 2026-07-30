@@ -2,31 +2,14 @@ import { normalizeNotificationReadStatus } from '@/constants/notificationStatus'
 import { getAcceptLanguage } from '@/features/i18n/services/localePreference'
 import { buildApiUrl, http } from '@/services/api/http'
 import { subscribeToSse } from '@/services/api/sse'
+import { formatKstDate, formatKstDateTime } from '@/services/datetime/kstDateTime'
 
 function formatDate(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value ?? '').slice(0, 10)
-  }
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`
+  return formatKstDate(value)
 }
 
 function formatDateTime(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value ?? '')
-      .replace('T', ' ')
-      .slice(0, 16)
-  }
-
-  return `${formatDate(value)} ${String(date.getHours()).padStart(2, '0')}:${String(
-    date.getMinutes(),
-  ).padStart(2, '0')}`
+  return formatKstDateTime(value)
 }
 
 export function getNotificationGroupDate(item) {

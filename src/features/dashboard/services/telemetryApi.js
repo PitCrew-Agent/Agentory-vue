@@ -13,6 +13,7 @@ import {
 } from '@/features/dashboard/constants/equipmentMetrics'
 import { translate } from '@/features/i18n'
 import { http } from '@/services/api/http'
+import { formatKstDate, formatKstTime } from '@/services/datetime/kstDateTime'
 
 const shapeByType = {
   ASHING: 'etch',
@@ -113,15 +114,7 @@ function formatDatePart(value) {
     return '-'
   }
 
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value).slice(0, 10) || '-'
-  }
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`
+  return formatKstDate(value) || '-'
 }
 
 function formatTimePart(value, includeSeconds = true) {
@@ -129,20 +122,7 @@ function formatTimePart(value, includeSeconds = true) {
     return '-'
   }
 
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    const timePart = String(value).split('T').at(-1)?.split('+')[0]?.split('.')[0] ?? ''
-
-    return includeSeconds ? timePart.slice(0, 8) || '-' : timePart.slice(0, 5) || '-'
-  }
-
-  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(
-    2,
-    '0',
-  )}`
-
-  return includeSeconds ? `${time}:${String(date.getSeconds()).padStart(2, '0')}` : time
+  return formatKstTime(value, { includeSeconds }) || '-'
 }
 
 function formatUpdatedAt(value) {
