@@ -52,7 +52,7 @@ describe('workLogApi', () => {
       ended_at: null,
       plan: '압력 센서 점검',
       source_notification_id: 27,
-      started_at: '2026-07-13T09:00:00',
+      started_at: '2026-07-13T09:00:00+09:00',
       status: '진행중',
       work_type: '긴급수리',
     })
@@ -90,9 +90,9 @@ describe('workLogApi', () => {
     })
 
     expect(http.patch).toHaveBeenCalledWith('/api/v1/work-logs/15', {
-      ended_at: '2026-07-13T10:00:00',
+      ended_at: '2026-07-13T10:00:00+09:00',
       plan: '압력 센서 교체 계획',
-      started_at: '2026-07-13T09:00:00',
+      started_at: '2026-07-13T09:00:00+09:00',
       work_type: '수리점검',
     })
     expect(http.post).toHaveBeenCalledWith('/api/v1/work-logs/15/complete', {
