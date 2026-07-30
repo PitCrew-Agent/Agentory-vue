@@ -1,31 +1,13 @@
 import { normalizeWorkLogStatus, toWorkLogStatusLabel } from '@/constants/workLogStatus'
 import { http } from '@/services/api/http'
+import { formatKstDate, formatKstTime } from '@/services/datetime/kstDateTime'
 
 function formatDate(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value ?? '').slice(0, 10)
-  }
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`
+  return formatKstDate(value)
 }
 
 function formatTime(value) {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return (
-      String(value ?? '')
-        .split('T')
-        .at(-1)
-        ?.slice(0, 5) ?? ''
-    )
-  }
-
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return formatKstTime(value)
 }
 
 function toLocalDateTime(date, time) {
