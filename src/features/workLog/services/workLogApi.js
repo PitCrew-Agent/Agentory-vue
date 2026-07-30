@@ -10,8 +10,11 @@ function formatTime(value) {
   return formatKstTime(value)
 }
 
-function toLocalDateTime(date, time) {
-  return `${date}T${time || '00:00'}:00`
+// 사용자가 폼에 입력한 값은 한국시간(KST) 벽시각이므로 `+09:00` 오프셋을 붙여
+// 타임존이 명시된 순간으로 전송한다. 오프셋 없이 보내면 서버가 UTC로 간주해
+// 조회 시 +9시간 밀린 값으로 저장·표시된다.
+function toKstDateTime(date, time) {
+  return `${date}T${time || '00:00'}:00+09:00`
 }
 
 function getWorkPlan(log) {
@@ -30,10 +33,10 @@ function createWorkLogPayload(log) {
   const status = isCompletionStatus(log.status) ? 'progress' : log.status
 
   return {
-    ended_at: log.endedDate ? toLocalDateTime(log.endedDate, log.endedTime) : null,
+    ended_at: log.endedDate ? toKstDateTime(log.endedDate, log.endedTime) : null,
     plan: getWorkPlan(log),
     source_notification_id: log.sourceNotificationId ?? null,
-    started_at: toLocalDateTime(log.date, log.time),
+    started_at: toKstDateTime(log.date, log.time),
     status: toWorkLogStatusLabel(status),
     work_type: log.workType || '기타',
   }
@@ -41,9 +44,9 @@ function createWorkLogPayload(log) {
 
 function createWorkLogUpdatePayload(log) {
   const payload = {
-    ended_at: log.endedDate ? toLocalDateTime(log.endedDate, log.endedTime) : null,
+    ended_at: log.endedDate ? toKstDateTime(log.endedDate, log.endedTime) : null,
     plan: getWorkPlan(log),
-    started_at: toLocalDateTime(log.date, log.time),
+    started_at: toKstDateTime(log.date, log.time),
     work_type: log.workType || '기타',
   }
 
