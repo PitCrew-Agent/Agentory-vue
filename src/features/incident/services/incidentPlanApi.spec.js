@@ -45,9 +45,15 @@ describe('incidentPlanApi', () => {
 
     const plan = await createIncidentPlanRequest(27)
 
-    expect(http.post).toHaveBeenCalledWith('/api/v1/incident-plans', {
-      notification_id: 27,
-    })
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/v1/incident-plans',
+      {
+        notification_id: 27,
+      },
+      {
+        timeout: 60_000,
+      },
+    )
     expect(plan).toMatchObject({
       alarmCode: 'ERR-402',
       equipmentId: 'EQP-A05',

@@ -1,6 +1,8 @@
 import { normalizeWorkLogStatus } from '@/constants/workLogStatus'
 import { http } from '@/services/api/http'
 
+const INCIDENT_PLAN_TIMEOUT_MS = 60_000
+
 function normalizeNumber(value) {
   const numberValue = Number(value)
 
@@ -52,9 +54,15 @@ export function normalizeIncidentPlan(plan = {}) {
 }
 
 export async function createIncidentPlanRequest(notificationId) {
-  const response = await http.post('/api/v1/incident-plans', {
-    notification_id: Number(notificationId),
-  })
+  const response = await http.post(
+    '/api/v1/incident-plans',
+    {
+      notification_id: Number(notificationId),
+    },
+    {
+      timeout: INCIDENT_PLAN_TIMEOUT_MS,
+    },
+  )
 
   return normalizeIncidentPlan(response)
 }

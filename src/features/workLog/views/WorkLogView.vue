@@ -20,7 +20,6 @@ const isWorkLogSubmitting = ref(false)
 const workLogErrorMessage = ref('')
 const shouldSkipWorkLogApi = import.meta.env.MODE === 'test'
 const pendingIncidentPlan = computed(() => incidentPlanStore.pendingPlan)
-const incidentPlanErrorMessage = computed(() => incidentPlanStore.errorMessage)
 const isIncidentPlanLoading = computed(() => incidentPlanStore.isCreating)
 const isPageLoading = computed(() => isWorkLogLoading.value && !isIncidentPlanLoading.value)
 
@@ -146,7 +145,7 @@ onMounted(() => {
     :is-loading="isPageLoading"
   >
     <WorkLogPanel
-      :error-message="workLogErrorMessage || incidentPlanErrorMessage"
+      :error-message="workLogErrorMessage"
       :groups="workLogGroupState"
       :incident-plan="pendingIncidentPlan"
       :is-incident-plan-loading="isIncidentPlanLoading"
