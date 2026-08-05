@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatKstDate, formatKstDateTime, formatKstTime } from '@/services/datetime/kstDateTime'
+import {
+  createKstDayRange,
+  formatKstDate,
+  formatKstDateTime,
+  formatKstTime,
+} from '@/services/datetime/kstDateTime'
 
 describe('kstDateTime', () => {
+  it('알림 캘린더 날짜를 KST 반열림 구간으로 변환한다', () => {
+    expect(createKstDayRange('2026-08-05')).toEqual({
+      end: '2026-08-06T00:00:00+09:00',
+      start: '2026-08-05T00:00:00+09:00',
+    })
+    expect(createKstDayRange('2026-02-30')).toBeNull()
+  })
+
   it('UTC 시각을 한국시간(+09:00) 기준으로 변환한다', () => {
     const utc = '2026-07-30T05:10:47.381100+00:00'
 

@@ -18,6 +18,7 @@ const {
   notificationDates,
   notificationGroups,
   notificationPagination,
+  selectedNotificationDate,
   setNotificationReadStatus,
 } = useNotificationLog()
 const { t } = useI18n()
@@ -31,7 +32,13 @@ async function refreshNotifications() {
     return
   }
 
-  await loadNotifications({ reset: true, unreadOnly: false })
+  await loadNotifications({
+    end: null,
+    reset: true,
+    selectedDate: '',
+    start: null,
+    unreadOnly: false,
+  })
 }
 
 async function startNotificationResponse(notification) {
@@ -74,6 +81,7 @@ onMounted(() => {
       :calendar-dates="notificationDates"
       :pagination="notificationPagination"
       :response-error="incidentErrorMessage"
+      :selected-calendar-date="selectedNotificationDate"
       @mark-all-read="markAllNotificationsRead"
       @next-page="loadNextNotificationsPage"
       @page-change="loadNotificationsPage"

@@ -1,19 +1,22 @@
 import { computed, reactive, ref } from 'vue'
 
 import {
-  fetchAllNotificationItems,
   fetchNotificationPage,
   groupNotificationRows,
   markNotificationReadRequest,
 } from '@/features/notification/services/notificationApi'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
+import { createKstDayRange } from '@/services/datetime/kstDateTime'
 
 function createPaginationState() {
   return {
     canGoPrevious: false,
+    end: null,
     hasMore: false,
     limit: 10,
     pageIndex: 1,
+    selectedDate: '',
+    start: null,
     totalItems: 0,
     totalPages: 0,
     unreadOnly: false,
@@ -23,16 +26,15 @@ function createPaginationState() {
 export function useNotificationLog() {
   const notificationCenter = useNotificationCenter()
   const notificationItems = reactive([])
-  const notificationIndexItems = reactive([])
   const notificationPagination = reactive(createPaginationState())
   const isNotificationLoading = ref(false)
-  let notificationDateIndexRequestId = 0
 
   const notificationDates = computed(() =>
-    [...new Set(notificationIndexItems.map((item) => item.occurredDate).filter(Boolean))].toSorted(
+    [...new Set(notificationItems.map((item) => item.occurredDate).filter(Boolean))].toSorted(
       (first, second) => second.localeCompare(first),
     ),
   )
+  const selectedNotificationDate = computed(() => notificationPagination.selectedDate)
 
   const notificationGroups = computed(() => groupNotificationRows(notificationItems))
 
@@ -49,30 +51,14 @@ export function useNotificationLog() {
     notificationPagination.hasMore = page.hasMore
   }
 
-  async function refreshNotificationDateIndex(unreadOnly, fallbackItems = []) {
-    const requestId = ++notificationDateIndexRequestId
-    let indexItems = fallbackItems
-
-    try {
-      indexItems = await fetchAllNotificationItems({ unreadOnly })
-    } catch {
-      // Keep the visible page available when the optional calendar index cannot be refreshed.
-    }
-
-    if (requestId !== notificationDateIndexRequestId) {
-      return
-    }
-
-    notificationIndexItems.splice(
-      0,
-      notificationIndexItems.length,
-      ...indexItems.map((item) => ({ ...item })),
-    )
-  }
-
   async function loadNotificationPage(pageNumber, options = {}) {
     const nextLimit = options.limit ?? notificationPagination.limit
     const nextUnreadOnly = options.unreadOnly ?? notificationPagination.unreadOnly
+    const nextStart = Object.hasOwn(options, 'start') ? options.start : notificationPagination.start
+    const nextEnd = Object.hasOwn(options, 'end') ? options.end : notificationPagination.end
+    const nextSelectedDate = Object.hasOwn(options, 'selectedDate')
+      ? options.selectedDate
+      : notificationPagination.selectedDate
 
     if (isNotificationLoading.value) {
       return notificationGroups.value
@@ -82,8 +68,10 @@ export function useNotificationLog() {
 
     try {
       const page = await fetchNotificationPage({
+        end: nextEnd,
         limit: nextLimit,
         page: pageNumber,
+        start: nextStart,
         unreadOnly: nextUnreadOnly,
       })
 
@@ -93,11 +81,10 @@ export function useNotificationLog() {
         ...page.items.map((item) => ({ ...item })),
       )
       notificationPagination.unreadOnly = nextUnreadOnly
+      notificationPagination.start = nextStart
+      notificationPagination.end = nextEnd
+      notificationPagination.selectedDate = nextSelectedDate
       syncPagination(page)
-
-      if (options.refreshDates) {
-        void refreshNotificationDateIndex(nextUnreadOnly, page.items)
-      }
 
       return notificationGroups.value
     } catch {
@@ -116,7 +103,6 @@ export function useNotificationLog() {
   function loadNotifications(options = {}) {
     return loadNotificationPage(options.page ?? 1, {
       ...options,
-      refreshDates: true,
       unreadOnly: options.unreadOnly ?? false,
     })
   }
@@ -151,19 +137,19 @@ export function useNotificationLog() {
   }
 
   async function goToNotificationDate(date) {
-    const firstNotificationIndex = notificationIndexItems.findIndex(
-      (notification) => notification.occurredDate === date,
-    )
+    const range = createKstDayRange(date)
 
-    if (firstNotificationIndex < 0) {
+    if (!range) {
       return false
     }
 
-    const targetPage = Math.floor(firstNotificationIndex / notificationPagination.limit) + 1
+    await loadNotificationPage(1, {
+      end: range.end,
+      selectedDate: date,
+      start: range.start,
+    })
 
-    await loadNotificationsPage(targetPage)
-
-    return true
+    return notificationItems.some((notification) => notification.occurredDate === date)
   }
 
   async function setNotificationReadStatus(id, readStatus) {
@@ -217,6 +203,7 @@ export function useNotificationLog() {
     notificationDates,
     notificationGroups,
     notificationPagination,
+    selectedNotificationDate,
     setNotificationReadStatus,
   }
 }
