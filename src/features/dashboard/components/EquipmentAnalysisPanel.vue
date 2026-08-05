@@ -30,7 +30,11 @@ function formatValue(value, precision) {
   return precision === 0 ? `${Math.round(value)}` : value.toFixed(precision)
 }
 
-function getMetricStatus(value, thresholds) {
+function getMetricStatus(value, thresholds, pointStatusTone) {
+  if (['danger', 'warning'].includes(pointStatusTone)) {
+    return { labelKey: `status.${pointStatusTone}`, tone: pointStatusTone }
+  }
+
   if (!Number.isFinite(value)) {
     return { labelKey: 'analysis.noData', tone: 'normal' }
   }
@@ -54,18 +58,17 @@ const metricRows = computed(() =>
       ...config.thresholds,
       ...chart.thresholds,
     }
-    const values = (chart.points ?? [])
-      .slice(-12)
-      .map((point) => Number(point?.value))
-      .filter(Number.isFinite)
+    const recentPoints = (chart.points ?? []).slice(-12)
+    const values = recentPoints.map((point) => Number(point?.value)).filter(Number.isFinite)
     const currentValue = values.at(-1) ?? null
+    const currentPoint = recentPoints.at(-1)
     const range = thresholds.usl - thresholds.lsl
     const displayPadding = range * 0.12
     const displayMin = thresholds.lsl - displayPadding
     const displayMax = thresholds.usl + displayPadding
     const displayRange = displayMax - displayMin
     const position = (value) => clamp(((value - displayMin) / displayRange) * 100, 0, 100)
-    const status = getMetricStatus(currentValue, thresholds)
+    const status = getMetricStatus(currentValue, thresholds, currentPoint?.statusTone)
     const recentMin = values.length ? Math.min(...values) : null
     const recentMax = values.length ? Math.max(...values) : null
     const recentStart = Number.isFinite(recentMin) ? position(recentMin) : 0

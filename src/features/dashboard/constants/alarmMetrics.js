@@ -20,6 +20,14 @@ const ALARM_METRIC_IDS = Object.freeze({
   'WRN-801': Object.freeze([]),
 })
 
+export function getAlarmMetricIds(alarmCode) {
+  const normalizedCode = String(alarmCode ?? '')
+    .trim()
+    .toUpperCase()
+
+  return [...(ALARM_METRIC_IDS[normalizedCode] ?? [])]
+}
+
 function createMetricItems(metricIds) {
   if (!metricIds.length) {
     return [{ id: 'multiSensor', label: '복합 센서', labelKey: 'metrics.multiSensor', order: 90 }]
@@ -39,5 +47,5 @@ export function getAlarmMetrics(alarmCode) {
     return [{ id: 'unclassified', label: '기타 센서', labelKey: 'metrics.unclassified', order: 99 }]
   }
 
-  return createMetricItems(ALARM_METRIC_IDS[normalizedCode])
+  return createMetricItems(getAlarmMetricIds(normalizedCode))
 }

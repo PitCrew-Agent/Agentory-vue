@@ -52,4 +52,25 @@ describe('DashboardAlertToast', () => {
     expect(wrapper.emitted('pause')).toHaveLength(1)
     expect(wrapper.emitted('resume')).toHaveLength(1)
   })
+
+  it('ERR-402 알림에는 일반 상태 점 대신 전용 마커를 표시한다', () => {
+    const wrapper = mount(DashboardAlertToast, {
+      global: { plugins: [i18n] },
+      props: {
+        toasts: [
+          {
+            code: 'ERR-402',
+            id: 20,
+            message: '복합 냉각 알림',
+            occurredAt: '2026-08-05 19:20',
+            toastKey: 'toast-20',
+            tone: 'danger',
+          },
+        ],
+      },
+    })
+
+    expect(wrapper.find('.critical-cooling-marker').exists()).toBe(true)
+    expect(wrapper.find('.dashboard-alert-toast__dot').exists()).toBe(false)
+  })
 })

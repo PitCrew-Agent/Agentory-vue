@@ -1,8 +1,11 @@
 import {
   equipmentStatusMap,
   equipmentStatusOrder,
+  normalizeAlarmCodeTone,
   normalizeEquipmentStatus,
+  resolveEquipmentStatus,
 } from '@/constants/equipmentStatus'
+import { getAlarmMetricIds } from '@/features/dashboard/constants/alarmMetrics'
 import {
   createEmptyMetricChart,
   createEmptyMetricCharts,
@@ -56,6 +59,18 @@ const bayLayout = {
 
 function compactText(value) {
   return String(value ?? '').trim()
+}
+
+function getAlarmCodeFromSource(source, fallback = '-') {
+  if (Object.hasOwn(source ?? {}, 'alarm_code')) {
+    return compactText(source.alarm_code) || '-'
+  }
+
+  if (Object.hasOwn(source ?? {}, 'alarmCode')) {
+    return compactText(source.alarmCode) || '-'
+  }
+
+  return fallback
 }
 
 function camelToSnake(value) {
@@ -212,6 +227,23 @@ function getPointStatus(point, index, pointCount, detail) {
   return null
 }
 
+function getPointAlarmCode(point, index, pointCount, detail, metricId) {
+  const pointAlarmCode = compactText(point.alarm_code ?? point.alarmCode)
+  const alarmCode =
+    pointAlarmCode || (index === pointCount - 1 ? compactText(detail.alarm_code) : '')
+
+  if (!alarmCode) {
+    return ''
+  }
+
+  const sourceAlarmMetrics = pointAlarmCode
+    ? (point.alarm_metrics ?? point.alarmMetrics)
+    : (detail.alarm_metrics ?? detail.alarmMetrics)
+  const alarmMetricIds = normalizeAlarmMetricIds(sourceAlarmMetrics, getAlarmMetricIds(alarmCode))
+
+  return alarmMetricIds.includes(metricId) ? alarmCode : ''
+}
+
 function getMetricThresholdStatus(metricId, value, processType) {
   const thresholds = getMetricThresholds(metricId, processType)
 
@@ -252,12 +284,20 @@ function getMetricBandStatus(value, point, band) {
   return equipmentStatusMap.normal
 }
 
-function createMetrics(detail = {}) {
+function createMetrics(detail = {}, alarmCode = '', alarmMetricIds = []) {
+  const alarmTone = normalizeAlarmCodeTone(alarmCode)
+  const resolvedAlarmMetricIds = alarmMetricIds.length
+    ? alarmMetricIds
+    : getAlarmMetricIds(alarmCode)
+
   return metricIds.map((metricId) => {
     const config = metricConfigs[metricId]
     const rawValue = getMetricRawValue(detail, metricId)
     const status =
-      getMetricThresholdStatus(metricId, rawValue, detail.process_type) ?? equipmentStatusMap.normal
+      alarmTone && resolvedAlarmMetricIds.includes(metricId)
+        ? equipmentStatusMap[alarmTone]
+        : (getMetricThresholdStatus(metricId, rawValue, detail.process_type) ??
+          equipmentStatusMap.normal)
 
     return {
       icon: config.icon,
@@ -283,12 +323,15 @@ function createMetricChart(metricId, series = [], detail = {}) {
   const points = series
     .map((point, index) => {
       const value = getMetricRawValue(point, metricId)
+      const alarmCode = getPointAlarmCode(point, index, series.length, detail, metricId)
+      const alarmTone = normalizeAlarmCodeTone(alarmCode)
       const status =
+        (alarmTone ? equipmentStatusMap[alarmTone] : null) ??
         getMetricThresholdStatus(metricId, value, detail.process_type) ??
         getPointStatus(point, index, series.length, detail)
 
       return {
-        alarmCode: compactText(point.alarm_code ?? point.alarmCode) || detail.alarm_code || '',
+        alarmCode,
         center: getMetricCenter(point, metricId),
         statusLabel: status?.label ?? '',
         statusTone: status?.tone ?? 'normal',
@@ -301,13 +344,16 @@ function createMetricChart(metricId, series = [], detail = {}) {
 
   if (!points.length) {
     const currentValue = getMetricRawValue(detail, metricId)
+    const alarmCode = getPointAlarmCode({}, 0, 1, detail, metricId)
+    const alarmTone = normalizeAlarmCodeTone(alarmCode)
     const status =
+      (alarmTone ? equipmentStatusMap[alarmTone] : null) ??
       getMetricThresholdStatus(metricId, currentValue, detail.process_type) ??
-      (detail.status ? normalizeEquipmentStatus(detail.status) : null)
+      (detail.status ? resolveEquipmentStatus(detail.status, alarmCode) : null)
 
     if (currentValue !== null) {
       points.push({
-        alarmCode: detail.alarm_code ?? '',
+        alarmCode,
         center: getMetricCenter(detail, metricId),
         statusLabel: status?.label ?? '',
         statusTone: status?.tone ?? 'normal',
@@ -337,7 +383,9 @@ function createMetricChart(metricId, series = [], detail = {}) {
     point.bandUpper = hasBand ? point.center + band.half : null
 
     // 점 상태를 시점별 밴드 기준으로 갱신(드리프트 반영). 판정 불가 시 정적 관리한계 기반 값을 유지한다.
-    const bandStatus = getMetricBandStatus(point.value, point, band)
+    const bandStatus = normalizeAlarmCodeTone(point.alarmCode)
+      ? null
+      : getMetricBandStatus(point.value, point, band)
 
     if (bandStatus) {
       point.statusLabel = bandStatus.label
@@ -479,12 +527,13 @@ function normalizeChecklist(checklist = [], equipmentId) {
 
 function createBaseEquipment(statusItem, line, equipmentIndex) {
   const equipmentId = compactText(statusItem.equipment_id)
-  const status = normalizeEquipmentStatus(statusItem.status)
+  const alarmCode = getAlarmCodeFromSource(statusItem)
+  const status = resolveEquipmentStatus(statusItem.status, alarmCode)
   const displayOrder = toNumber(statusItem.display_order) ?? equipmentIndex + 1
 
   return {
     alarmMetricIds: [],
-    alarmCode: compactText(statusItem.alarm_code) || '-',
+    alarmCode,
     bayZone: compactText(statusItem.bay_zone),
     charts: createEmptyMetricCharts(),
     checklist: [],
@@ -517,12 +566,14 @@ function createBaseEquipment(statusItem, line, equipmentIndex) {
 function applyEquipmentDetail(equipment, detail = {}) {
   const managerName = compactText(detail.manager_name) || '-'
   const processType = compactText(detail.process_type) || equipment.type
-  const alarmCode = compactText(detail.alarm_code) || equipment.alarmCode
+  const alarmCode = getAlarmCodeFromSource(detail, equipment.alarmCode)
   const alarmMetricIds = normalizeAlarmMetricIds(
     detail.alarm_metrics ?? detail.alarmMetrics,
     equipment.alarmMetricIds ?? [],
   )
-  const status = detail.status ? normalizeEquipmentStatus(detail.status) : equipment.status
+  const status = detail.status
+    ? resolveEquipmentStatus(detail.status, alarmCode)
+    : resolveEquipmentStatus(equipment.status?.tone, alarmCode)
   const inspectionStartedAt =
     compactText(detail.last_inspection_at) || equipment.inspectionStartedAt
 
@@ -533,7 +584,7 @@ function applyEquipmentDetail(equipment, detail = {}) {
     checklist: normalizeChecklist(detail.checklist ?? equipment.checklist, equipment.id),
     inspectedAt: formatInspectionAt(inspectionStartedAt),
     inspectionStartedAt,
-    metrics: createMetrics(detail),
+    metrics: createMetrics(detail, alarmCode, alarmMetricIds),
     name: equipment.name || equipment.id,
     owner: managerName,
     ownerDisplay: managerName,
@@ -613,6 +664,73 @@ async function fetchEquipmentSeries(equipmentId, start, end) {
   })
 }
 
+function getAlarmTimestampKey(value) {
+  const timestamp = Date.parse(value)
+
+  return Number.isFinite(timestamp) ? String(timestamp) : compactText(value)
+}
+
+function mergeSeriesAlarmEvents(series = [], alarmEvents = []) {
+  if (!alarmEvents.length) {
+    return series
+  }
+
+  const alarmByTimestamp = new Map()
+
+  alarmEvents.forEach((event) => {
+    const key = getAlarmTimestampKey(event.occurred_at ?? event.occurredAt)
+    const alarmCode = compactText(event.alarm_code ?? event.alarmCode)
+    const currentCode = alarmByTimestamp.get(key)
+    const currentTone = normalizeAlarmCodeTone(currentCode)
+    const nextTone = normalizeAlarmCodeTone(alarmCode)
+
+    if (!key || !alarmCode || currentTone === 'danger') {
+      return
+    }
+
+    if (!currentCode || nextTone === 'danger') {
+      alarmByTimestamp.set(key, alarmCode)
+    }
+  })
+
+  return series.map((point) => {
+    const eventAlarmCode = alarmByTimestamp.get(getAlarmTimestampKey(point.timestamp))
+
+    return eventAlarmCode && !compactText(point.alarm_code ?? point.alarmCode)
+      ? { ...point, alarm_code: eventAlarmCode }
+      : point
+  })
+}
+
+async function fetchEquipmentAlarmEvents(equipmentId, start, end) {
+  const normalizedStart = normalizeSeriesStart(start)
+  const normalizedEnd = normalizeSeriesStart(end)
+  const alarmEvents = []
+  let before = ''
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await http.get(
+      `/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/alarms`,
+      {
+        params: {
+          ...(before ? { before } : {}),
+          ...(normalizedEnd ? { end: normalizedEnd } : {}),
+          limit: 50,
+          ...(normalizedStart ? { start: normalizedStart } : {}),
+        },
+      },
+    )
+    const items = Array.isArray(response) ? response : (response?.items ?? [])
+
+    alarmEvents.push(...items)
+    before = response?.next_cursor ?? response?.nextCursor ?? ''
+    hasMore = Boolean(response?.has_more ?? response?.hasMore) && Boolean(before)
+  }
+
+  return alarmEvents
+}
+
 export async function fetchEquipmentSuggestions(equipmentId) {
   const response = await http.get(
     `/api/v1/telemetry/equipment/${encodeURIComponent(equipmentId)}/suggestions`,
@@ -681,11 +799,16 @@ export async function fetchEquipmentTelemetry(
   baseEquipment = createEmptyEquipment(),
   options = {},
 ) {
-  const [detail, series] = await Promise.all([
+  const start = options.start || createRecentSeriesStart()
+  const [detail, series, alarmEvents] = await Promise.all([
     fetchEquipmentDetail(equipmentId),
-    fetchEquipmentSeries(equipmentId, options.start || createRecentSeriesStart(), options.end),
+    fetchEquipmentSeries(equipmentId, start, options.end),
+    options.includeAlarmHistory
+      ? fetchEquipmentAlarmEvents(equipmentId, start, options.end)
+      : Promise.resolve([]),
   ])
   const nextEquipment = applyEquipmentDetail(baseEquipment, detail)
+  const seriesWithAlarmEvents = mergeSeriesAlarmEvents(series, alarmEvents)
 
-  return applyEquipmentSeries(nextEquipment, series, detail)
+  return applyEquipmentSeries(nextEquipment, seriesWithAlarmEvents, detail)
 }

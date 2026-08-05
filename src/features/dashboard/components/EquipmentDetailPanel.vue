@@ -5,6 +5,8 @@ import gasFlowIcon from '@/assets/icons/dashboard/metric-gas-flow.svg'
 import pressureIcon from '@/assets/icons/dashboard/metric-pressure.png'
 import rfPowerIcon from '@/assets/icons/dashboard/metric-rf-power.svg'
 import temperatureIcon from '@/assets/icons/dashboard/metric-temperature.png'
+import { isCriticalCoolingAlarm } from '@/constants/equipmentStatus'
+import CriticalCoolingMarker from '@/features/dashboard/components/CriticalCoolingMarker.vue'
 import RollingMetricValue from '@/features/dashboard/components/RollingMetricValue.vue'
 
 defineProps({
@@ -36,6 +38,10 @@ function isAlertMetric(metric) {
   return ['warning', 'danger'].includes(metric.statusTone)
 }
 
+function isCriticalCoolingMetric(alarmCode, metricId) {
+  return isCriticalCoolingAlarm(alarmCode) && ['pressure', 'temperature'].includes(metricId)
+}
+
 function getMetricStatusLabel(metric) {
   return t(`status.${metric.statusTone ?? 'normal'}`)
 }
@@ -63,6 +69,7 @@ function getMetricStatusLabel(metric) {
             class="detail-panel__alarm-code"
             :class="`detail-panel__alarm-code--${equipment.status.tone}`"
           >
+            <CriticalCoolingMarker v-if="isCriticalCoolingAlarm(equipment.alarmCode)" compact />
             {{ equipment.alarmCode }}
           </span>
         </div>
@@ -108,7 +115,20 @@ function getMetricStatusLabel(metric) {
         >
           <span
             class="detail-panel__metric-icon"
-            :class="`detail-panel__metric-icon--${metric.id}`"
+            :class="[
+              `detail-panel__metric-icon--${metric.id}`,
+              {
+                'detail-panel__metric-icon--critical-cooling': isCriticalCoolingMetric(
+                  equipment.alarmCode,
+                  metric.id,
+                ),
+              },
+            ]"
+            :title="
+              isCriticalCoolingMetric(equipment.alarmCode, metric.id)
+                ? equipment.alarmCode
+                : undefined
+            "
           >
             <img :src="metricIconMap[metric.icon]" alt="" width="24" height="24" />
           </span>
@@ -122,7 +142,7 @@ function getMetricStatusLabel(metric) {
             </strong>
           </div>
           <span
-            v-if="isAlertMetric(metric)"
+            v-if="isAlertMetric(metric) && !isCriticalCoolingMetric(equipment.alarmCode, metric.id)"
             class="detail-panel__metric-alert"
             :class="`detail-panel__metric-alert--${metric.statusTone}`"
             :aria-label="getMetricStatusLabel(metric)"
@@ -204,6 +224,7 @@ function getMetricStatusLabel(metric) {
 .detail-panel__alarm-code {
   display: inline-flex;
   align-items: center;
+  gap: var(--agentory-spacing-4);
   max-width: min(180px, 34cqw);
   min-height: clamp(24px, min(6.4cqw, 7cqh), 56px);
   padding: var(--agentory-spacing-4) var(--agentory-spacing-10);
@@ -340,6 +361,7 @@ function getMetricStatusLabel(metric) {
 }
 
 .detail-panel__metric-icon {
+  position: relative;
   display: inline-flex;
   grid-row: 1;
   align-items: center;
@@ -351,7 +373,36 @@ function getMetricStatusLabel(metric) {
   border-radius: var(--agentory-radius-8);
 }
 
+.detail-panel__metric-icon--critical-cooling::before,
+.detail-panel__metric-icon--critical-cooling::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--detail-fluid-icon) + var(--agentory-spacing-8));
+  height: calc(var(--detail-fluid-icon) + var(--agentory-spacing-8));
+  border: 1px solid color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 18%);
+  border-radius: var(--agentory-radius-pill);
+  box-shadow: 0 0 var(--agentory-spacing-8)
+    color-mix(in srgb, var(--agentory-color-status-danger-text), transparent 68%);
+  content: '';
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.detail-panel__metric-icon--critical-cooling::before {
+  animation: detail-critical-cooling-ring 1.8s var(--agentory-ease-soft) infinite;
+}
+
+.detail-panel__metric-icon--critical-cooling::after {
+  width: calc(var(--detail-fluid-icon) + var(--agentory-spacing-16));
+  height: calc(var(--detail-fluid-icon) + var(--agentory-spacing-16));
+  opacity: 0.42;
+  animation: detail-critical-cooling-ring 1.8s var(--agentory-ease-soft) 320ms infinite;
+}
+
 .detail-panel__metric-icon img {
+  position: relative;
+  z-index: 1;
   width: var(--detail-fluid-icon);
   height: var(--detail-fluid-icon);
   object-fit: contain;
@@ -512,6 +563,19 @@ function getMetricStatusLabel(metric) {
   }
 }
 
+@keyframes detail-critical-cooling-ring {
+  0%,
+  100% {
+    opacity: 0.88;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+
+  52% {
+    opacity: 0.22;
+    transform: translate(-50%, -50%) scale(1.14);
+  }
+}
+
 .detail-panel__metric small {
   min-width: 0;
   padding-top: var(--agentory-spacing-2);
@@ -589,6 +653,8 @@ function getMetricStatusLabel(metric) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .detail-panel__metric-icon--critical-cooling::before,
+  .detail-panel__metric-icon--critical-cooling::after,
   .detail-panel__metric-icon img {
     animation: none;
   }
