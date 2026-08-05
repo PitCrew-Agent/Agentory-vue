@@ -2,6 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { isCriticalCoolingAlarm } from '@/constants/equipmentStatus'
+import CriticalCoolingMarker from '@/features/dashboard/components/CriticalCoolingMarker.vue'
+
 const props = defineProps({
   activeNotificationId: {
     type: Number,
@@ -48,7 +51,8 @@ const visibleToasts = computed(() => props.toasts.slice(0, 2))
       :class="`dashboard-alert-toast--${toast.tone}`"
       :style="{ '--dashboard-toast-stack-index': index }"
     >
-      <span class="dashboard-alert-toast__dot" aria-hidden="true"></span>
+      <CriticalCoolingMarker v-if="isCriticalCoolingAlarm(toast.code)" />
+      <span v-else class="dashboard-alert-toast__dot" aria-hidden="true"></span>
       <div class="dashboard-alert-toast__copy">
         <strong>{{ toast.code }}</strong>
         <span>{{ toast.message }}</span>

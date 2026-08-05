@@ -7,7 +7,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import cameraLockIcon from '@/assets/icons/dashboard/camera-lock.svg'
 import cameraUnlockIcon from '@/assets/icons/dashboard/camera-unlock.svg'
 import chevronDownIcon from '@/assets/icons/dashboard/chevron-down.svg'
-import { equipmentStatusOrder } from '@/constants/equipmentStatus'
+import { equipmentStatusOrder, isCriticalCoolingAlarm } from '@/constants/equipmentStatus'
+import CriticalCoolingMarker from '@/features/dashboard/components/CriticalCoolingMarker.vue'
 import DashboardContentLoader from '@/features/dashboard/components/DashboardContentLoader.vue'
 import { formatLineLabel } from '@/features/i18n/utils/formatLineLabel'
 
@@ -1589,7 +1590,8 @@ onBeforeUnmount(() => {
         :aria-pressed="label.isSelected"
         @click="selectEquipment(label.equipment.id, { manual: true })"
       >
-        <span class="factory-viewport__label-dot"></span>
+        <CriticalCoolingMarker v-if="isCriticalCoolingAlarm(label.equipment.alarmCode)" compact />
+        <span v-else class="factory-viewport__label-dot"></span>
         <strong>{{ label.equipment.name }}</strong>
         <Transition name="factory-label-status" mode="out-in">
           <small :key="`${label.equipment.id}-${label.equipment.status.tone}`">
