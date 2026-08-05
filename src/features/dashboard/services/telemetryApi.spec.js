@@ -242,4 +242,102 @@ describe('telemetryApi', () => {
       usl: 46.5,
     })
   })
+
+  it('keeps ERR alarm events dangerous even when their sensor values are inside warning bands', async () => {
+    http.get.mockImplementation((url) => {
+      if (url.endsWith('/alarms')) {
+        return Promise.resolve({
+          has_more: false,
+          items: [
+            {
+              alarm_code: 'ERR-401',
+              occurred_at: '2026-07-20T12:00:00Z',
+              severity: 'warning',
+            },
+          ],
+          next_cursor: null,
+        })
+      }
+
+      if (url.endsWith('/series')) {
+        return Promise.resolve([
+          {
+            temperature: 60.31,
+            temperature_center: 60,
+            timestamp: '2026-07-20T12:00:00Z',
+          },
+          {
+            temperature: 60,
+            temperature_center: 60,
+            timestamp: '2026-07-20T12:01:00Z',
+          },
+        ])
+      }
+
+      return Promise.resolve({
+        bands: { temperature: { half: 0.3, lsl: 58.5, usl: 61.5 } },
+        process_type: 'Etching',
+        status: 'normal',
+      })
+    })
+
+    const equipment = await fetchEquipmentTelemetry('EQP-A02', createEmptyEquipment(), {
+      includeAlarmHistory: true,
+      start: '2026-07-20T11:50:00Z',
+    })
+    const [alarmPoint, normalPoint] = equipment.charts.temperature.points
+
+    expect(alarmPoint).toMatchObject({ alarmCode: 'ERR-401', statusTone: 'danger' })
+    expect(normalPoint.statusTone).toBe('normal')
+  })
+
+  it('uses an ERR detail code for the equipment and affected metric regardless of status', async () => {
+    http.get.mockImplementation((url) =>
+      Promise.resolve(
+        url.endsWith('/series')
+          ? [{ temperature: 60.31, timestamp: '2026-07-20T12:00:00Z' }]
+          : {
+              alarm_code: 'ERR-401',
+              alarm_metrics: ['temperature'],
+              process_type: 'Etching',
+              status: 'warning',
+              temperature: 60.31,
+            },
+      ),
+    )
+
+    const equipment = await fetchEquipmentTelemetry('EQP-A02', createEmptyEquipment())
+    const temperatureMetric = equipment.metrics.find((metric) => metric.id === 'temperature')
+
+    expect(equipment.status.tone).toBe('danger')
+    expect(temperatureMetric.statusTone).toBe('danger')
+    expect(equipment.charts.temperature.points[0]).toMatchObject({
+      alarmCode: 'ERR-401',
+      statusTone: 'danger',
+    })
+  })
+
+  it('clears a previous ERR state when the backend explicitly returns a null alarm code', async () => {
+    http.get.mockImplementation((url) =>
+      Promise.resolve(
+        url.endsWith('/series')
+          ? []
+          : {
+              alarm_code: null,
+              process_type: 'Etching',
+              status: 'normal',
+            },
+      ),
+    )
+    const baseEquipment = {
+      ...createEmptyEquipment(),
+      alarmCode: 'ERR-401',
+      status: { label: '위험', labelKey: 'status.danger', tone: 'danger' },
+    }
+
+    const equipment = await fetchEquipmentTelemetry('EQP-A02', baseEquipment)
+
+    expect(equipment.alarmCode).toBe('-')
+    expect(equipment.status.tone).toBe('normal')
+  })
 })

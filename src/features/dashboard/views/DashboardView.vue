@@ -6,7 +6,8 @@ import { useI18n } from 'vue-i18n'
 import {
   equipmentStatusMap,
   equipmentStatusOrder,
-  normalizeEquipmentStatus,
+  normalizeAlarmCodeTone,
+  resolveEquipmentStatus,
 } from '@/constants/equipmentStatus'
 import AssistantPanel from '@/features/dashboard/components/AssistantPanel.vue'
 import DashboardAlertToast from '@/features/dashboard/components/DashboardAlertToast.vue'
@@ -735,12 +736,13 @@ async function refreshRealtimeNotificationTelemetry(equipmentId) {
   try {
     const shouldMergeIncrementalTelemetry =
       metricChartRange.mode !== 'custom' && hasChartPoints(baseEquipment)
+    const telemetryOptions = shouldMergeIncrementalTelemetry
+      ? getIncrementalMetricChartQuery(baseEquipment)
+      : { ...getMetricChartQuery(), includeAlarmHistory: true }
     const updatedEquipmentResponse = await fetchEquipmentTelemetry(
       equipmentId,
       baseEquipment,
-      shouldMergeIncrementalTelemetry
-        ? getIncrementalMetricChartQuery(baseEquipment)
-        : getMetricChartQuery(),
+      telemetryOptions,
     )
 
     if (realtimeNotificationRequestIds.get(equipmentId) !== requestId) {
@@ -810,6 +812,7 @@ function applyRealtimeNotification(notification) {
   }
 
   const metricId = getNotificationMetricId(notification.metric)
+  const notificationTone = normalizeAlarmCodeTone(notification.code) ?? notification.tone
   const nextAlarmMetricIds = metricId
     ? [metricId, ...(equipment.alarmMetricIds ?? []).filter((item) => item !== metricId)]
     : (equipment.alarmMetricIds ?? [])
@@ -817,7 +820,7 @@ function applyRealtimeNotification(notification) {
     ...equipment,
     alarmCode: notification.code || equipment.alarmCode,
     alarmMetricIds: nextAlarmMetricIds,
-    status: equipmentStatusMap[notification.tone],
+    status: equipmentStatusMap[notificationTone],
   }
 
   realtimeSnapshotRequestId += 1
@@ -980,8 +983,12 @@ function applyEquipmentStatusSnapshot(statusItems = []) {
       return equipment
     }
 
-    const nextStatus = normalizeEquipmentStatus(statusItem.status)
-    const nextAlarmCode = statusItem.alarm_code || statusItem.alarmCode || equipment.alarmCode
+    const hasAlarmCode =
+      Object.hasOwn(statusItem, 'alarm_code') || Object.hasOwn(statusItem, 'alarmCode')
+    const nextAlarmCode = hasAlarmCode
+      ? statusItem.alarm_code || statusItem.alarmCode || '-'
+      : equipment.alarmCode
+    const nextStatus = resolveEquipmentStatus(statusItem.status, nextAlarmCode)
 
     if (nextStatus.tone === equipment.status?.tone && nextAlarmCode === equipment.alarmCode) {
       return equipment
@@ -1059,11 +1066,26 @@ function mergeIncrementalTelemetry(baseEquipment, updatedEquipment) {
       const currentChart = baseEquipment?.charts?.[metricId]
       const updatedChart = updatedEquipment?.charts?.[metricId]
       const pointMap = new Map(
-        [...(currentChart?.points ?? []), ...(updatedChart?.points ?? [])].map((point) => [
-          point.timestamp,
-          point,
-        ]),
+        (currentChart?.points ?? []).map((point) => [point.timestamp, point]),
       )
+
+      ;(updatedChart?.points ?? []).forEach((point) => {
+        const previousPoint = pointMap.get(point.timestamp)
+        const previousAlarmTone = normalizeAlarmCodeTone(previousPoint?.alarmCode)
+        const nextAlarmTone = normalizeAlarmCodeTone(point.alarmCode)
+
+        if (previousPoint && previousAlarmTone && !nextAlarmTone) {
+          pointMap.set(point.timestamp, {
+            ...point,
+            alarmCode: previousPoint.alarmCode,
+            statusLabel: previousPoint.statusLabel,
+            statusTone: previousPoint.statusTone,
+          })
+          return
+        }
+
+        pointMap.set(point.timestamp, point)
+      })
       const points = [...pointMap.values()]
         .filter(
           (point) => !Number.isFinite(rangeStart) || Date.parse(point.timestamp) >= rangeStart,
@@ -1105,7 +1127,7 @@ async function loadRealtimeSnapshot({
     incrementalTelemetry && metricChartRange.mode !== 'custom' && hasChartPoints(baseEquipment)
   const chartQuery = shouldMergeIncrementalTelemetry
     ? getIncrementalMetricChartQuery(baseEquipment)
-    : getMetricChartQuery()
+    : { ...getMetricChartQuery(), includeAlarmHistory: true }
 
   const [sceneResult, statusResult, telemetryResult] = await Promise.allSettled([
     includeFactoryScene ? fetchFactoryScene() : Promise.resolve(null),

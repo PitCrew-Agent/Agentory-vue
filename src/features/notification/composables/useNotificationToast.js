@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 
+import { normalizeAlarmCodeTone } from '@/constants/equipmentStatus'
 import { useNotificationCenter } from '@/features/notification/composables/useNotificationCenter'
 
 const ALERT_TOAST_DURATION = 4200
@@ -10,6 +11,12 @@ export function useNotificationToastStackState() {
 }
 
 function getNotificationToastTone(notification) {
+  const alarmCodeTone = normalizeAlarmCodeTone(notification.code)
+
+  if (alarmCodeTone) {
+    return alarmCodeTone
+  }
+
   const source = `${notification.code ?? ''} ${notification.message ?? ''}`.toLowerCase()
 
   if (/danger|critical|error|err|위험|긴급/.test(source)) {
