@@ -1,4 +1,5 @@
 const KST_TIME_ZONE = 'Asia/Seoul'
+const KST_OFFSET = '+09:00'
 
 const kstPartsFormatter = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
@@ -80,4 +81,31 @@ export function formatKstDateTime(value) {
   }
 
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
+}
+
+/**
+ * `YYYY-MM-DD` 날짜를 KST 하루의 반열림 구간 `[start, end)`으로 변환한다.
+ */
+export function createKstDayRange(value) {
+  const normalizedDate = String(value ?? '').trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalizedDate)
+
+  if (!match) {
+    return null
+  }
+
+  const [, year, month, day] = match
+  const startDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+
+  if (startDate.toISOString().slice(0, 10) !== normalizedDate) {
+    return null
+  }
+
+  const endDate = new Date(startDate)
+  endDate.setUTCDate(endDate.getUTCDate() + 1)
+
+  return {
+    end: `${endDate.toISOString().slice(0, 10)}T00:00:00${KST_OFFSET}`,
+    start: `${normalizedDate}T00:00:00${KST_OFFSET}`,
+  }
 }

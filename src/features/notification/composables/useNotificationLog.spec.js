@@ -2,18 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   applyNotificationReadStatusMock,
-  fetchAllNotificationItemsMock,
   fetchNotificationPageMock,
   markNotificationReadRequestMock,
 } = vi.hoisted(() => ({
   applyNotificationReadStatusMock: vi.fn(),
-  fetchAllNotificationItemsMock: vi.fn(),
   fetchNotificationPageMock: vi.fn(),
   markNotificationReadRequestMock: vi.fn(),
 }))
 
 vi.mock('@/features/notification/services/notificationApi', () => ({
-  fetchAllNotificationItems: fetchAllNotificationItemsMock,
   fetchNotificationPage: fetchNotificationPageMock,
   groupNotificationRows(items) {
     return [...new Set(items.map((item) => item.occurredDate))].map((date) => ({
@@ -65,7 +62,6 @@ function mockPageResponse(notifications, totalItems = notifications.length) {
 
 describe('useNotificationLog', () => {
   beforeEach(() => {
-    fetchAllNotificationItemsMock.mockReset()
     fetchNotificationPageMock.mockReset()
     applyNotificationReadStatusMock.mockReset()
     markNotificationReadRequestMock.mockReset()
@@ -75,7 +71,6 @@ describe('useNotificationLog', () => {
   it('uses backend page metadata and requests the selected page', async () => {
     const notifications = createNotifications(23)
 
-    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
     mockPageResponse(notifications)
     const notificationLog = useNotificationLog()
 
@@ -93,8 +88,10 @@ describe('useNotificationLog', () => {
     expect(notificationLog.notificationGroups.value[0].rows).toHaveLength(3)
     expect(notificationLog.notificationPagination.hasMore).toBe(false)
     expect(fetchNotificationPageMock).toHaveBeenLastCalledWith({
+      end: null,
       limit: 10,
       page: 3,
+      start: null,
       unreadOnly: false,
     })
   })
@@ -105,7 +102,6 @@ describe('useNotificationLog', () => {
       { ...createNotifications(1)[0], id: 2, readStatus: 'unread' },
     ]
 
-    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
     mockPageResponse(notifications)
     const notificationLog = useNotificationLog()
 
@@ -122,30 +118,50 @@ describe('useNotificationLog', () => {
     expect(notificationLog.notificationGroups.value[0].rows[1].readStatus).toBe('read')
   })
 
-  it('keeps all calendar dates and loads the first page containing the selected date', async () => {
+  it('loads the selected calendar date with the backend KST range filter', async () => {
     const notifications = [
       ...createNotificationsForDate('2026-07-12', 12, 1),
       ...createNotificationsForDate('2026-07-11', 5, 13),
       ...createNotificationsForDate('2026-07-10', 3, 18),
     ]
 
-    fetchAllNotificationItemsMock.mockResolvedValue(notifications)
-    mockPageResponse(notifications)
+    fetchNotificationPageMock.mockImplementation(({ end, limit, page, start }) => {
+      const filteredNotifications = start
+        ? notifications.filter((notification) => {
+            const occurredAt = `${notification.occurredDate}T12:00:00+09:00`
+
+            return occurredAt >= start && occurredAt < end
+          })
+        : notifications
+
+      return {
+        groups: [],
+        hasMore: page < Math.ceil(filteredNotifications.length / limit),
+        items: filteredNotifications.slice((page - 1) * limit, page * limit),
+        limit,
+        page,
+        totalItems: filteredNotifications.length,
+        totalPages: Math.ceil(filteredNotifications.length / limit),
+      }
+    })
     const notificationLog = useNotificationLog()
 
     await notificationLog.loadNotifications()
 
-    expect(notificationLog.notificationDates.value).toEqual([
-      '2026-07-12',
-      '2026-07-11',
-      '2026-07-10',
-    ])
     await expect(notificationLog.goToNotificationDate('2026-07-11')).resolves.toBe(true)
-    expect(notificationLog.notificationPagination.pageIndex).toBe(2)
+    expect(fetchNotificationPageMock).toHaveBeenLastCalledWith({
+      end: '2026-07-12T00:00:00+09:00',
+      limit: 10,
+      page: 1,
+      start: '2026-07-11T00:00:00+09:00',
+      unreadOnly: false,
+    })
+    expect(notificationLog.notificationPagination.pageIndex).toBe(1)
+    expect(notificationLog.selectedNotificationDate.value).toBe('2026-07-11')
     expect(
       notificationLog.notificationGroups.value.flatMap((group) => group.rows.map((row) => row.id)),
     ).toContain(13)
     await expect(notificationLog.goToNotificationDate('2026-07-09')).resolves.toBe(false)
-    expect(notificationLog.notificationPagination.pageIndex).toBe(2)
+    expect(notificationLog.notificationPagination.totalItems).toBe(0)
   })
 })

@@ -25,7 +25,6 @@ export function normalizeNotificationTone(item = {}) {
   const code = String(item.alarm_code ?? item.code ?? '')
     .trim()
     .toUpperCase()
-
   if (['danger', 'critical', 'error', '위험'].includes(rawTone) || code.startsWith('ERR-')) {
     return 'danger'
   }
@@ -84,13 +83,29 @@ export function groupNotificationRows(items) {
     }))
 }
 
-export async function fetchNotificationPage({ page = 1, limit = 10, unreadOnly = false } = {}) {
+export async function fetchNotificationPage({
+  end = null,
+  limit = 10,
+  page = 1,
+  start = null,
+  unreadOnly = false,
+} = {}) {
+  const params = {
+    limit,
+    page,
+    unread_only: unreadOnly,
+  }
+
+  if (start) {
+    params.start = start
+  }
+
+  if (end) {
+    params.end = end
+  }
+
   const response = await http.get('/api/v1/notifications', {
-    params: {
-      limit,
-      page,
-      unread_only: unreadOnly,
-    },
+    params,
   })
   const rawItems = Array.isArray(response) ? response : (response?.items ?? [])
   const items = rawItems.map(normalizeNotification)
@@ -108,35 +123,6 @@ export async function fetchNotificationPage({ page = 1, limit = 10, unreadOnly =
     totalItems,
     totalPages,
   }
-}
-
-export async function fetchAllNotificationItems({ batchSize = 50, unreadOnly = false } = {}) {
-  const items = []
-  const itemIds = new Set()
-  let pageNumber = 1
-
-  while (true) {
-    const page = await fetchNotificationPage({
-      limit: batchSize,
-      page: pageNumber,
-      unreadOnly,
-    })
-
-    page.items.forEach((item) => {
-      if (!itemIds.has(item.id)) {
-        itemIds.add(item.id)
-        items.push(item)
-      }
-    })
-
-    if (!page.hasMore || page.page >= page.totalPages) {
-      break
-    }
-
-    pageNumber = page.page + 1
-  }
-
-  return items
 }
 
 export async function fetchNotificationGroups(options = {}) {

@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { notificationReadStatusMap } from '@/constants/notificationStatus'
 import refreshIcon from '@/assets/icons/dashboard/refresh.svg'
 import paginationArrowIcon from '@/assets/icons/dashboard/chat-back.svg'
 import DashboardCalendarPicker from '@/features/dashboard/components/DashboardCalendarPicker.vue'
 import DashboardTablePanel from '@/features/dashboard/components/DashboardTablePanel.vue'
-import { notificationReadStatusMap } from '@/constants/notificationStatus'
 
 const props = defineProps({
   activeNotificationId: {
@@ -40,6 +40,10 @@ const props = defineProps({
     }),
   },
   responseError: {
+    type: String,
+    default: '',
+  },
+  selectedCalendarDate: {
     type: String,
     default: '',
   },
@@ -176,6 +180,8 @@ defineExpose({
           :aria-label="t('notificationLog.calendar')"
           data-test-prefix="notification"
           :dates="calendarDates"
+          :selected-date="selectedCalendarDate"
+          select-any-date
           @select="selectCalendarDate"
         />
       </template>

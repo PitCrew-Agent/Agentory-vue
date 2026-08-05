@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import calendarIcon from '@/assets/icons/dashboard/calendar.svg'
+import { formatKstDate } from '@/services/datetime/kstDateTime'
 
 const props = defineProps({
   ariaLabel: {
@@ -17,12 +18,21 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  selectAnyDate: {
+    type: Boolean,
+    default: false,
+  },
+  selectedDate: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['select'])
 const { locale, t, tm } = useI18n()
 const isOpen = ref(false)
 const currentMonthIndex = ref(0)
+const currentMonthValue = ref('')
 
 const monthFormatter = computed(
   () =>
@@ -40,9 +50,14 @@ const availableMonths = computed(() => {
 
   return [...monthSet].sort()
 })
+const today = computed(() => formatKstDate(new Date()))
+const latestSelectableMonth = computed(() => today.value.slice(0, 7))
 
 const currentMonth = computed(
-  () => availableMonths.value[currentMonthIndex.value] ?? sortedDates.value[0]?.slice(0, 7),
+  () =>
+    (props.selectAnyDate
+      ? currentMonthValue.value
+      : availableMonths.value[currentMonthIndex.value]) ?? sortedDates.value[0]?.slice(0, 7),
 )
 const currentMonthLabel = computed(() => {
   if (!currentMonth.value) {
@@ -74,7 +89,7 @@ const calendarCells = computed(() => {
       date,
       day,
       id: date,
-      isAvailable: availableDateSet.value.has(date),
+      isAvailable: props.selectAnyDate ? date <= today.value : availableDateSet.value.has(date),
       isBlank: false,
     })
   }
@@ -83,6 +98,13 @@ const calendarCells = computed(() => {
 })
 
 function openCalendar() {
+  if (props.selectAnyDate) {
+    currentMonthValue.value =
+      props.selectedDate.slice(0, 7) ||
+      sortedDates.value.at(-1)?.slice(0, 7) ||
+      today.value.slice(0, 7)
+  }
+
   currentMonthIndex.value = Math.max(availableMonths.value.length - 1, 0)
   isOpen.value = true
 }
@@ -97,6 +119,17 @@ function toggleCalendar() {
 }
 
 function moveMonth(delta) {
+  if (props.selectAnyDate) {
+    const [year, month] = currentMonth.value.split('-').map(Number)
+    const nextMonth = new Date(year, month - 1 + delta, 1)
+    const nextMonthValue = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
+
+    if (nextMonthValue <= latestSelectableMonth.value) {
+      currentMonthValue.value = nextMonthValue
+    }
+    return
+  }
+
   currentMonthIndex.value = Math.min(
     Math.max(currentMonthIndex.value + delta, 0),
     availableMonths.value.length - 1,
@@ -111,6 +144,10 @@ function selectDate(date) {
 watch(
   availableMonths,
   (months) => {
+    if (props.selectAnyDate) {
+      return
+    }
+
     currentMonthIndex.value = Math.max(months.length - 1, 0)
   },
   { immediate: true },
@@ -144,7 +181,7 @@ watch(
             class="dashboard-calendar-picker__month-button"
             type="button"
             :aria-label="t('calendar.previousMonth')"
-            :disabled="currentMonthIndex === 0"
+            :disabled="!selectAnyDate && currentMonthIndex === 0"
             :data-test="`${dataTestPrefix}-calendar-prev`"
             @click="moveMonth(-1)"
           >
@@ -155,7 +192,11 @@ watch(
             class="dashboard-calendar-picker__month-button"
             type="button"
             :aria-label="t('calendar.nextMonth')"
-            :disabled="currentMonthIndex >= availableMonths.length - 1"
+            :disabled="
+              selectAnyDate
+                ? currentMonth >= latestSelectableMonth
+                : currentMonthIndex >= availableMonths.length - 1
+            "
             :data-test="`${dataTestPrefix}-calendar-next`"
             @click="moveMonth(1)"
           >
@@ -176,7 +217,11 @@ watch(
             <button
               v-else
               class="dashboard-calendar-picker__day"
-              :class="{ 'dashboard-calendar-picker__day--available': cell.isAvailable }"
+              :class="{
+                'dashboard-calendar-picker__day--available': !selectAnyDate && cell.isAvailable,
+                'dashboard-calendar-picker__day--selectable': selectAnyDate && cell.isAvailable,
+                'dashboard-calendar-picker__day--selected': cell.date === selectedDate,
+              }"
               type="button"
               :disabled="!cell.isAvailable"
               :data-test="
@@ -330,6 +375,21 @@ watch(
     var(--agentory-color-bg-primary),
     var(--agentory-color-text-primary) 14%
   );
+}
+
+.dashboard-calendar-picker__day--selectable {
+  color: var(--agentory-color-text-primary);
+  cursor: pointer;
+}
+
+.dashboard-calendar-picker__day--selectable:hover {
+  background: var(--agentory-color-bg-muted);
+}
+
+.dashboard-calendar-picker__day--selected,
+.dashboard-calendar-picker__day--selected:hover {
+  color: var(--agentory-color-text-inverse);
+  background: var(--agentory-color-bg-primary);
 }
 
 .dashboard-calendar-picker-enter-active,

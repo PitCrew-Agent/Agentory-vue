@@ -16,7 +16,6 @@ vi.mock('@/services/api/sse', () => ({
 }))
 
 import {
-  fetchAllNotificationItems,
   fetchNotificationPage,
   normalizeNotification,
   normalizeNotificationTone,
@@ -94,32 +93,27 @@ describe('notificationApi', () => {
     expect(page.items).toHaveLength(1)
   })
 
-  it('collects every notification page by page number', async () => {
-    httpGetMock
-      .mockResolvedValueOnce({
-        has_more: true,
-        items: [{ alarm_code: 'WRN-501', id: 3, occurred_at: '2026-07-15T12:00:00Z' }],
-        limit: 1,
-        page: 1,
-        total_items: 2,
-        total_pages: 2,
-      })
-      .mockResolvedValueOnce({
-        has_more: false,
-        items: [{ alarm_code: 'ERR-402', id: 2, occurred_at: '2026-07-14T12:00:00Z' }],
-        limit: 1,
-        page: 2,
-        total_items: 2,
-        total_pages: 2,
-      })
+  it('requests the selected KST calendar range with pagination', async () => {
+    httpGetMock.mockResolvedValue({
+      has_more: false,
+      items: [],
+      limit: 10,
+      page: 1,
+      total_items: 0,
+      total_pages: 0,
+    })
 
-    const items = await fetchAllNotificationItems({ batchSize: 1 })
+    await fetchNotificationPage({
+      end: '2026-08-06T00:00:00+09:00',
+      start: '2026-08-05T00:00:00+09:00',
+    })
 
-    expect(items.map((item) => item.id)).toEqual([3, 2])
-    expect(httpGetMock).toHaveBeenNthCalledWith(2, '/api/v1/notifications', {
+    expect(httpGetMock).toHaveBeenCalledWith('/api/v1/notifications', {
       params: {
-        limit: 1,
-        page: 2,
+        end: '2026-08-06T00:00:00+09:00',
+        limit: 10,
+        page: 1,
+        start: '2026-08-05T00:00:00+09:00',
         unread_only: false,
       },
     })
