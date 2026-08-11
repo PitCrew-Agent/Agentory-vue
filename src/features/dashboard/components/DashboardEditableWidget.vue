@@ -42,6 +42,10 @@ const dropState = ref('')
 const pendingLayouts = ref(null)
 const isMenuOpen = ref(false)
 const isResizeEditing = ref(false)
+const isTouchCapable = ref(false)
+const isTouchEditing = ref(false)
+const lastPointerType = ref('')
+let removeActiveInteractionListeners = null
 
 const renderedLayout = computed(() => draftLayout.value ?? props.layout)
 const widgetStyle = computed(() => ({
@@ -89,11 +93,21 @@ function toggleMenu() {
 }
 
 function closeMenuOnOutsidePointerDown(event) {
-  if (!isMenuOpen.value || widgetRef.value?.contains(event.target)) {
+  if (widgetRef.value?.contains(event.target)) {
     return
   }
 
   isMenuOpen.value = false
+
+  if (isTouchEditing.value && !activeMode.value) {
+    isTouchEditing.value = false
+    isResizeEditing.value = false
+    clearDraft()
+  }
+}
+
+function recordPointerType(event) {
+  lastPointerType.value = event.pointerType ?? ''
 }
 
 function stashWidget() {
@@ -106,17 +120,23 @@ function stashWidget() {
 function startResizeEditing() {
   isMenuOpen.value = false
   isResizeEditing.value = true
+
+  if (lastPointerType.value === 'touch') {
+    isTouchEditing.value = true
+  }
+
   applyResolvedDraft('resize', { ...props.layout })
 }
 
 function saveResize() {
   commitPendingLayout()
   isResizeEditing.value = false
+  isTouchEditing.value = false
   clearDraft()
 }
 
 function startInteraction(mode, event) {
-  if (event.button !== 0 || !widgetRef.value) {
+  if (event.button !== 0 || !widgetRef.value || activeMode.value) {
     return
   }
 
@@ -127,17 +147,45 @@ function startInteraction(mode, event) {
   const startY = event.clientY
   const minWidthPct = (props.minWidth / boardRect.width) * 100
   const minHeightPct = (props.minHeight / boardRect.height) * 100
+  const pointerId = event.pointerId
+  const isTouchPointer = event.pointerType === 'touch'
+  const dragThreshold = isTouchPointer ? 6 : 0
+  let hasMoved = false
+
+  recordPointerType(event)
+
+  if (isTouchPointer) {
+    isTouchEditing.value = true
+  }
 
   activeMode.value = mode
   isMenuOpen.value = false
   applyResolvedDraft(mode, startLayout)
   event.preventDefault()
   event.stopPropagation()
-  event.currentTarget.setPointerCapture?.(event.pointerId)
+  try {
+    event.currentTarget.setPointerCapture?.(pointerId)
+  } catch {
+    // Synthetic pointer events used by browser tests do not own pointer capture.
+  }
 
   function handlePointerMove(moveEvent) {
-    const deltaX = ((moveEvent.clientX - startX) / boardRect.width) * 100
-    const deltaY = ((moveEvent.clientY - startY) / boardRect.height) * 100
+    if (moveEvent.pointerId !== pointerId) {
+      return
+    }
+
+    const movedX = moveEvent.clientX - startX
+    const movedY = moveEvent.clientY - startY
+
+    if (!hasMoved && Math.hypot(movedX, movedY) < dragThreshold) {
+      return
+    }
+
+    hasMoved = true
+    moveEvent.preventDefault()
+
+    const deltaX = (movedX / boardRect.width) * 100
+    const deltaY = (movedY / boardRect.height) * 100
     const nextLayout = { ...startLayout }
 
     if (mode === 'move') {
@@ -170,30 +218,56 @@ function startInteraction(mode, event) {
     applyResolvedDraft(mode, nextLayout)
   }
 
-  function handlePointerUp() {
-    if (mode === 'move') {
-      commitPendingLayout()
-      isResizeEditing.value = false
-      clearDraft()
-    } else {
-      commitPendingLayout()
-      clearDraft()
-      activeMode.value = ''
-    }
-
+  function removeInteractionListeners() {
     window.removeEventListener('pointermove', handlePointerMove)
     window.removeEventListener('pointerup', handlePointerUp)
+    window.removeEventListener('pointercancel', handlePointerCancel)
+
+    if (removeActiveInteractionListeners === removeInteractionListeners) {
+      removeActiveInteractionListeners = null
+    }
+  }
+
+  function handlePointerUp(upEvent) {
+    if (upEvent.pointerId !== pointerId) {
+      return
+    }
+
+    if (hasMoved) {
+      commitPendingLayout()
+    }
+
+    if (mode === 'move') {
+      isResizeEditing.value = false
+    }
+
+    clearDraft()
+    removeInteractionListeners()
+  }
+
+  function handlePointerCancel(cancelEvent) {
+    if (cancelEvent.pointerId !== pointerId) {
+      return
+    }
+
+    clearDraft()
+    removeInteractionListeners()
   }
 
   window.addEventListener('pointermove', handlePointerMove)
-  window.addEventListener('pointerup', handlePointerUp, { once: true })
+  window.addEventListener('pointerup', handlePointerUp)
+  window.addEventListener('pointercancel', handlePointerCancel)
+  removeActiveInteractionListeners = removeInteractionListeners
 }
 
 onMounted(() => {
+  isTouchCapable.value =
+    navigator.maxTouchPoints > 0 || window.matchMedia?.('(any-pointer: coarse)').matches
   window.addEventListener('pointerdown', closeMenuOnOutsidePointerDown)
 })
 
 onBeforeUnmount(() => {
+  removeActiveInteractionListeners?.()
   window.removeEventListener('pointerdown', closeMenuOnOutsidePointerDown)
 })
 </script>
@@ -205,6 +279,8 @@ onBeforeUnmount(() => {
     :class="{
       'dashboard-widget--active': activeMode,
       'dashboard-widget--resize-editing': isResizeEditing,
+      'dashboard-widget--touch-capable': isTouchCapable,
+      'dashboard-widget--touch-editing': isTouchEditing,
       'dashboard-widget--drop-valid': dropState === 'valid',
       'dashboard-widget--drop-invalid': dropState === 'invalid',
     }"
@@ -225,7 +301,7 @@ onBeforeUnmount(() => {
 
       <div class="dashboard-widget__actions">
         <button
-          v-if="isResizeEditing"
+          v-if="isResizeEditing || isTouchEditing"
           class="dashboard-widget__save"
           type="button"
           :data-test="`widget-save-${id}`"
@@ -240,6 +316,7 @@ onBeforeUnmount(() => {
           :aria-expanded="isMenuOpen"
           :data-test="`widget-menu-${id}`"
           :aria-label="t('widget.menu')"
+          @pointerdown="recordPointerType"
           @click="toggleMenu"
         >
           <img :src="widgetMenuIcon" alt="" width="16" height="16" />
@@ -260,7 +337,16 @@ onBeforeUnmount(() => {
       <slot></slot>
     </div>
 
-    <template v-if="isResizeEditing">
+    <button
+      v-if="isTouchEditing && !activeMode"
+      class="dashboard-widget__touch-drag-surface"
+      type="button"
+      :data-test="`widget-touch-drag-${id}`"
+      :aria-label="t('widget.move')"
+      @pointerdown="startInteraction('move', $event)"
+    ></button>
+
+    <template v-if="isResizeEditing || isTouchEditing">
       <button
         class="dashboard-widget__resize dashboard-widget__resize--left"
         type="button"
@@ -324,6 +410,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .dashboard-widget {
   --dashboard-widget-motion-duration: 690ms;
+  --dashboard-widget-touch-target: 44px;
 
   position: absolute;
   min-width: 0;
@@ -355,7 +442,8 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-widget--active,
-.dashboard-widget--resize-editing {
+.dashboard-widget--resize-editing,
+.dashboard-widget--touch-editing {
   z-index: 20;
 }
 
@@ -392,6 +480,11 @@ onBeforeUnmount(() => {
 
 .dashboard-widget--drop-invalid::after {
   border-color: rgba(229, 64, 64, 0.92);
+  opacity: 1;
+}
+
+.dashboard-widget--touch-editing:not(.dashboard-widget--active)::after {
+  border-color: color-mix(in srgb, var(--agentory-color-bg-primary), transparent 58%);
   opacity: 1;
 }
 
@@ -442,6 +535,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: var(--agentory-radius-4);
   pointer-events: auto;
+  touch-action: none;
 }
 
 .dashboard-widget__move,
@@ -535,6 +629,42 @@ onBeforeUnmount(() => {
   padding: 0;
   background: transparent;
   border: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.dashboard-widget__touch-drag-surface {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  right: 112px;
+  left: 52px;
+  height: 50px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__header-tools {
+  top: 6px;
+  height: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__move,
+.dashboard-widget--touch-capable .dashboard-widget__menu-button,
+.dashboard-widget--touch-capable .dashboard-widget__save {
+  min-width: var(--dashboard-widget-touch-target);
+  height: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__actions {
+  gap: 0;
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__menu {
+  top: 46px;
 }
 
 .dashboard-widget__resize--right {
@@ -685,6 +815,145 @@ onBeforeUnmount(() => {
 .dashboard-widget__resize--left-bottom::after {
   bottom: 4px;
   left: 4px;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize {
+  z-index: 10;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__header-tools {
+  z-index: 12;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left {
+  top: var(--dashboard-widget-touch-target);
+  bottom: calc(var(--dashboard-widget-touch-target) / 2);
+  width: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right {
+  right: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left {
+  left: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right::after,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left::after {
+  top: 50%;
+  width: 4px;
+  height: 48px;
+  transform: translateY(-50%);
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right::after {
+  right: 0;
+  left: auto;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left::after {
+  right: auto;
+  left: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--top,
+.dashboard-widget--touch-editing .dashboard-widget__resize--bottom {
+  right: calc(var(--dashboard-widget-touch-target) / 2);
+  left: calc(var(--dashboard-widget-touch-target) / 2);
+  height: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--top {
+  top: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--bottom {
+  bottom: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--top::after,
+.dashboard-widget--touch-editing .dashboard-widget__resize--bottom::after {
+  left: 50%;
+  width: 48px;
+  height: 4px;
+  transform: translateX(-50%);
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--top::after {
+  top: 0;
+  bottom: auto;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--bottom::after {
+  top: auto;
+  bottom: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--corner,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-top,
+.dashboard-widget--touch-editing .dashboard-widget__resize--right-top,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-bottom {
+  width: var(--dashboard-widget-touch-target);
+  height: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-top {
+  top: 0;
+  left: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right-top {
+  top: 0;
+  right: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-bottom {
+  bottom: 0;
+  left: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--corner {
+  right: 0;
+  bottom: 0;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--corner::after,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-top::after,
+.dashboard-widget--touch-editing .dashboard-widget__resize--right-top::after,
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-bottom::after {
+  width: 13px;
+  height: 13px;
+  transform: none;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-top::after {
+  top: 2px;
+  right: auto;
+  bottom: auto;
+  left: 2px;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--right-top::after {
+  top: 2px;
+  right: 2px;
+  bottom: auto;
+  left: auto;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--left-bottom::after {
+  top: auto;
+  right: auto;
+  bottom: 2px;
+  left: 2px;
+}
+
+.dashboard-widget--touch-editing .dashboard-widget__resize--corner::after {
+  top: auto;
+  right: 2px;
+  bottom: 2px;
+  left: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
