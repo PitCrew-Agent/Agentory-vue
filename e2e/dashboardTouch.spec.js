@@ -18,6 +18,17 @@ async function getRect(locator) {
   })
 }
 
+async function getPseudoSize(locator, pseudoElement) {
+  return locator.evaluate((element, pseudo) => {
+    const style = window.getComputedStyle(element, pseudo)
+
+    return {
+      height: Number.parseFloat(style.height),
+      width: Number.parseFloat(style.width),
+    }
+  }, pseudoElement)
+}
+
 async function dragWithTouch(page, locator, deltaX, deltaY, pointerId = 11) {
   const box = await locator.boundingBox()
 
@@ -106,9 +117,14 @@ test('터치 한 번의 드래그로 위젯을 이동하고 크기를 조절한�
   await page.locator('[data-test="widget-stash-assistant"]').click()
 
   const moveTargetRect = await getRect(detailMoveButton)
+  const moveTouchTargetSize = await getPseudoSize(detailMoveButton, '::before')
 
-  expect(moveTargetRect.width).toBeGreaterThanOrEqual(43.5)
-  expect(moveTargetRect.height).toBeGreaterThanOrEqual(43.5)
+  expect(moveTargetRect.width).toBeGreaterThanOrEqual(19.5)
+  expect(moveTargetRect.width).toBeLessThanOrEqual(20.5)
+  expect(moveTargetRect.height).toBeGreaterThanOrEqual(19.5)
+  expect(moveTargetRect.height).toBeLessThanOrEqual(20.5)
+  expect(moveTouchTargetSize.width).toBe(44)
+  expect(moveTouchTargetSize.height).toBe(44)
 
   const beforeMove = await getRect(detailWidget)
 
