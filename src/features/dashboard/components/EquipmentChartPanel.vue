@@ -398,8 +398,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocument
 .chart-panel__range-control {
   position: relative;
   min-width: 0;
-  margin-right: var(--agentory-spacing-40);
+  margin-right: var(--dashboard-widget-header-end-reserve, var(--agentory-spacing-40));
   flex: 0 1 auto;
+  transition: margin-right 220ms var(--agentory-ease-soft);
 }
 
 .chart-panel__range-trigger {

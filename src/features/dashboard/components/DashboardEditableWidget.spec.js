@@ -73,6 +73,23 @@ afterEach(() => {
 })
 
 describe('DashboardEditableWidget', () => {
+  it('reserves header space only while edit actions are visible', async () => {
+    const wrapper = mountWidget()
+
+    await wrapper.get('[data-test="widget-menu-detail"]').trigger('click')
+    await wrapper.get('[data-test="widget-resize-mode-detail"]').trigger('click')
+
+    expect(wrapper.classes()).toContain('dashboard-widget--actions-visible')
+    expect(wrapper.find('[data-test="widget-save-detail"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="widget-save-detail"]').trigger('click')
+
+    expect(wrapper.classes()).not.toContain('dashboard-widget--actions-visible')
+    expect(wrapper.find('[data-test="widget-save-detail"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it('마우스 이동은 기존처럼 포인터를 놓는 즉시 반영한다', async () => {
     const wrapper = mountWidget()
     const moveButton = wrapper.get('[data-test="widget-move-detail"]')
