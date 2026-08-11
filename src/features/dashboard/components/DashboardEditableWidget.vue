@@ -278,6 +278,7 @@ onBeforeUnmount(() => {
     class="dashboard-widget"
     :class="{
       'dashboard-widget--active': activeMode,
+      'dashboard-widget--actions-visible': isResizeEditing || isTouchEditing,
       'dashboard-widget--resize-editing': isResizeEditing,
       'dashboard-widget--touch-capable': isTouchCapable,
       'dashboard-widget--touch-editing': isTouchEditing,
@@ -411,6 +412,7 @@ onBeforeUnmount(() => {
 .dashboard-widget {
   --dashboard-widget-motion-duration: 690ms;
   --dashboard-widget-touch-target: 44px;
+  --dashboard-widget-header-end-reserve: var(--agentory-spacing-40);
 
   position: absolute;
   min-width: 0;
@@ -424,6 +426,17 @@ onBeforeUnmount(() => {
     top var(--dashboard-widget-motion-duration) cubic-bezier(0.16, 1, 0.3, 1),
     width var(--dashboard-widget-motion-duration) cubic-bezier(0.16, 1, 0.3, 1);
   will-change: left, top, width, height;
+}
+
+.dashboard-widget--actions-visible {
+  --dashboard-widget-header-end-reserve: var(--agentory-spacing-80);
+}
+
+.dashboard-widget--actions-visible.dashboard-widget--touch-capable {
+  --dashboard-widget-header-end-reserve: calc(
+    var(--dashboard-widget-touch-target) + var(--dashboard-widget-touch-target) +
+      var(--agentory-spacing-4)
+  );
 }
 
 .dashboard-widget::after {
@@ -652,11 +665,27 @@ onBeforeUnmount(() => {
   height: var(--dashboard-widget-touch-target);
 }
 
-.dashboard-widget--touch-capable .dashboard-widget__move,
 .dashboard-widget--touch-capable .dashboard-widget__menu-button,
 .dashboard-widget--touch-capable .dashboard-widget__save {
   min-width: var(--dashboard-widget-touch-target);
   height: var(--dashboard-widget-touch-target);
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__move {
+  position: relative;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+}
+
+.dashboard-widget--touch-capable .dashboard-widget__move::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--dashboard-widget-touch-target);
+  height: var(--dashboard-widget-touch-target);
+  transform: translate(-50%, -50%);
+  content: '';
 }
 
 .dashboard-widget--touch-capable .dashboard-widget__actions {
